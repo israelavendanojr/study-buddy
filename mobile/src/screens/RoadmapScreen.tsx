@@ -157,7 +157,7 @@ export default function RoadmapScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Path 🗺️</Text>
+        <Text style={styles.headerTitle}>Roadmap</Text>
         <View style={styles.progressBg}>
           <View style={[styles.progressFill, { width: `${progressPct * 100}%` }]} />
         </View>
