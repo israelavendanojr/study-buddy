@@ -23,11 +23,9 @@ interface Lesson {
   id: string
   title: string
   type: 'lesson' | 'practice' | 'milestone'
-  emoji: string
   estimatedMinutes: number
-  side: 'left' | 'right'
 }
-interface Chapter { id: string; title: string; emoji: string; lessons: Lesson[] }
+interface Chapter { id: string; title: string; lessons: Lesson[] }
 interface Roadmap { title: string; chapters: Chapter[] }
 interface RoadmapParams {
   goal: string; buddyName: string; roadmap: Roadmap
@@ -130,7 +128,6 @@ export default function RoadmapScreen() {
       <Modal visible={modalOpen} transparent animationType="slide" onRequestClose={() => setModalOpen(false)}>
         <Pressable style={styles.overlay} onPress={() => setModalOpen(false)} />
         <View style={styles.sheet}>
-          <Text style={styles.sheetEmoji}>{selectedLesson.emoji}</Text>
           <Text style={styles.sheetTitle}>{selectedLesson.title}</Text>
           <View style={styles.sheetMeta}>
             <View style={[styles.typePill, { backgroundColor: typeColor + '33' }]}>
@@ -292,7 +289,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     alignItems: 'center',
   },
-  sheetEmoji: { fontSize: 44, marginBottom: 10 },
   sheetTitle: {
     fontFamily: 'FredokaOne_400Regular',
     fontSize: 21,

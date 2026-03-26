@@ -6,15 +6,12 @@ interface Lesson {
   id: string
   title: string
   type: 'lesson' | 'practice' | 'milestone'
-  emoji: string
   estimatedMinutes: number
-  side: 'left' | 'right'
 }
 
 interface Chapter {
   id: string
   title: string
-  emoji: string
   lessons: Lesson[]
 }
 

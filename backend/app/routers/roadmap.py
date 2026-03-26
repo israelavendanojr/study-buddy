@@ -123,15 +123,12 @@ Return ONLY valid JSON matching this exact schema — no markdown, no explanatio
     {{
       "id": "string (e.g. ch1)",
       "title": "string",
-      "emoji": "string (single emoji)",
       "lessons": [
         {{
           "id": "string (e.g. ch1-l1)",
           "title": "string",
           "type": "lesson | practice | milestone",
-          "emoji": "string (single emoji)",
-          "estimatedMinutes": number,
-          "side": "left | right"
+          "estimatedMinutes": number
         }}
       ]
     }}
@@ -142,7 +139,6 @@ Rules:
 - {min_chapters} to {max_chapters} chapters total (scale to the {weeks}-week duration)
 - {min_lessons} to {max_lessons} lessons per chapter
 - The last lesson of every chapter must have type "milestone"
-- Lessons alternate side: first is "left", second "right", third "left", and so on
 - estimatedMinutes for each lesson must be <= {total_minutes}
 - Front-load simpler foundational content for experience level {req.experience}/5
 - Each lesson title should be specific and actionable, not generic
