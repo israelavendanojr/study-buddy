@@ -14,6 +14,7 @@ import OnboardingScreen from './src/screens/OnboardingScreen'
 import BuddyNamingScreen from './src/screens/BuddyNamingScreen'
 import GoalTuningScreen from './src/screens/GoalTuningScreen'
 import ConfirmationScreen from './src/screens/ConfirmationScreen'
+import RoadmapScreen from './src/screens/RoadmapScreen'
 
 const Stack = createStackNavigator()
 
@@ -42,6 +43,7 @@ export default function App() {
           <Stack.Screen name="BuddyNaming" component={BuddyNamingScreen} />
           <Stack.Screen name="GoalTuning" component={GoalTuningScreen} />
           <Stack.Screen name="Confirmation" component={ConfirmationScreen} />
+          <Stack.Screen name="Roadmap" component={RoadmapScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

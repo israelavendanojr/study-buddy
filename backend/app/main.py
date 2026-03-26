@@ -1,10 +1,13 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .database import Base, engine, get_db
-from .routers import onboarding
+from .routers import onboarding, roadmap
 
 Base.metadata.create_all(bind=engine)
 
@@ -24,6 +27,7 @@ app.add_middleware(
 )
 
 app.include_router(onboarding.router, prefix="/onboarding")
+app.include_router(roadmap.router, prefix="/roadmap")
 
 
 @app.get("/health")

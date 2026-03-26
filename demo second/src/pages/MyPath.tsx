@@ -42,7 +42,7 @@ const MyPath: React.FC = () => {
     <div className="min-h-screen bg-background pb-24">
       <Confetti active={confetti} onDone={() => setConfetti(false)} />
       
-      <h1 className="text-2xl font-heading text-foreground text-center pt-6 pb-4">My Path 🗺</h1>
+      <h1 className="text-2xl font-heading text-foreground text-center pt-6 pb-4">My Path </h1>
 
       {/* Landscape background */}
       <div className="relative px-4">

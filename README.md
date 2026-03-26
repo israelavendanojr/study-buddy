@@ -47,25 +47,7 @@ make clean      Stop DB + remove venv and node_modules
 make help       Show all commands
 ```
 
-## Running on a Physical Device
 
-Your phone and computer must be on the **same Wi-Fi network**.
-
-1. Get your local IP:
-
-   ```bash
-   make ip
-   ```
-
-2. Update `API_URL` in `mobile/App.tsx`:
-
-   ```ts
-   const API_URL = "http://YOUR_LOCAL_IP:8000";
-   ```
-
-3. Scan the QR code with Expo Go.
-
-## Project Structure
 
 ```
 study-buddy/
@@ -82,18 +64,3 @@ study-buddy/
 └── README.md
 ```
 
-## Database
-
-PostgreSQL runs on `localhost:5432` with:
-
-| Field | Value |
-|-------|-------|
-| User | `studbud` |
-| Password | `studbud_dev` |
-| Database | `studbud` |
-
-## API
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Queries the DB, returns `{"status": "ok", "message": "hello from StudBud"}` |
