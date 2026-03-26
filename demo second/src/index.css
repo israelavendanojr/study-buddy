@@ -1,0 +1,160 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 43 100% 98%;
+    --foreground: 30 20% 20%;
+
+    --card: 40 60% 97%;
+    --card-foreground: 30 20% 20%;
+
+    --popover: 43 100% 98%;
+    --popover-foreground: 30 20% 20%;
+
+    --primary: 150 55% 70%;
+    --primary-foreground: 150 40% 15%;
+
+    --secondary: 25 100% 82%;
+    --secondary-foreground: 25 60% 20%;
+
+    --muted: 40 30% 93%;
+    --muted-foreground: 30 10% 50%;
+
+    --accent: 210 70% 84%;
+    --accent-foreground: 210 50% 20%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 30% 90%;
+    --input: 40 30% 90%;
+    --ring: 150 55% 70%;
+
+    --radius: 1.5rem;
+
+    --lavender: 265 100% 86%;
+    --golden: 43 100% 69%;
+    --peach: 25 100% 82%;
+    --mint: 150 55% 70%;
+    --sky: 210 70% 84%;
+    --cream: 43 100% 98%;
+
+    --shadow-mint: 0 8px 24px rgba(168, 230, 195, 0.3);
+    --shadow-peach: 0 8px 24px rgba(255, 203, 164, 0.3);
+    --shadow-sky: 0 8px 24px rgba(184, 216, 248, 0.3);
+    --shadow-lavender: 0 8px 24px rgba(212, 187, 255, 0.3);
+    --shadow-golden: 0 8px 24px rgba(255, 224, 130, 0.3);
+
+    font-family: 'Nunito', sans-serif;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Nunito', sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Fredoka One', cursive;
+  }
+}
+
+@layer utilities {
+  .font-heading {
+    font-family: 'Fredoka One', cursive;
+  }
+  .font-body {
+    font-family: 'Nunito', sans-serif;
+  }
+  .squircle {
+    border-radius: 24px;
+  }
+  .squircle-sm {
+    border-radius: 16px;
+  }
+  .squircle-lg {
+    border-radius: 32px;
+  }
+  .shadow-mint {
+    box-shadow: var(--shadow-mint);
+  }
+  .shadow-peach {
+    box-shadow: var(--shadow-peach);
+  }
+  .shadow-sky {
+    box-shadow: var(--shadow-sky);
+  }
+  .shadow-lavender {
+    box-shadow: var(--shadow-lavender);
+  }
+  .shadow-golden {
+    box-shadow: var(--shadow-golden);
+  }
+  .press {
+    @apply active:scale-[0.96] transition-transform duration-75;
+  }
+}
+
+@keyframes idle-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+@keyframes excited-bounce {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-12px); }
+  50% { transform: translateY(0); }
+  75% { transform: translateY(-8px); }
+}
+@keyframes happy-spin {
+  0% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.2) rotate(180deg); }
+  100% { transform: scale(1) rotate(360deg); }
+}
+@keyframes thinking-tilt {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(15deg); }
+  75% { transform: rotate(-15deg); }
+}
+@keyframes sad-droop {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(4px) scale(0.97); }
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-8deg); }
+  40% { transform: rotate(8deg); }
+  60% { transform: rotate(-5deg); }
+  80% { transform: rotate(5deg); }
+}
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(20deg); }
+  75% { transform: rotate(-10deg); }
+}
+@keyframes confetti-fall {
+  0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0); }
+  50% { opacity: 1; transform: scale(1); }
+}
+@keyframes reviewing-tilt {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  50% { transform: rotate(-5deg) translateY(-2px); }
+}
+
+.animate-idle { animation: idle-breathe 3s ease-in-out infinite; }
+.animate-excited { animation: excited-bounce 0.6s ease-in-out; }
+.animate-happy { animation: happy-spin 0.8s ease-in-out; }
+.animate-thinking { animation: thinking-tilt 2s ease-in-out infinite; }
+.animate-sad { animation: sad-droop 2s ease-in-out infinite; }
+.animate-wiggle { animation: wiggle 0.5s ease-in-out; }
+.animate-wave { animation: wave 1s ease-in-out; }
+.animate-reviewing { animation: reviewing-tilt 2s ease-in-out infinite; }
+.animate-sparkle { animation: sparkle 1.5s ease-in-out infinite; }
