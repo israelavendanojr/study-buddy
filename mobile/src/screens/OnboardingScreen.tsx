@@ -14,11 +14,14 @@ import type { StackNavigationProp } from '@react-navigation/stack'
 import Companion from '../components/Companion'
 import { colors, radius, shadows } from '../theme'
 
+const GOAL_PREFIX = 'I want to learn'
 const placeholders = [
-  'I want to speak Spanish…',
-  'I want to learn chess…',
-  'I want to run a 5K…',
-  'I want to cook Italian food…',
+  'to speak Spanish…',
+  'chess…',
+  'to run a 5K…',
+  'to cook Italian food…',
+  'to play guitar…',
+  'how to code…',
 ]
 
 export default function OnboardingScreen() {
@@ -54,7 +57,7 @@ export default function OnboardingScreen() {
 
   const handlePress = () => {
     if (!goal.trim()) return
-    navigation.navigate('BuddyNaming', { goal: goal.trim() })
+    navigation.navigate('BuddyNaming', { goal: `${GOAL_PREFIX} ${goal.trim()}` })
   }
 
   const onPressIn = () => {
@@ -84,15 +87,19 @@ export default function OnboardingScreen() {
         <Text style={styles.heading}>Hi there! 👋</Text>
         <Text style={styles.subheading}>Let's learn something amazing.</Text>
 
-        <TextInput
-          style={styles.input}
-          value={goal}
-          onChangeText={setGoal}
-          placeholder={placeholders[placeholderIdx]}
-          placeholderTextColor={colors.muted + '80'}
-          returnKeyType="done"
-          onSubmitEditing={handlePress}
-        />
+        <View style={styles.inputRow}>
+          <Text style={styles.prefix}>{GOAL_PREFIX}</Text>
+          <TextInput
+            style={styles.input}
+            value={goal}
+            onChangeText={setGoal}
+            placeholder={placeholders[placeholderIdx]}
+            placeholderTextColor={colors.muted + '80'}
+            returnKeyType="done"
+            onSubmitEditing={handlePress}
+            autoCapitalize="none"
+          />
+        </View>
 
         <Animated.View style={{ transform: [{ scale: buttonScale }], width: '100%' }}>
           <Pressable
@@ -142,16 +149,28 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginBottom: 32,
   },
-  input: {
+  inputRow: {
     width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    marginBottom: 20,
+  },
+  prefix: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 18,
+    color: colors.muted,
+    marginRight: 6,
+  },
+  input: {
+    flex: 1,
     fontFamily: 'Nunito_400Regular',
     fontSize: 18,
     color: colors.foreground,
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    backgroundColor: colors.background,
-    marginBottom: 20,
+    paddingVertical: 4,
   },
   button: {
     width: '100%',

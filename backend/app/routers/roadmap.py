@@ -270,3 +270,78 @@ async def coach_roadmap(req: CoachRequest) -> CoachResponse:
 
     parsed = _strip_and_parse(full_text, "Coach")
     return CoachResponse(**parsed)
+
+
+class SummarizeRequest(BaseModel):
+    goal: str
+    buddy_name: str
+    experience: int = Field(ge=1, le=5)
+    session_hours: int = Field(ge=0, le=8)
+    session_minutes: int = Field(ge=0, le=45)
+    days_per_week: int = Field(ge=1, le=7)
+    weeks: int = Field(ge=1, le=52)
+    success_vision: str
+    coaching_result: dict | None = None
+
+
+@router.post("/summarize")
+async def summarize_goal(req: SummarizeRequest) -> dict:
+    total_minutes = req.session_hours * 60 + req.session_minutes
+    exp_label = (
+        "total beginner" if req.experience <= 1
+        else "some experience" if req.experience <= 3
+        else "advanced"
+    )
+
+    coaching_context = ""
+    if req.coaching_result:
+        cr = req.coaching_result
+        coaching_context = f"""
+Additional context from coaching:
+- Motivation: {cr.get("motivation", "")}
+- Learning style: {cr.get("learning_style", "")}
+- Interests: {", ".join(cr.get("key_interests", []))}"""
+
+    prompt = f"""Rewrite this user's learning goal into strict SMART format for a confirmation screen.
+
+User info:
+- Goal: {req.goal}
+- Experience: {exp_label} ({req.experience}/5)
+- Schedule: {total_minutes} min/day, {req.days_per_week} days/week
+- Duration: {req.weeks} weeks
+- Success vision: {req.success_vision}
+{coaching_context}
+
+Return ONLY valid JSON matching this exact schema — no markdown, no explanation:
+{{
+  "smart_goal": "One sentence SMART goal (Specific, Measurable, Achievable, Relevant, Time-bound). Max 20 words.",
+  "schedule": "{req.days_per_week}x per week, {total_minutes} min/day, {req.weeks} weeks",
+  "achievability": "very achievable" or "ambitious but doable" or "stretch goal"
+}}
+
+Rules:
+- smart_goal must be one clear sentence, max 20 words
+- smart_goal must include the specific skill and a measurable outcome
+- achievability: "very achievable" if <= 7 hrs/week, "ambitious but doable" if <= 14, "stretch goal" otherwise"""
+
+    # SWAP: replace client.messages.create below with a different provider if needed
+    try:
+        client = anthropic.Anthropic()
+        message = client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=256,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        full_text = message.content[0].text
+    except anthropic.APIConnectionError:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not connect to Anthropic API.",
+        )
+    except anthropic.APIStatusError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Anthropic API error: {e.status_code} {e.message}",
+        )
+
+    return _strip_and_parse(full_text, "Summarize")

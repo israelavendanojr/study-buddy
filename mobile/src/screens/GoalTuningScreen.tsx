@@ -36,10 +36,14 @@ const experienceOptions = [
 ]
 
 const durationOptions = [
+  { value: 1, label: '1 Week' },
   { value: 2, label: '2 Weeks' },
   { value: 4, label: '1 Month' },
+  { value: 8, label: '2 Months' },
   { value: 12, label: '3 Months' },
   { value: 24, label: '6 Months' },
+  { value: 36, label: '9 Months' },
+  { value: 52, label: '1 Year' },
 ]
 
 interface DynamicStep {

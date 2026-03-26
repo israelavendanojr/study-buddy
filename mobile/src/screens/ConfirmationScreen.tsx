@@ -57,6 +57,10 @@ export default function ConfirmationScreen() {
   const buttonScale = useRef(new Animated.Value(1)).current
   const fadeAnim = useRef(new Animated.Value(0)).current
   const [loading, setLoading] = useState(false)
+  const [smartGoal, setSmartGoal] = useState<string | null>(null)
+  const [schedule, setSchedule] = useState<string | null>(null)
+  const [achievability, setAchievability] = useState<string | null>(null)
+  const [loadingSummary, setLoadingSummary] = useState(true)
 
   // Loading screen animations
   const arcSpin = useRef(new Animated.Value(0)).current
@@ -76,6 +80,40 @@ export default function ConfirmationScreen() {
       duration: 500,
       useNativeDriver: true,
     }).start()
+  }, [])
+
+  // Fetch LLM-generated summary
+  useEffect(() => {
+    const fetchSummary = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/roadmap/summarize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            goal: params.goal,
+            buddy_name: params.buddyName,
+            experience: params.experience,
+            session_hours: params.sessionHours,
+            session_minutes: params.sessionMinutes,
+            days_per_week: params.daysPerWeek,
+            weeks: params.weeks,
+            success_vision: params.successVision,
+            coaching_result: params.coachingResult ?? null,
+          }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setSmartGoal(data.smart_goal ?? null)
+          setSchedule(data.schedule ?? null)
+          setAchievability(data.achievability ?? null)
+        }
+      } catch {
+        // Fallback to static text
+      } finally {
+        setLoadingSummary(false)
+      }
+    }
+    fetchSummary()
   }, [])
 
   useEffect(() => {
@@ -220,14 +258,7 @@ export default function ConfirmationScreen() {
     )
   }
 
-  // Compute summary text
-  const expLabel =
-    params.experience <= 1
-      ? 'total beginner'
-      : params.experience <= 3
-      ? 'having some experience'
-      : 'being pretty confident'
-
+  // Fallback values
   const totalMinutes = params.sessionHours * 60 + params.sessionMinutes
   const timeLabel = params.sessionHours > 0 && params.sessionMinutes > 0
     ? `${params.sessionHours}h ${params.sessionMinutes}m`
@@ -235,11 +266,12 @@ export default function ConfirmationScreen() {
     ? `${params.sessionHours} ${params.sessionHours === 1 ? 'hour' : 'hours'}`
     : `${params.sessionMinutes} minutes`
 
-  const summaryText = `In ${params.weeks} weeks, you'll go from ${expLabel} to ${params.successVision || `mastering ${params.goal}`}, practicing ${params.daysPerWeek}x per week for ${timeLabel}.`
-
+  const displayGoal = smartGoal ?? params.goal
+  const displaySchedule = schedule ?? `${params.daysPerWeek}x per week, ${timeLabel}/day, ${params.weeks} weeks`
   const totalHoursPerWeek = (totalMinutes * params.daysPerWeek) / 60
-  const achievabilityLabel =
-    totalHoursPerWeek <= 7 ? '✅ Very Achievable' : '⚡ Ambitious but doable'
+  const fallbackAchievability = totalHoursPerWeek <= 7 ? 'very achievable' : 'ambitious but doable'
+  const displayAchievability = achievability ?? fallbackAchievability
+  const achievabilityEmoji = displayAchievability === 'very achievable' ? '✅' : displayAchievability === 'stretch goal' ? '🔥' : '⚡'
 
   return (
     <ScrollView
@@ -253,11 +285,18 @@ export default function ConfirmationScreen() {
 
         <View style={[styles.summaryCard, shadows.peach]}>
           <Text style={styles.starEmoji}>⭐</Text>
-          <Text style={styles.cardHeading}>Your Tuned Goal</Text>
-          <Text style={styles.summaryText}>{summaryText}</Text>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{achievabilityLabel}</Text>
-          </View>
+          <Text style={styles.cardHeading}>Your SMART Goal</Text>
+          {loadingSummary ? (
+            <Text style={styles.summaryText}>Refining your goal…</Text>
+          ) : (
+            <>
+              <Text style={styles.smartGoal}>{displayGoal}</Text>
+              <Text style={styles.scheduleText}>{displaySchedule}</Text>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{achievabilityEmoji} {displayAchievability}</Text>
+              </View>
+            </>
+          )}
         </View>
 
         <Animated.View style={{ transform: [{ scale: buttonScale }], width: '100%' }}>
@@ -320,9 +359,22 @@ const styles = StyleSheet.create({
   summaryText: {
     fontFamily: 'Nunito_400Regular',
     fontSize: 16,
-    color: colors.foreground,
+    color: colors.muted,
     lineHeight: 24,
     marginBottom: 16,
+  },
+  smartGoal: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 17,
+    color: colors.foreground,
+    lineHeight: 24,
+    marginBottom: 12,
+  },
+  scheduleText: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 14,
+    color: colors.muted,
+    marginBottom: 14,
   },
   badge: {
     alignSelf: 'flex-start',
