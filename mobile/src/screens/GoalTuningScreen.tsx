@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   Animated,
+  Alert,
 } from 'react-native'
 import Slider from '@react-native-community/slider'
 import { useNavigation, useRoute } from '@react-navigation/native'
@@ -14,9 +15,11 @@ import type { RouteProp } from '@react-navigation/native'
 import Companion from '../components/Companion'
 import { colors, radius, shadows } from '../theme'
 
-const TOTAL_STEPS = 5
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
+const FIXED_STEPS = 5
+const MAX_DYNAMIC_STEPS = 5
 
-const companionMoods: Array<'thinking' | 'idle' | 'idle' | 'excited' | 'happy'> = [
+const fixedCompanionMoods: Array<'thinking' | 'idle' | 'excited' | 'happy'> = [
   'thinking',
   'idle',
   'idle',
@@ -39,11 +42,17 @@ const durationOptions = [
   { value: 24, label: '6 Months' },
 ]
 
+interface DynamicStep {
+  question: string
+  answer: string
+}
+
 export default function GoalTuningScreen() {
   const navigation = useNavigation<StackNavigationProp<any>>()
   const route = useRoute<RouteProp<{ params: { goal: string; buddyName: string } }, 'params'>>()
   const { goal, buddyName } = route.params as { goal: string; buddyName: string }
 
+  // Fixed step state
   const [step, setStep] = useState(0)
   const [experience, setExperience] = useState<number | null>(null)
   const [sessionHours, setSessionHours] = useState(0)
@@ -52,12 +61,46 @@ export default function GoalTuningScreen() {
   const [weeks, setWeeks] = useState<number | null>(null)
   const [successVision, setSuccessVision] = useState('')
 
+  // Dynamic coaching state
+  const [dynamicSteps, setDynamicSteps] = useState<DynamicStep[]>([])
+  const [currentDynamicAnswer, setCurrentDynamicAnswer] = useState('')
+  const [conversationHistory, setConversationHistory] = useState<Array<{ role: string; content: string }>>([])
+  const [loadingCoach, setLoadingCoach] = useState(false)
+
+  // Animations
   const fadeAnim = useRef(new Animated.Value(1)).current
   const dropAnim = useRef(new Animated.Value(0)).current
   const buttonScale = useRef(new Animated.Value(1)).current
 
+  // Loading dots animation
+  const dot1 = useRef(new Animated.Value(0.3)).current
+  const dot2 = useRef(new Animated.Value(0.3)).current
+  const dot3 = useRef(new Animated.Value(0.3)).current
+  const dotLoops = useRef<Animated.CompositeAnimation[]>([])
+
+  useEffect(() => {
+    if (loadingCoach) {
+      dotLoops.current.forEach(l => l.stop())
+      dotLoops.current = [dot1, dot2, dot3].map((anim, i) => {
+        anim.setValue(0.3)
+        const loop = Animated.loop(
+          Animated.sequence([
+            Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+            Animated.timing(anim, { toValue: 0.3, duration: 400, useNativeDriver: true }),
+          ])
+        )
+        setTimeout(() => loop.start(), i * 200)
+        return loop
+      })
+    } else {
+      dotLoops.current.forEach(l => l.stop())
+      dot1.setValue(0.3)
+      dot2.setValue(0.3)
+      dot3.setValue(0.3)
+    }
+  }, [loadingCoach])
+
   const animateToStep = (nextStep: number) => {
-    // Fade out + drop down
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 0,
@@ -72,7 +115,6 @@ export default function GoalTuningScreen() {
     ]).start(() => {
       setStep(nextStep)
       dropAnim.setValue(0)
-      // Fade in
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 300,
@@ -91,6 +133,64 @@ export default function GoalTuningScreen() {
     }).start()
   }, [])
 
+  const navigateToConfirmation = (coachingResult: object | null) => {
+    navigation.navigate('Confirmation', {
+      goal,
+      buddyName,
+      experience: experience!,
+      sessionHours,
+      sessionMinutes,
+      daysPerWeek,
+      weeks: weeks!,
+      successVision: successVision.trim(),
+      coachingResult,
+    })
+  }
+
+  // -----------------------------------------------------------------------
+  // Coaching API
+  // -----------------------------------------------------------------------
+
+  const callCoach = async (history: Array<{ role: string; content: string }>, currentDynamic: DynamicStep[]) => {
+    setLoadingCoach(true)
+    try {
+      const res = await fetch(`${API_BASE}/roadmap/coach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          goal,
+          buddy_name: buddyName,
+          conversation_history: history,
+          experience,
+          session_minutes: (sessionHours ?? 0) * 60 + (sessionMinutes ?? 0),
+          days_per_week: daysPerWeek,
+          weeks,
+          success_vision: successVision.trim(),
+        }),
+      })
+      if (!res.ok) throw new Error('Coach error')
+      const data = await res.json()
+
+      if (data.ready || currentDynamic.length >= MAX_DYNAMIC_STEPS) {
+        navigateToConfirmation(data.coaching_result ?? null)
+      } else {
+        const newDynamic = [...currentDynamic, { question: data.message, answer: '' }]
+        setDynamicSteps(newDynamic)
+        setCurrentDynamicAnswer('')
+        setLoadingCoach(false)
+        animateToStep(FIXED_STEPS + newDynamic.length - 1)
+      }
+    } catch {
+      // On error, skip coaching gracefully
+      setLoadingCoach(false)
+      navigateToConfirmation(null)
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Handlers
+  // -----------------------------------------------------------------------
+
   const handleExperienceSelect = (val: number) => {
     setExperience(val)
     setTimeout(() => animateToStep(1), 200)
@@ -103,16 +203,35 @@ export default function GoalTuningScreen() {
 
   const handleFinish = () => {
     if (!successVision.trim()) return
-    navigation.navigate('Confirmation', {
-      goal,
-      buddyName,
-      experience: experience!,
-      sessionHours,
-      sessionMinutes,
-      daysPerWeek,
-      weeks: weeks!,
-      successVision: successVision.trim(),
-    })
+    // Kick off coaching flow
+    const initialHistory = [{ role: 'user', content: successVision.trim() }]
+    setConversationHistory(initialHistory)
+    callCoach(initialHistory, [])
+  }
+
+  const handleDynamicContinue = () => {
+    if (!currentDynamicAnswer.trim() || loadingCoach) return
+    const answer = currentDynamicAnswer.trim()
+    const dynamicIndex = step - FIXED_STEPS
+
+    // Update step answer
+    const updatedDynamic = [...dynamicSteps]
+    updatedDynamic[dynamicIndex] = { ...updatedDynamic[dynamicIndex], answer }
+    setDynamicSteps(updatedDynamic)
+
+    // Update conversation history
+    const updatedHistory = [
+      ...conversationHistory,
+      { role: 'assistant', content: dynamicSteps[dynamicIndex].question },
+      { role: 'user', content: answer },
+    ]
+    setConversationHistory(updatedHistory)
+    setCurrentDynamicAnswer('')
+    callCoach(updatedHistory, updatedDynamic)
+  }
+
+  const handleSkipCoaching = () => {
+    navigateToConfirmation(null)
   }
 
   const canAdvance = () => {
@@ -121,6 +240,7 @@ export default function GoalTuningScreen() {
     if (step === 2) return true
     if (step === 3) return weeks !== null
     if (step === 4) return !!successVision.trim()
+    if (step >= FIXED_STEPS) return !!currentDynamicAnswer.trim()
     return false
   }
 
@@ -130,6 +250,16 @@ export default function GoalTuningScreen() {
   const onPressOut = () => {
     Animated.timing(buttonScale, { toValue: 1, duration: 75, useNativeDriver: true }).start()
   }
+
+  const currentMood = (): 'thinking' | 'idle' | 'excited' | 'happy' => {
+    if (loadingCoach) return 'thinking'
+    if (step < FIXED_STEPS) return fixedCompanionMoods[step]
+    return 'happy'
+  }
+
+  // -----------------------------------------------------------------------
+  // Step rendering
+  // -----------------------------------------------------------------------
 
   const renderStep = () => {
     switch (step) {
@@ -167,7 +297,6 @@ export default function GoalTuningScreen() {
           <>
             <Text style={styles.question}>How much time per day?</Text>
             <View style={styles.dualPickerRow}>
-              {/* Hours picker */}
               <View style={styles.pickerBox}>
                 <Text style={styles.pickerLabel}>Hours</Text>
                 <View style={styles.pickerControls}>
@@ -186,7 +315,6 @@ export default function GoalTuningScreen() {
                   </Pressable>
                 </View>
               </View>
-              {/* Minutes picker */}
               <View style={styles.pickerBox}>
                 <Text style={styles.pickerLabel}>Minutes</Text>
                 <View style={styles.pickerControls}>
@@ -304,11 +432,11 @@ export default function GoalTuningScreen() {
                 onPress={handleFinish}
                 onPressIn={onPressIn}
                 onPressOut={onPressOut}
-                disabled={!successVision.trim()}
+                disabled={!successVision.trim() || loadingCoach}
                 style={[
                   styles.stepButton,
                   shadows.mint,
-                  !successVision.trim() && { opacity: 0.4 },
+                  (!successVision.trim() || loadingCoach) && { opacity: 0.4 },
                 ]}
               >
                 <Text style={styles.stepButtonText}>Continue →</Text>
@@ -316,8 +444,55 @@ export default function GoalTuningScreen() {
             </Animated.View>
           </>
         )
-      default:
-        return null
+      default: {
+        // Dynamic coaching steps
+        const dynamicIndex = step - FIXED_STEPS
+        const dynStep = dynamicSteps[dynamicIndex]
+
+        if (loadingCoach || !dynStep) {
+          return (
+            <>
+              <Text style={styles.question}>Thinking of a question...</Text>
+              <View style={styles.loadingDots}>
+                <Animated.View style={[styles.loadingDot, { opacity: dot1 }]} />
+                <Animated.View style={[styles.loadingDot, { opacity: dot2 }]} />
+                <Animated.View style={[styles.loadingDot, { opacity: dot3 }]} />
+              </View>
+            </>
+          )
+        }
+
+        return (
+          <>
+            <Text style={styles.question}>{dynStep.question}</Text>
+            <TextInput
+              style={styles.textArea}
+              value={currentDynamicAnswer}
+              onChangeText={setCurrentDynamicAnswer}
+              placeholder="Type your answer…"
+              placeholderTextColor={colors.muted + '99'}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+            <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+              <Pressable
+                onPress={handleDynamicContinue}
+                onPressIn={onPressIn}
+                onPressOut={onPressOut}
+                disabled={!currentDynamicAnswer.trim() || loadingCoach}
+                style={[
+                  styles.stepButton,
+                  shadows.mint,
+                  (!currentDynamicAnswer.trim() || loadingCoach) && { opacity: 0.4 },
+                ]}
+              >
+                <Text style={styles.stepButtonText}>Continue →</Text>
+              </Pressable>
+            </Animated.View>
+          </>
+        )
+      }
     }
   }
 
@@ -330,12 +505,14 @@ export default function GoalTuningScreen() {
 
       {/* Progress dots */}
       <View style={styles.dotsRow}>
-        {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+        {Array.from({ length: FIXED_STEPS }).map((_, i) => (
           <View
             key={i}
             style={[
               styles.dot,
-              i === step
+              step >= FIXED_STEPS
+                ? styles.dotPast
+                : i === step
                 ? styles.dotActive
                 : i < step
                 ? styles.dotPast
@@ -343,6 +520,9 @@ export default function GoalTuningScreen() {
             ]}
           />
         ))}
+        {step >= FIXED_STEPS && (
+          <Text style={styles.almostThere}>Almost there...</Text>
+        )}
       </View>
 
       {/* Step card */}
@@ -354,7 +534,7 @@ export default function GoalTuningScreen() {
       >
         {/* Companion in top-right */}
         <View style={styles.companionCorner}>
-          <Companion size={56} mood={companionMoods[step]} />
+          <Companion size={56} mood={currentMood()} />
         </View>
         {renderStep()}
       </Animated.View>
@@ -363,24 +543,35 @@ export default function GoalTuningScreen() {
       <View style={styles.navRow}>
         <Pressable
           onPress={() => {
-            if (step > 0) {
+            if (loadingCoach) return
+            if (step > 0 && step < FIXED_STEPS) {
               animateToStep(step - 1)
-            } else {
+            } else if (step === 0) {
               navigation.goBack()
+            } else if (step >= FIXED_STEPS) {
+              // Back from dynamic step → go to last fixed step
+              setDynamicSteps([])
+              setConversationHistory([])
+              setCurrentDynamicAnswer('')
+              animateToStep(4)
             }
           }}
           style={styles.navArrow}
         >
           <Text style={styles.navArrowText}>← Back</Text>
         </Pressable>
-        {step < TOTAL_STEPS - 1 && canAdvance() ? (
+        {step >= FIXED_STEPS && !loadingCoach ? (
+          <Pressable onPress={handleSkipCoaching} style={styles.navArrow}>
+            <Text style={styles.navArrowText}>Skip →</Text>
+          </Pressable>
+        ) : step < FIXED_STEPS - 1 && canAdvance() ? (
           <Pressable
             onPress={() => animateToStep(step + 1)}
             style={styles.navArrow}
           >
             <Text style={styles.navArrowText}>Next →</Text>
           </Pressable>
-        ) : step === TOTAL_STEPS - 1 ? (
+        ) : step === FIXED_STEPS - 1 ? (
           <View />
         ) : (
           <View style={[styles.navArrow, { opacity: 0.3 }]}>
@@ -416,6 +607,7 @@ const styles = StyleSheet.create({
   dotsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     gap: 8,
     marginBottom: 24,
   },
@@ -436,6 +628,12 @@ const styles = StyleSheet.create({
   },
   dotFuture: {
     backgroundColor: colors.border,
+  },
+  almostThere: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 12,
+    color: colors.muted,
+    marginLeft: 4,
   },
   stepCard: {
     backgroundColor: colors.card,
@@ -574,6 +772,18 @@ const styles = StyleSheet.create({
     fontFamily: 'FredokaOne_400Regular',
     fontSize: 18,
     color: colors.foreground,
+  },
+  loadingDots: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  loadingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.mint,
   },
   navRow: {
     flexDirection: 'row',

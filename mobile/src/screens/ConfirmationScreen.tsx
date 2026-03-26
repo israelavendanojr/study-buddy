@@ -9,7 +9,7 @@ import {
   ScrollView,
 } from 'react-native'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RouteProp } from '@react-navigation/native'
@@ -25,6 +25,7 @@ interface ConfirmationParams {
   daysPerWeek: number
   weeks: number
   successVision: string
+  coachingResult?: object | null
 }
 
 const PARTICLE_COLORS = [
@@ -161,6 +162,7 @@ export default function ConfirmationScreen() {
           days_per_week: params.daysPerWeek,
           weeks: params.weeks,
           success_vision: params.successVision,
+          coaching_result: params.coachingResult ?? null,
         }),
       })
       if (!res.ok) {
