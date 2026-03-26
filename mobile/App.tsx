@@ -1,66 +1,49 @@
-import { useEffect, useState } from "react";
-import { StatusBar } from "expo-status-bar";
+import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one'
 import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+  Nunito_400Regular,
+  Nunito_600SemiBold,
+  Nunito_700Bold,
+} from '@expo-google-fonts/nunito'
+import { NavigationContainer } from '@react-navigation/native'
+import { createStackNavigator } from '@react-navigation/stack'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { View } from 'react-native'
+import { colors } from './src/theme'
 
-// When running on a physical device via Expo Go, replace "localhost"
-// with your machine's local IP address (e.g. 192.168.1.42).
-const API_URL = "http://localhost:8000";
+import OnboardingScreen from './src/screens/OnboardingScreen'
+import BuddyNamingScreen from './src/screens/BuddyNamingScreen'
+import GoalTuningScreen from './src/screens/GoalTuningScreen'
+import ConfirmationScreen from './src/screens/ConfirmationScreen'
+
+const Stack = createStackNavigator()
 
 export default function App() {
-  const [message, setMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [fontsLoaded] = useFonts({
+    FredokaOne_400Regular,
+    Nunito_400Regular,
+    Nunito_600SemiBold,
+    Nunito_700Bold,
+  })
 
-  useEffect(() => {
-    fetch(`${API_URL}/health`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data) => setMessage(data.message))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+  if (!fontsLoaded) {
+    return <View style={{ flex: 1, backgroundColor: colors.background }} />
+  }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>StudBud</Text>
-
-      {loading && <ActivityIndicator size="large" color="#4f46e5" />}
-      {error && <Text style={styles.error}>Error: {error}</Text>}
-      {message && <Text style={styles.message}>{message}</Text>}
-
-      <StatusBar style="auto" />
-    </View>
-  );
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <Stack.Navigator
+          screenOptions={{
+            headerShown: false,
+            cardStyle: { backgroundColor: colors.background },
+          }}
+        >
+          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+          <Stack.Screen name="BuddyNaming" component={BuddyNamingScreen} />
+          <Stack.Screen name="GoalTuning" component={GoalTuningScreen} />
+          <Stack.Screen name="Confirmation" component={ConfirmationScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SafeAreaProvider>
+  )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  heading: {
-    fontSize: 32,
-    fontWeight: "bold",
-    marginBottom: 24,
-  },
-  message: {
-    fontSize: 18,
-    color: "#4f46e5",
-    marginTop: 12,
-  },
-  error: {
-    fontSize: 16,
-    color: "#dc2626",
-    marginTop: 12,
-  },
-});

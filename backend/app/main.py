@@ -4,6 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .database import Base, engine, get_db
+from .routers import onboarding
 
 Base.metadata.create_all(bind=engine)
 
@@ -21,6 +22,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(onboarding.router, prefix="/onboarding")
 
 
 @app.get("/health")
