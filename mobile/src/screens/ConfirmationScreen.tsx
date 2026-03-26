@@ -57,6 +57,7 @@ export default function ConfirmationScreen() {
   const buttonScale = useRef(new Animated.Value(1)).current
   const fadeAnim = useRef(new Animated.Value(0)).current
   const [loading, setLoading] = useState(false)
+  const [motivationLine, setMotivationLine] = useState<string | null>(null)
   const [smartGoal, setSmartGoal] = useState<string | null>(null)
   const [schedule, setSchedule] = useState<string | null>(null)
   const [achievability, setAchievability] = useState<string | null>(null)
@@ -103,6 +104,7 @@ export default function ConfirmationScreen() {
         })
         if (res.ok) {
           const data = await res.json()
+          setMotivationLine(data.motivation_line ?? null)
           setSmartGoal(data.smart_goal ?? null)
           setSchedule(data.schedule ?? null)
           setAchievability(data.achievability ?? null)
@@ -285,11 +287,14 @@ export default function ConfirmationScreen() {
 
         <View style={[styles.summaryCard, shadows.peach]}>
           <Text style={styles.starEmoji}>⭐</Text>
-          <Text style={styles.cardHeading}>Your SMART Goal</Text>
+          <Text style={styles.cardHeading}>Your Tuned Goal</Text>
           {loadingSummary ? (
             <Text style={styles.summaryText}>Refining your goal…</Text>
           ) : (
             <>
+              {motivationLine && (
+                <Text style={styles.motivationLine}>{motivationLine}</Text>
+              )}
               <Text style={styles.smartGoal}>{displayGoal}</Text>
               <Text style={styles.scheduleText}>{displaySchedule}</Text>
               <View style={styles.badge}>
@@ -362,6 +367,14 @@ const styles = StyleSheet.create({
     color: colors.muted,
     lineHeight: 24,
     marginBottom: 16,
+  },
+  motivationLine: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 14,
+    color: colors.muted,
+    fontStyle: 'italic',
+    marginBottom: 10,
+    lineHeight: 20,
   },
   smartGoal: {
     fontFamily: 'Nunito_700Bold',

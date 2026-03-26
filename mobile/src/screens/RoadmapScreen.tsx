@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
@@ -6,13 +6,15 @@ import {
   StyleSheet,
   ScrollView,
   Modal,
-  Animated,
   Dimensions,
 } from 'react-native'
 import Svg, { Path, Circle, Rect } from 'react-native-svg'
 import { useRoute } from '@react-navigation/native'
 import type { RouteProp } from '@react-navigation/native'
 import Companion from '../components/Companion'
+import PathTrail from '../components/PathTrail'
+import PathNode from '../components/PathNode'
+import { computePathLayout } from '../utils/computePathLayout'
 import { colors, radius, shadows } from '../theme'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -33,9 +35,6 @@ interface RoadmapParams {
 }
 
 const { width: SW } = Dimensions.get('window')
-const HALF = SW / 2
-const NODE_SIZE = 58
-const MILESTONE_SIZE = 68
 
 // ── Tab icons (SVG) ───────────────────────────────────────────────────────────
 
@@ -65,38 +64,6 @@ function BadgeIcon() {
   )
 }
 
-// ── Node content ──────────────────────────────────────────────────────────────
-
-function NodeContent({ isDone, isActive, isLocked, isMilestone }: {
-  isDone: boolean; isActive: boolean; isLocked: boolean; isMilestone: boolean
-}) {
-  if (isDone && isMilestone) return <Text style={styles.nodeIconText}>✓🏆</Text>
-  if (isDone) return <Text style={styles.nodeCheck}>✓</Text>
-  if (isActive && isMilestone) return <Text style={styles.nodeIconText}>🏆</Text>
-  if (isActive) return <Text style={styles.nodeGo}>GO</Text>
-  if (isMilestone) return <Text style={styles.nodeIconText}>🏆</Text>
-  return null
-}
-
-// ── Active node pulse ─────────────────────────────────────────────────────────
-
-function ActiveNodeWrap({ size, children }: { size: number; children: React.ReactNode }) {
-  const pulse = useRef(new Animated.Value(1)).current
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1.06, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 800, useNativeDriver: true }),
-      ])
-    ).start()
-  }, [])
-  return (
-    <Animated.View style={[{ width: size, height: size, borderRadius: 16 }, { transform: [{ scale: pulse }] }]}>
-      {children}
-    </Animated.View>
-  )
-}
-
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function RoadmapScreen() {
@@ -110,6 +77,8 @@ export default function RoadmapScreen() {
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null)
 
+  const scrollRef = useRef<ScrollView>(null)
+
   // Build id→index map
   const indexMap = useRef<Map<string, number>>(new Map())
   useEffect(() => {
@@ -118,6 +87,19 @@ export default function RoadmapScreen() {
       for (const l of ch.lessons)
         indexMap.current.set(l.id, i++)
   }, [])
+
+  // Compute the winding path layout
+  const layout = useMemo(() => computePathLayout(roadmap.chapters), [roadmap.chapters])
+
+  // Auto-scroll to active node
+  useEffect(() => {
+    if (layout.nodePositions[activeIndex]) {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, layout.nodePositions[activeIndex].y - 200),
+        animated: true,
+      })
+    }
+  }, [activeIndex])
 
   const handleNodePress = (lesson: Lesson) => {
     const idx = indexMap.current.get(lesson.id) ?? -1
@@ -133,120 +115,12 @@ export default function RoadmapScreen() {
       setActiveIndex(prev => Math.min(prev + 1, totalLessons))
   }
 
-  // ── Render one lesson row ────────────────────────────────────────────────
+  // ── Progress path length ────────────────────────────────────────────────
 
-  const renderLesson = (lesson: Lesson, flatIdx: number) => {
-    const isDone = flatIdx < activeIndex
-    const isActive = flatIdx === activeIndex
-    const isLocked = flatIdx > activeIndex
-    const isMilestone = lesson.type === 'milestone'
-    const size = isMilestone ? MILESTONE_SIZE : NODE_SIZE
+  const progressLength = layout.cumulativeLengths[activeIndex] ?? 0
+  const totalLength = layout.cumulativeLengths[layout.cumulativeLengths.length - 1] ?? 1
 
-    const nodeStyle = [
-      styles.node,
-      { width: size, height: size, borderRadius: 16 },
-      isDone && { backgroundColor: colors.mint },
-      isActive && isMilestone && { backgroundColor: colors.mint },
-      isActive && !isMilestone && { backgroundColor: colors.sky },
-      isLocked && isMilestone && { backgroundColor: colors.golden + '50' },
-      isLocked && !isMilestone && { backgroundColor: colors.border },
-    ]
-
-    const labelStyle = [
-      styles.nodeLabel,
-      isDone && { color: colors.muted },
-      isActive && { color: colors.foreground, fontFamily: 'Nunito_700Bold' },
-      isLocked && { color: colors.muted },
-    ]
-
-    const nodeInner = (
-      <View style={[nodeStyle as object]}>
-        <NodeContent isDone={isDone} isActive={isActive} isLocked={isLocked} isMilestone={isMilestone} />
-      </View>
-    )
-
-    const isLeft = lesson.side === 'left'
-
-    return (
-      <View key={lesson.id} style={styles.lessonRow}>
-        {isLeft ? (
-          <>
-            {/* Left half: node + label */}
-            <View style={styles.leftHalf}>
-              <Pressable
-                onPress={() => handleNodePress(lesson)}
-                disabled={isLocked}
-              >
-                {isActive
-                  ? <ActiveNodeWrap size={size}>{nodeInner}</ActiveNodeWrap>
-                  : nodeInner
-                }
-              </Pressable>
-              <Text style={[labelStyle, styles.labelLeft]} numberOfLines={3}>{lesson.title}</Text>
-              {/* Companion floats above active left node */}
-              {isActive && (
-                <View style={styles.companionOnNodeLeft}>
-                  <Companion size={48} mood="happy" />
-                </View>
-              )}
-            </View>
-            {/* Right half: empty */}
-            <View style={styles.rightHalf} />
-          </>
-        ) : (
-          <>
-            {/* Left half: empty */}
-            <View style={styles.leftHalf} />
-            {/* Right half: label + node */}
-            <View style={styles.rightHalf}>
-              <Text style={[labelStyle, styles.labelRight]} numberOfLines={3}>{lesson.title}</Text>
-              <Pressable
-                onPress={() => handleNodePress(lesson)}
-                disabled={isLocked}
-              >
-                {isActive
-                  ? <ActiveNodeWrap size={size}>{nodeInner}</ActiveNodeWrap>
-                  : nodeInner
-                }
-              </Pressable>
-              {/* Companion floats above active right node */}
-              {isActive && (
-                <View style={styles.companionOnNodeRight}>
-                  <Companion size={48} mood="happy" />
-                </View>
-              )}
-            </View>
-          </>
-        )}
-      </View>
-    )
-  }
-
-  // ── Render chapters ──────────────────────────────────────────────────────
-
-  let globalIdx = 0
-  const renderChapters = () =>
-    roadmap.chapters.map(chapter => (
-      <View key={chapter.id} style={styles.chapterBlock}>
-        {/* Chapter header */}
-        <View style={styles.chapterHeader}>
-          <Text style={styles.chapterTitle}>{chapter.title}</Text>
-          <View style={styles.chapterUnderline} />
-        </View>
-        {/* Lessons with center line */}
-        <View style={styles.lessonsWrap}>
-          {/* Vertical center line */}
-          <View style={styles.centerLine} />
-          {chapter.lessons.map(lesson => {
-            const node = renderLesson(lesson, globalIdx)
-            globalIdx++
-            return node
-          })}
-        </View>
-      </View>
-    ))
-
-  // ── Modal ────────────────────────────────────────────────────────────────
+  // ── Modal ──────────────────────────────────────────────────────────────
 
   const renderModal = () => {
     if (!selectedLesson) return null
@@ -275,7 +149,7 @@ export default function RoadmapScreen() {
     )
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────
 
   const progressPct = totalLessons > 0 ? activeIndex / totalLessons : 0
 
@@ -290,9 +164,42 @@ export default function RoadmapScreen() {
         <Text style={styles.progressLabel}>{activeIndex} / {totalLessons} lessons</Text>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {renderChapters()}
-        <View style={{ height: 80 }} />
+      <ScrollView
+        ref={scrollRef}
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { height: layout.totalHeight + 80 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* SVG winding path */}
+        <PathTrail
+          pathD={layout.pathD}
+          totalHeight={layout.totalHeight}
+          progressLength={progressLength}
+          totalLength={totalLength}
+        />
+
+        {/* Chapter headers */}
+        {layout.chapterHeaderPositions.map(({ y, chapter }) => (
+          <View key={chapter.id} style={[styles.chapterHeader, { top: y }]}>
+            <Text style={styles.chapterTitle}>{chapter.title}</Text>
+            <View style={styles.chapterUnderline} />
+          </View>
+        ))}
+
+        {/* Nodes along the path */}
+        {layout.nodePositions.map(({ x, y, lesson, globalIndex, labelSide }) => (
+          <PathNode
+            key={lesson.id}
+            lesson={lesson}
+            x={x}
+            y={y}
+            labelSide={labelSide}
+            isDone={globalIndex < activeIndex}
+            isActive={globalIndex === activeIndex}
+            isLocked={globalIndex > activeIndex}
+            onPress={handleNodePress}
+          />
+        ))}
       </ScrollView>
 
       {/* Tab bar */}
@@ -356,12 +263,11 @@ const styles = StyleSheet.create({
   // Scroll
   scroll: { flex: 1 },
   scrollContent: { paddingTop: 16 },
-  // Chapter
-  chapterBlock: { marginBottom: 12 },
+  // Chapter headers (absolutely positioned)
   chapterHeader: {
-    paddingHorizontal: 24,
-    marginBottom: 12,
-    marginTop: 16,
+    position: 'absolute',
+    left: 24,
+    right: 24,
   },
   chapterTitle: {
     fontFamily: 'FredokaOne_400Regular',
@@ -374,91 +280,6 @@ const styles = StyleSheet.create({
     width: 120,
     backgroundColor: colors.mint,
     borderRadius: 2,
-  },
-  // Lessons area with center line
-  lessonsWrap: {
-    position: 'relative',
-    paddingBottom: 8,
-  },
-  centerLine: {
-    position: 'absolute',
-    left: SW / 2 - 0.75,
-    top: 0,
-    bottom: 0,
-    width: 1.5,
-    backgroundColor: colors.border,
-    zIndex: 0,
-  },
-  // Lesson row
-  lessonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 80,
-    marginBottom: 8,
-    zIndex: 1,
-  },
-  leftHalf: {
-    width: HALF,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: 20,
-    paddingRight: 12,
-    position: 'relative',
-  },
-  rightHalf: {
-    width: HALF,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: 20,
-    paddingLeft: 12,
-    justifyContent: 'flex-end',
-    position: 'relative',
-  },
-  node: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  nodeCheck: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 22,
-    color: colors.white,
-  },
-  nodeGo: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 15,
-    color: colors.foreground,
-  },
-  nodeIconText: {
-    fontSize: 20,
-  },
-  labelLeft: {
-    marginLeft: 10,
-    flex: 1,
-  },
-  labelRight: {
-    marginRight: 10,
-    flex: 1,
-    textAlign: 'right',
-  },
-  nodeLabel: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 13,
-    color: colors.foreground,
-    lineHeight: 18,
-  },
-  // Companion on active node
-  companionOnNodeLeft: {
-    position: 'absolute',
-    top: -40,
-    left: 12,
-    zIndex: 10,
-  },
-  companionOnNodeRight: {
-    position: 'absolute',
-    top: -40,
-    right: 12,
-    zIndex: 10,
   },
   // Modal
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.25)' },

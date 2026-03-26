@@ -60,6 +60,21 @@ def _build_prompt(req: RoadmapRequest) -> str:
         else "expert"
     )
 
+    # Scale roadmap size to goal duration
+    weeks = req.weeks
+    if weeks <= 2:
+        min_chapters, max_chapters = 2, 3
+        min_lessons, max_lessons = 3, 5
+    elif weeks <= 8:
+        min_chapters, max_chapters = 3, 5
+        min_lessons, max_lessons = 4, 6
+    elif weeks <= 24:
+        min_chapters, max_chapters = 4, 7
+        min_lessons, max_lessons = 5, 8
+    else:
+        min_chapters, max_chapters = 6, 10
+        min_lessons, max_lessons = 6, 10
+
     coaching_block = ""
     if req.coaching_result:
         cr = req.coaching_result
@@ -74,19 +89,19 @@ DEEP CONTEXT FROM COACHING CONVERSATION:
 - Baseline: {cr.get("baseline", "")}
 - Known obstacles: {obstacles}
 - Recommended approach: {cr.get("recommended_approach", "")}
-- Interests to weave in: {interests}
+- User interests: {interests}
 
-Use this context to:
-1. Make chapter titles emotional and personal, not generic
-   (e.g. 'Reading Your First Telenovela' not 'Intermediate Spanish')
+How to use this context:
+1. Make chapter titles personal and emotionally resonant, not generic textbook names
 2. Design the final milestone of each chapter as a direct test of the success metric
-3. If learning_style is 'reading', bias lesson types toward reading-based activities
-   If 'kinesthetic', bias toward practice/doing exercises
-   If 'social', include conversation/partner activities as milestone lessons
-4. Weave the listed interests into lesson titles where natural
-   (e.g. interest=cooking → 'Ordering Food: Real Restaurant Vocabulary')
-5. Address each obstacle in known_obstacles with a specific resilience lesson
-   (e.g. obstacle='travels frequently' → add 'Offline Practice: No WiFi Sessions')
+3. Adapt lesson types to learning_style:
+   reading → reading-based activities, kinesthetic → hands-on practice,
+   social → conversation/partner activities, visual → video/diagram-based
+4. User interests are for SUBTLE flavor — reference them occasionally in 1-2 lesson
+   titles where it fits naturally. Do NOT force them into every chapter.
+   Bad: every chapter mentions the interest. Good: one or two lessons nod to it.
+5. Address obstacles with at most 1-2 targeted resilience lessons across the whole
+   roadmap, not one per chapter
 6. Front-load content matching their baseline — skip what they already know
 """
 
@@ -97,7 +112,7 @@ User profile:
 - Experience level: {req.experience}/5 ({exp_label})
 - Daily session time: {total_minutes} minutes
 - Days per week: {req.days_per_week}
-- Duration: {req.weeks} weeks
+- Duration: {weeks} weeks
 - Success vision: {req.success_vision}
 {coaching_block}
 Return ONLY valid JSON matching this exact schema — no markdown, no explanation, nothing else:
@@ -124,13 +139,15 @@ Return ONLY valid JSON matching this exact schema — no markdown, no explanatio
 }}
 
 Rules:
-- 3 to 5 chapters total
-- 4 to 8 lessons per chapter
+- {min_chapters} to {max_chapters} chapters total (scale to the {weeks}-week duration)
+- {min_lessons} to {max_lessons} lessons per chapter
 - The last lesson of every chapter must have type "milestone"
 - Lessons alternate side: first is "left", second "right", third "left", and so on
 - estimatedMinutes for each lesson must be <= {total_minutes}
 - Front-load simpler foundational content for experience level {req.experience}/5
 - Each lesson title should be specific and actionable, not generic
+- Chapters should represent meaningful phases of progression, not arbitrary groupings
+- Later chapters should build on skills from earlier ones — the roadmap must tell a coherent learning story
 - Return ONLY the JSON object, starting with {{ and ending with }}"""
 
 
@@ -154,38 +171,69 @@ def _build_coach_system_prompt(req: CoachRequest) -> str:
     context_block = "\n".join(f"- {line}" for line in context_lines)
 
     return f"""You produce ONE short follow-up question per turn for a learning app onboarding form.
+Your job is to fill in the gaps that generic sliders can't capture — ask what a real tutor would ask.
 
 User context already collected:
 {context_block}
 
-Ask about these dimensions (one per turn, in order, skip any already answered):
-1. MOTIVATION: Why this goal matters to them
-2. LEARNING STYLE: How they prefer to learn (reading, watching, doing, listening)
-3. GOAL-SPECIFIC: One question unique to this domain
-   (e.g. Spanish → "Anyone to practice with?", Coding → "What will you build first?")
-4. INTERESTS: A hobby to weave into lessons (optional — skip if 3 answers are sufficient)
+Ask about these dimensions (one per turn, adapt order to what matters most for this goal):
+
+1. CURRENT LEVEL PROBE: The user rated themselves {req.experience}/5, but that's vague.
+   Ask ONE specific question to pin down where they actually are in domain-specific terms.
+   Examples:
+   - Spanish → "What's your current level? (A1, A2, B1…)"
+   - Chess → "Do you know basic openings and tactics?"
+   - Coding → "Have you built anything beyond tutorials?"
+   - Guitar → "Can you play any songs start to finish?"
+   - Cooking → "Can you follow a recipe or do you improvise?"
+   The answer to this question is MORE important than the 1-5 slider for planning.
+
+2. MOTIVATION: Why this goal matters to them — what's driving it?
+
+3. GOAL-SPECIFIC GAP: Based on their stated success vision and current level,
+   ask ONE question that probes the biggest gap or assumption.
+   Examples:
+   - Goal is B1 Spanish but they're A2 → "Are you stronger in reading or speaking?"
+   - Goal is run a marathon but beginner → "Have you run any shorter races?"
+   - Goal is build an app but knows basics → "Frontend, backend, or full stack?"
+   This question should feel like a coach zeroing in on what matters.
+
+4. LEARNING STYLE: How they naturally prefer to learn
+   (reading, watching videos, hands-on practice, listening, with others, solo)
+
+5. OBSTACLES: What might get in the way or has tripped them up before?
+   Examples:
+   - "What's been your biggest blocker so far?"
+   - "Anything that might get in the way?"
+   This helps build resilience lessons into the plan.
+
+6. INTERESTS (optional): Only ask if the prior answers haven't revealed enough
+   personality to flavor the roadmap. Skip if you already have enough.
 
 Rules:
-- Question must be 10 words or fewer
-- No greetings, no encouragement, no personality
+- Question must be 12 words or fewer
+- No greetings, no encouragement, no filler
+- Ask the most important missing dimension first, not necessarily in listed order
+- If the user's success vision implies a specific standard (certification, race, etc.),
+  treat that as a fixed target and probe their distance from it
 - Output ONLY valid JSON, no markdown
 
 Before ready:
 {{ "ready": false, "message": "the short question" }}
 
-After 3-4 questions answered (when you have enough context):
+After 4-5 questions answered (when you have enough to build a precise roadmap):
 {{
   "ready": true,
   "message": "one sentence summary",
   "coaching_result": {{
-    "refined_goal": "SMART version of their goal",
-    "success_metric": "concrete measurable outcome",
+    "refined_goal": "SMART version with specific measurable target",
+    "success_metric": "concrete measurable outcome (use domain terms like A2→B1, sub-4hr marathon, etc.)",
     "motivation": "their stated why",
     "learning_style": "detected preference",
-    "known_obstacles": ["obstacles if mentioned"],
-    "baseline": "current skill from context",
-    "recommended_approach": "method tailored to their style",
-    "key_interests": ["interests if mentioned"]
+    "known_obstacles": ["obstacles if mentioned, empty array if none"],
+    "baseline": "their SPECIFIC current level in domain terms, not just a number",
+    "recommended_approach": "method tailored to closing the gap between baseline and target",
+    "key_interests": ["interests if mentioned, empty array if none"]
   }}
 }}"""
 
@@ -221,7 +269,7 @@ async def generate_roadmap(req: RoadmapRequest) -> dict:  # type: ignore[return]
         client = anthropic.Anthropic()
         message = client.messages.create(
             model=ANTHROPIC_MODEL,
-            max_tokens=4096,
+            max_tokens=16384,
             messages=[{"role": "user", "content": prompt}],
         )
         full_text = message.content[0].text
@@ -294,35 +342,63 @@ async def summarize_goal(req: SummarizeRequest) -> dict:
     )
 
     coaching_context = ""
+    motivation = ""
+    baseline = ""
     if req.coaching_result:
         cr = req.coaching_result
+        motivation = cr.get("motivation", "")
+        baseline = cr.get("baseline", "")
         coaching_context = f"""
-Additional context from coaching:
-- Motivation: {cr.get("motivation", "")}
+Context from coaching conversation:
+- Motivation: {motivation}
+- Baseline: {baseline}
 - Learning style: {cr.get("learning_style", "")}
 - Interests: {", ".join(cr.get("key_interests", []))}"""
 
-    prompt = f"""Rewrite this user's learning goal into strict SMART format for a confirmation screen.
+    # Friendly duration label
+    if req.weeks <= 2:
+        duration_label = f"{req.weeks} week{'s' if req.weeks > 1 else ''}"
+    elif req.weeks <= 8:
+        months = req.weeks // 4
+        duration_label = f"about {months} month{'s' if months > 1 else ''}" if months >= 1 else f"{req.weeks} weeks"
+    elif req.weeks <= 52:
+        months = round(req.weeks / 4.3)
+        duration_label = f"about {months} months" if months < 12 else "about a year"
+    else:
+        duration_label = f"{req.weeks} weeks"
+
+    # Friendly time label
+    if total_minutes >= 60:
+        hours = total_minutes // 60
+        mins = total_minutes % 60
+        time_label = f"about {hours} hour{'s' if hours > 1 else ''}" + (f" {mins} min" if mins else "")
+    else:
+        time_label = f"about {total_minutes} minutes"
+
+    prompt = f"""Write a goal confirmation for a learning app. Be warm and encouraging, not clinical.
 
 User info:
 - Goal: {req.goal}
 - Experience: {exp_label} ({req.experience}/5)
-- Schedule: {total_minutes} min/day, {req.days_per_week} days/week
-- Duration: {req.weeks} weeks
+- Time per session: {time_label}
+- Frequency: {req.days_per_week} days a week
+- Duration: {duration_label}
 - Success vision: {req.success_vision}
 {coaching_context}
 
-Return ONLY valid JSON matching this exact schema — no markdown, no explanation:
+Return ONLY valid JSON — no markdown:
 {{
-  "smart_goal": "One sentence SMART goal (Specific, Measurable, Achievable, Relevant, Time-bound). Max 20 words.",
-  "schedule": "{req.days_per_week}x per week, {total_minutes} min/day, {req.weeks} weeks",
-  "achievability": "very achievable" or "ambitious but doable" or "stretch goal"
+  "motivation_line": "A short personal sentence reflecting their WHY — show you were listening. Max 12 words. If no motivation known, write something encouraging about their goal.",
+  "smart_goal": "Their goal rewritten as one clear, specific sentence. Max 20 words. Include what they'll achieve and by when.",
+  "schedule": "Friendly description of their commitment. Use casual language like 'a few times a week' not '3x per week, 75 min/day'. Max 10 words.",
+  "achievability": "A short encouraging phrase. Not just a label — something like 'Totally doable at your pace' or 'A good challenge — you got this'. Max 8 words."
 }}
 
 Rules:
-- smart_goal must be one clear sentence, max 20 words
-- smart_goal must include the specific skill and a measurable outcome
-- achievability: "very achievable" if <= 7 hrs/week, "ambitious but doable" if <= 14, "stretch goal" otherwise"""
+- motivation_line should feel personal — reference something specific they said if possible
+- schedule should sound easy and approachable, not like a contract
+- achievability should always feel positive, never scary
+- Do NOT include raw numbers like '75 minutes' or '52 weeks' — paraphrase naturally"""
 
     # SWAP: replace client.messages.create below with a different provider if needed
     try:
