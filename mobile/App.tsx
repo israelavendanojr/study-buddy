@@ -9,14 +9,61 @@ import { createStackNavigator } from '@react-navigation/stack'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { View } from 'react-native'
 import { colors } from './src/theme'
+import { ClerkProvider, useAuth } from '@clerk/clerk-expo'
+import * as SecureStore from 'expo-secure-store'
 
 import OnboardingScreen from './src/screens/OnboardingScreen'
 import BuddyNamingScreen from './src/screens/BuddyNamingScreen'
 import GoalTuningScreen from './src/screens/GoalTuningScreen'
 import ConfirmationScreen from './src/screens/ConfirmationScreen'
 import RoadmapScreen from './src/screens/RoadmapScreen'
+import SignInScreen from './src/screens/SignInScreen'
+import SignUpScreen from './src/screens/SignUpScreen'
+
+const CLERK_PUBLISHABLE_KEY = 'pk_test_ZXhjaXRlZC1wb255LTQxLmNsZXJrLmFjY291bnRzLmRldiQ'
+
+const tokenCache = {
+  async getToken(key: string) {
+    return SecureStore.getItemAsync(key)
+  },
+  async saveToken(key: string, value: string) {
+    return SecureStore.setItemAsync(key, value)
+  },
+}
 
 const Stack = createStackNavigator()
+
+function AppNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
+  const { isSignedIn, isLoaded } = useAuth()
+
+  if (!fontsLoaded || !isLoaded) {
+    return <View style={{ flex: 1, backgroundColor: colors.background }} />
+  }
+
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        cardStyle: { backgroundColor: colors.background },
+      }}
+    >
+      {isSignedIn ? (
+        <>
+          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+          <Stack.Screen name="BuddyNaming" component={BuddyNamingScreen} />
+          <Stack.Screen name="GoalTuning" component={GoalTuningScreen} />
+          <Stack.Screen name="Confirmation" component={ConfirmationScreen} />
+          <Stack.Screen name="Roadmap" component={RoadmapScreen} />
+        </>
+      ) : (
+        <>
+          <Stack.Screen name="SignIn" component={SignInScreen} />
+          <Stack.Screen name="SignUp" component={SignUpScreen} />
+        </>
+      )}
+    </Stack.Navigator>
+  )
+}
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -26,26 +73,13 @@ export default function App() {
     Nunito_700Bold,
   })
 
-  if (!fontsLoaded) {
-    return <View style={{ flex: 1, backgroundColor: colors.background }} />
-  }
-
   return (
-    <SafeAreaProvider>
-      <NavigationContainer>
-        <Stack.Navigator
-          screenOptions={{
-            headerShown: false,
-            cardStyle: { backgroundColor: colors.background },
-          }}
-        >
-          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-          <Stack.Screen name="BuddyNaming" component={BuddyNamingScreen} />
-          <Stack.Screen name="GoalTuning" component={GoalTuningScreen} />
-          <Stack.Screen name="Confirmation" component={ConfirmationScreen} />
-          <Stack.Screen name="Roadmap" component={RoadmapScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </SafeAreaProvider>
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
+      <SafeAreaProvider>
+        <NavigationContainer>
+          <AppNavigator fontsLoaded={fontsLoaded} />
+        </NavigationContainer>
+      </SafeAreaProvider>
+    </ClerkProvider>
   )
 }

@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
+import { useAuth } from '@clerk/clerk-expo'
 import Companion from '../components/Companion'
 import { colors, radius, shadows } from '../theme'
 
@@ -26,6 +27,7 @@ const placeholders = [
 
 export default function OnboardingScreen() {
   const navigation = useNavigation<StackNavigationProp<any>>()
+  const { signOut } = useAuth()
   const [goal, setGoal] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [companionMood, setCompanionMood] = useState<'idle' | 'happy'>('happy')
@@ -83,6 +85,9 @@ export default function OnboardingScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <Pressable style={styles.signOutBtn} onPress={() => signOut()}>
+        <Text style={styles.signOutText}>Sign out</Text>
+      </Pressable>
       <Animated.View style={[styles.inner, { opacity: fadeAnim }]}>
         <Text style={styles.heading}>Hi there! 👋</Text>
         <Text style={styles.subheading}>Let's learn something amazing.</Text>
@@ -186,5 +191,18 @@ const styles = StyleSheet.create({
   },
   companionWrap: {
     marginTop: 32,
+  },
+  signOutBtn: {
+    position: 'absolute',
+    top: 56,
+    right: 24,
+    zIndex: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  signOutText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 14,
+    color: colors.muted,
   },
 })
