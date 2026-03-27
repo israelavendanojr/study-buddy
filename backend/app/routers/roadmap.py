@@ -7,7 +7,6 @@ import anthropic
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ..database import get_db
@@ -37,21 +36,6 @@ class RoadmapRequest(BaseModel):
 
 class ProgressUpdate(BaseModel):
     active_index: int = Field(ge=0)
-
-
-class NextChapterRequest(BaseModel):
-    user_id: str
-    chapter_id: str
-    chapter_title: str
-    chapter_index: int = Field(ge=0)
-    total_chapters: int = Field(ge=1)
-    previous_chapter_summaries: list[dict]  # [{title, lessonTitles: [...]}]
-    goal: str
-    experience: int = Field(ge=1, le=5)
-    session_hours: int = Field(ge=0, le=8)
-    session_minutes: int = Field(ge=0, le=45)
-    weeks: int = Field(ge=1, le=52)
-    coaching_result: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -164,66 +148,15 @@ Return ONLY valid JSON matching this exact schema — no markdown, no explanatio
 
 Rules:
 - {min_chapters} to {max_chapters} chapters total (scale to the {weeks}-week duration)
-- Chapter 1 (ch1): generate {min_lessons} to {max_lessons} full lessons
-  - Last lesson of chapter 1 must have type "milestone"
+- Every chapter: generate {min_lessons} to {max_lessons} full lessons
+  - Last lesson of each chapter must have type "milestone"
   - estimatedMinutes for each lesson must be <= {total_minutes}
   - Each lesson title must be specific and actionable
-- Chapters 2+ (ch2, ch3, ...): set "lessons": [] (empty array — generated on demand)
 - Chapters should represent meaningful phases of progression
 - Chapter titles must hint at the learning arc without revealing lesson detail
-- Later chapters should build on skills from earlier ones — the roadmap must tell a coherent learning story
+- Lessons must build progressively — later chapters assume skills from earlier ones and escalate difficulty
+- The roadmap must tell a coherent learning story from chapter 1 through the final chapter
 - Return ONLY the JSON object, starting with {{ and ending with }}"""
-
-
-def _build_next_chapter_prompt(req: NextChapterRequest) -> str:
-    total_minutes = req.session_hours * 60 + req.session_minutes
-    weeks = req.weeks
-    if weeks <= 2:
-        min_l, max_l = 2, 3
-    elif weeks <= 8:
-        min_l, max_l = 4, 6
-    elif weeks <= 24:
-        min_l, max_l = 4, 8
-    else:
-        min_l, max_l = 5, 10
-
-    is_last = req.chapter_index == req.total_chapters - 1
-    prev = "\n".join(
-        f"  Ch{i+1} '{s['title']}': {', '.join(s['lessonTitles'])}"
-        for i, s in enumerate(req.previous_chapter_summaries)
-    )
-    coaching_block = ""
-    if req.coaching_result:
-        cr = req.coaching_result
-        coaching_block = f"""
-Personalization:
-- Refined goal: {cr.get("refined_goal", req.goal)}
-- Learning style: {cr.get("learning_style", "")}
-- Baseline: {cr.get("baseline", "")}
-- Recommended approach: {cr.get("recommended_approach", "")}
-"""
-    return f"""Generate ALL lessons for ONE chapter of a learning roadmap.
-
-Chapter: "{req.chapter_title}" (chapter {req.chapter_index + 1} of {req.total_chapters})
-Goal: {req.goal} | Experience: {req.experience}/5 | Session: {total_minutes} min
-{coaching_block}
-Previous chapters covered:
-{prev if prev else "  (this is the first chapter)"}
-
-Generate {min_l}–{max_l} lessons that DIRECTLY FOLLOW the content above.
-- Build on prior chapters — don't repeat covered material
-- Last lesson MUST have type "milestone" (capstone of this chapter)
-- All other lessons use type "lesson" or "practice"
-- estimatedMinutes <= {total_minutes}
-- Each title must be specific and actionable{"" if not is_last else chr(10) + "- This is the FINAL chapter — make lessons feel like a culmination"}
-
-Return ONLY valid JSON — no markdown:
-{{
-  "lessons": [
-    {{"id": "{req.chapter_id}-l1", "title": "string", "type": "lesson|practice|milestone", "estimatedMinutes": number}},
-    ...
-  ]
-}}"""
 
 
 def _build_coach_system_prompt(req: CoachRequest) -> str:
@@ -555,50 +488,3 @@ def update_progress(user_id: str, body: ProgressUpdate, db: Session = Depends(ge
     return {"active_index": row.active_index}
 
 
-@router.post("/next-chapter")
-async def generate_next_chapter(req: NextChapterRequest, db: Session = Depends(get_db)) -> dict:
-    row = db.query(UserRoadmap).filter(UserRoadmap.clerk_user_id == req.user_id).first()
-    if row is None:
-        raise HTTPException(status_code=404, detail="No roadmap found.")
-
-    chapters = row.roadmap_json.get("chapters", [])
-    if req.chapter_index >= len(chapters):
-        raise HTTPException(status_code=400, detail="chapter_index out of range.")
-
-    # Idempotent: if lessons already exist, return them
-    existing = chapters[req.chapter_index].get("lessons", [])
-    if existing:
-        return {"lessons": existing}
-
-    prompt = _build_next_chapter_prompt(req)
-    try:
-        client = anthropic.Anthropic()
-        message = client.messages.create(
-            model=ANTHROPIC_MODEL,
-            max_tokens=4096,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        full_text = message.content[0].text
-    except anthropic.APIConnectionError:
-        raise HTTPException(status_code=503, detail="Could not connect to Anthropic API.")
-    except anthropic.APIStatusError as e:
-        raise HTTPException(status_code=503, detail=f"Anthropic API error: {e.status_code} {e.message}")
-
-    result = _strip_and_parse(full_text, "NextChapter")
-    lessons = result.get("lessons", [])
-
-    # Enforce: last lesson must be milestone
-    if lessons:
-        lessons[-1]["type"] = "milestone"
-        # Re-index lesson IDs to be consistent
-        for i, lesson in enumerate(lessons):
-            lesson["id"] = f"{req.chapter_id}-l{i + 1}"
-
-    roadmap = row.roadmap_json
-    roadmap["chapters"][req.chapter_index]["lessons"] = lessons
-    row.roadmap_json = roadmap
-    flag_modified(row, "roadmap_json")
-    row.updated_at = datetime.now(timezone.utc)
-    db.commit()
-
-    return {"lessons": lessons}

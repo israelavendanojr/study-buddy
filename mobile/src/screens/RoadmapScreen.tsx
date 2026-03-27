@@ -149,11 +149,11 @@ function ConfettiOverlay({ triggerRef }: { triggerRef: React.MutableRefObject<((
 
 export default function RoadmapScreen() {
   const route = useRoute<RouteProp<{ params: RoadmapParams }, 'params'>>()
-  const { roadmap: initialRoadmap, initialActiveIndex, goal, experience, sessionHours, sessionMinutes, weeks, coachingResult } = route.params as RoadmapParams
+  const { roadmap: initialRoadmap, initialActiveIndex, goal } = route.params as RoadmapParams
   const { user } = useUser()
   const navigation = useNavigation<StackNavigationProp<any>>()
 
-  const [roadmap, setRoadmap] = useState<Roadmap>(initialRoadmap)
+  const [roadmap] = useState<Roadmap>(initialRoadmap)
 
   const allLessons = roadmap.chapters.flatMap(c => c.lessons)
   const totalLessons = allLessons.length
@@ -169,46 +169,6 @@ export default function RoadmapScreen() {
   const confettiTriggerRef = useRef<((isMilestone: boolean) => void) | null>(null)
   const shakeAnim = useRef(new Animated.Value(0)).current
 
-  const generateNextChapter = async (completedChapterIndex: number) => {
-    if (!user?.id) return
-    const nextChapterIndex = completedChapterIndex + 1
-    if (nextChapterIndex >= roadmap.chapters.length) return
-
-    const nextChapter = roadmap.chapters[nextChapterIndex]
-    if (nextChapter.lessons.length > 0) return  // already generated
-
-    const previousSummaries = roadmap.chapters
-      .slice(0, nextChapterIndex)
-      .map(ch => ({ title: ch.title, lessonTitles: ch.lessons.map(l => l.title) }))
-
-    try {
-      const res = await fetch(`${API_BASE}/roadmap/next-chapter`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user.id,
-          chapter_id: nextChapter.id,
-          chapter_title: nextChapter.title,
-          chapter_index: nextChapterIndex,
-          total_chapters: roadmap.chapters.length,
-          previous_chapter_summaries: previousSummaries,
-          goal, experience,
-          session_hours: sessionHours,
-          session_minutes: sessionMinutes,
-          weeks,
-          coaching_result: coachingResult ?? null,
-        }),
-      })
-      if (!res.ok) return
-      const { lessons } = await res.json()
-      setRoadmap(prev => ({
-        ...prev,
-        chapters: prev.chapters.map((ch, idx) =>
-          idx === nextChapterIndex ? { ...ch, lessons } : ch
-        ),
-      }))
-    } catch { /* fail silently */ }
-  }
 
   const saveProgress = async (newIndex: number) => {
     if (!user?.id) return
@@ -267,13 +227,6 @@ export default function RoadmapScreen() {
       const newIndex = Math.min(activeIndex + 1, totalLessons)
       setActiveIndex(newIndex)
       saveProgress(newIndex)
-      // Generate next chapter when milestone is hit
-      if (selectedLesson?.type === 'milestone') {
-        const chapterIndex = roadmap.chapters.findIndex(c =>
-          c.lessons.some(l => l.id === selectedLesson.id)
-        )
-        if (chapterIndex !== -1) generateNextChapter(chapterIndex)
-      }
     }
   }
 
