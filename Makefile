@@ -33,14 +33,14 @@ db-stop: ## Stop PostgreSQL
 backend: ## Start FastAPI (requires DB running)
 	cd backend && venv/bin/uvicorn app.main:app --reload --host 0.0.0.0
 
-mobile: ## Start Expo dev server
-	cd mobile && npx expo start
+mobile: ## Start Expo dev server (iOS)
+	cd mobile && npx expo run:ios
 
 dev: ## Start all services (DB + backend + mobile)
 	@$(MAKE) db-wait
 	@echo "Starting backend and mobile..."
 	@cd backend && venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 & \
-	cd mobile && npx expo start & \
+	cd mobile && npx expo run:ios & \
 	wait
 
 ip: ## Print your local IP for physical device testing

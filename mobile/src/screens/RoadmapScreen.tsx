@@ -10,8 +10,9 @@ import {
   Animated,
 } from 'react-native'
 import Svg, { Path, Circle, Rect } from 'react-native-svg'
-import { useRoute } from '@react-navigation/native'
+import { useRoute, useNavigation } from '@react-navigation/native'
 import type { RouteProp } from '@react-navigation/native'
+import type { StackNavigationProp } from '@react-navigation/stack'
 import { useUser } from '@clerk/clerk-expo'
 import Companion from '../components/Companion'
 import PathTrail from '../components/PathTrail'
@@ -33,6 +34,11 @@ interface RoadmapParams {
   goal: string; buddyName: string; roadmap: Roadmap
   roadmapId?: number | null
   initialActiveIndex?: number
+  experience: number
+  sessionHours: number
+  sessionMinutes: number
+  weeks: number
+  coachingResult?: object | null
   [key: string]: unknown
 }
 
@@ -171,8 +177,11 @@ function ConfettiOverlay({ triggerRef }: { triggerRef: React.MutableRefObject<((
 
 export default function RoadmapScreen() {
   const route = useRoute<RouteProp<{ params: RoadmapParams }, 'params'>>()
-  const { roadmap, initialActiveIndex } = route.params as RoadmapParams
+  const { roadmap: initialRoadmap, initialActiveIndex, goal, experience, sessionHours, sessionMinutes, weeks, coachingResult } = route.params as RoadmapParams
   const { user } = useUser()
+  const navigation = useNavigation<StackNavigationProp<any>>()
+
+  const [roadmap, setRoadmap] = useState<Roadmap>(initialRoadmap)
 
   const allLessons = roadmap.chapters.flatMap(c => c.lessons)
   const totalLessons = allLessons.length
@@ -181,9 +190,53 @@ export default function RoadmapScreen() {
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null)
 
+  const allChaptersGenerated = roadmap.chapters.every(ch => ch.lessons.length > 0)
+  const isCompleted = allChaptersGenerated && totalLessons > 0 && activeIndex >= totalLessons
+
   const scrollRef = useRef<ScrollView>(null)
   const confettiTriggerRef = useRef<((isMilestone: boolean) => void) | null>(null)
   const shakeAnim = useRef(new Animated.Value(0)).current
+
+  const generateNextChapter = async (completedChapterIndex: number) => {
+    if (!user?.id) return
+    const nextChapterIndex = completedChapterIndex + 1
+    if (nextChapterIndex >= roadmap.chapters.length) return
+
+    const nextChapter = roadmap.chapters[nextChapterIndex]
+    if (nextChapter.lessons.length > 0) return  // already generated
+
+    const previousSummaries = roadmap.chapters
+      .slice(0, nextChapterIndex)
+      .map(ch => ({ title: ch.title, lessonTitles: ch.lessons.map(l => l.title) }))
+
+    try {
+      const res = await fetch(`${API_BASE}/roadmap/next-chapter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          chapter_id: nextChapter.id,
+          chapter_title: nextChapter.title,
+          chapter_index: nextChapterIndex,
+          total_chapters: roadmap.chapters.length,
+          previous_chapter_summaries: previousSummaries,
+          goal, experience,
+          session_hours: sessionHours,
+          session_minutes: sessionMinutes,
+          weeks,
+          coaching_result: coachingResult ?? null,
+        }),
+      })
+      if (!res.ok) return
+      const { lessons } = await res.json()
+      setRoadmap(prev => ({
+        ...prev,
+        chapters: prev.chapters.map((ch, idx) =>
+          idx === nextChapterIndex ? { ...ch, lessons } : ch
+        ),
+      }))
+    } catch { /* fail silently */ }
+  }
 
   const saveProgress = async (newIndex: number) => {
     if (!user?.id) return
@@ -204,14 +257,14 @@ export default function RoadmapScreen() {
     ).start()
   }
 
-  // Build id→index map
+  // Build id→index map — rebuilds whenever lessons are appended
   const indexMap = useRef<Map<string, number>>(new Map())
   useEffect(() => {
     let i = 0
     for (const ch of roadmap.chapters)
       for (const l of ch.lessons)
         indexMap.current.set(l.id, i++)
-  }, [])
+  }, [roadmap])
 
   // Compute the winding path layout
   const layout = useMemo(() => computePathLayout(roadmap.chapters), [roadmap.chapters])
@@ -242,6 +295,13 @@ export default function RoadmapScreen() {
       const newIndex = Math.min(activeIndex + 1, totalLessons)
       setActiveIndex(newIndex)
       saveProgress(newIndex)
+      // Generate next chapter when milestone is hit
+      if (selectedLesson?.type === 'milestone') {
+        const chapterIndex = roadmap.chapters.findIndex(c =>
+          c.lessons.some(l => l.id === selectedLesson.id)
+        )
+        if (chapterIndex !== -1) generateNextChapter(chapterIndex)
+      }
     }
   }
 
@@ -293,43 +353,65 @@ export default function RoadmapScreen() {
         <Text style={styles.progressLabel}>{activeIndex} / {totalLessons} lessons</Text>
       </View>
 
-      <ScrollView
-        ref={scrollRef}
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { height: layout.totalHeight + 80 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* SVG winding path */}
-        <PathTrail
-          pathD={layout.pathD}
-          totalHeight={layout.totalHeight}
-          progressLength={progressLength}
-          totalLength={totalLength}
-        />
-
-        {/* Chapter headers */}
-        {layout.chapterHeaderPositions.map(({ y, chapter }) => (
-          <View key={chapter.id} style={[styles.chapterHeader, { top: y }]}>
-            <Text style={styles.chapterTitle}>{chapter.title}</Text>
-            <View style={styles.chapterUnderline} />
-          </View>
-        ))}
-
-        {/* Nodes along the path */}
-        {layout.nodePositions.map(({ x, y, lesson, globalIndex, labelSide }) => (
-          <PathNode
-            key={lesson.id}
-            lesson={lesson}
-            x={x}
-            y={y}
-            labelSide={labelSide}
-            isDone={globalIndex < activeIndex}
-            isActive={globalIndex === activeIndex}
-            isLocked={globalIndex > activeIndex}
-            onPress={handleNodePress}
+      {isCompleted ? (
+        <View style={styles.completionContent}>
+          <Companion size={80} mood="excited" />
+          <Text style={styles.completionTitle}>You did it! 🎉</Text>
+          <Text style={styles.completionGoal}>{goal}</Text>
+          <Text style={styles.completionStats}>
+            {totalLessons} lessons · {roadmap.chapters.length} chapters
+          </Text>
+          <Pressable
+            onPress={() => navigation.replace('Onboarding')}
+            style={[styles.newGoalBtn, shadows.mint]}
+          >
+            <Text style={styles.newGoalBtnText}>Start a new goal →</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scroll}
+          contentContainerStyle={[styles.scrollContent, { height: layout.totalHeight + 80 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* SVG winding path */}
+          <PathTrail
+            pathD={layout.pathD}
+            totalHeight={layout.totalHeight}
+            progressLength={progressLength}
+            totalLength={totalLength}
           />
-        ))}
-      </ScrollView>
+
+          {/* Chapter headers */}
+          {layout.chapterHeaderPositions.map(({ y, chapter }) => {
+            const isLocked = chapter.lessons.length === 0
+            return (
+              <View key={chapter.id} style={[styles.chapterHeader, { top: y }]}>
+                <Text style={[styles.chapterTitle, isLocked && { color: colors.muted }]}>
+                  {isLocked ? '🔒 ' : ''}{chapter.title}
+                </Text>
+                <View style={[styles.chapterUnderline, isLocked && { backgroundColor: colors.border }]} />
+              </View>
+            )
+          })}
+
+          {/* Nodes along the path */}
+          {layout.nodePositions.map(({ x, y, lesson, globalIndex, labelSide }) => (
+            <PathNode
+              key={lesson.id}
+              lesson={lesson}
+              x={x}
+              y={y}
+              labelSide={labelSide}
+              isDone={globalIndex < activeIndex}
+              isActive={globalIndex === activeIndex}
+              isLocked={globalIndex > activeIndex}
+              onPress={handleNodePress}
+            />
+          ))}
+        </ScrollView>
+      )}
 
       {/* Tab bar */}
       <View style={styles.tabBar}>
@@ -465,5 +547,46 @@ const styles = StyleSheet.create({
     backgroundColor: colors.mint,
     borderRadius: 2,
     marginTop: 2,
+  },
+  // Completion state (replaces scroll content)
+  completionContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  completionTitle: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 28,
+    color: colors.foreground,
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  completionGoal: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 15,
+    color: colors.muted,
+    textAlign: 'center',
+    marginBottom: 6,
+    lineHeight: 20,
+  },
+  completionStats: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 13,
+    color: colors.muted,
+    marginBottom: 32,
+  },
+  newGoalBtn: {
+    width: '100%',
+    backgroundColor: colors.mint,
+    borderRadius: radius.lg,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  newGoalBtnText: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 17,
+    color: colors.foreground,
   },
 })

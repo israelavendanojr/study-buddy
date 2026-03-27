@@ -22,11 +22,17 @@ export default function LoadingScreen() {
       try {
         const res = await fetch(`${API_BASE}/roadmap/${user.id}`)
         if (res.ok) {
-          const { roadmap_id, active_index, ...roadmapBody } = await res.json()
+          const { roadmap_id, active_index, _context, ...roadmapBody } = await res.json()
           navigation.replace('Roadmap', {
             roadmap: roadmapBody,
             roadmapId: roadmap_id,
             initialActiveIndex: active_index,
+            goal: _context?.goal ?? '',
+            experience: _context?.experience ?? 3,
+            sessionHours: _context?.session_hours ?? 0,
+            sessionMinutes: _context?.session_minutes ?? 30,
+            weeks: _context?.weeks ?? 4,
+            coachingResult: _context?.coaching_result ?? null,
           })
         } else {
           navigation.replace('Onboarding')
