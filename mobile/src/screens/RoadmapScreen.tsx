@@ -7,6 +7,7 @@ import {
   ScrollView,
   Modal,
   Dimensions,
+  Animated,
 } from 'react-native'
 import Svg, { Path, Circle, Rect } from 'react-native-svg'
 import { useRoute } from '@react-navigation/native'
@@ -32,7 +33,7 @@ interface RoadmapParams {
   [key: string]: unknown
 }
 
-const { width: SW } = Dimensions.get('window')
+const { width: SW, height: SH } = Dimensions.get('window')
 
 // ── Tab icons (SVG) ───────────────────────────────────────────────────────────
 
@@ -62,6 +63,105 @@ function BadgeIcon() {
   )
 }
 
+// ── Confetti ──────────────────────────────────────────────────────────────────
+
+const CONFETTI_COLORS = [
+  colors.mint, colors.peach, colors.golden, colors.sky, colors.lavender, '#FF8FAB',
+]
+const CONFETTI_COUNT = 50
+
+interface ConfettiPiece {
+  x: number
+  y: Animated.Value
+  opacity: Animated.Value
+  rot: Animated.Value
+  color: string
+  w: number
+  h: number
+  delay: number
+  maxRot: number
+}
+
+function makeConfettiPieces(): ConfettiPiece[] {
+  return Array.from({ length: CONFETTI_COUNT }, () => ({
+    x: Math.random() * SW,
+    y: new Animated.Value(-30),
+    opacity: new Animated.Value(0),
+    rot: new Animated.Value(0),
+    color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+    w: Math.random() * 9 + 5,
+    h: Math.random() * 7 + 4,
+    delay: Math.random() * 500,
+    maxRot: (Math.random() > 0.5 ? 1 : -1) * (360 + Math.random() * 360),
+  }))
+}
+
+function ConfettiOverlay({ triggerRef }: { triggerRef: React.MutableRefObject<((isMilestone: boolean) => void) | null> }) {
+  const pieces = useRef(makeConfettiPieces()).current
+
+  useEffect(() => {
+    triggerRef.current = (isMilestone: boolean) => {
+      const active = isMilestone ? pieces : pieces.slice(0, 20)
+      active.forEach(p => {
+        p.y.setValue(-30)
+        p.opacity.setValue(1)
+        p.rot.setValue(0)
+
+        Animated.parallel([
+          Animated.timing(p.y, {
+            toValue: SH + 40,
+            duration: 1400 + Math.random() * 800,
+            delay: p.delay,
+            useNativeDriver: true,
+          }),
+          Animated.sequence([
+            Animated.delay(p.delay + 800),
+            Animated.timing(p.opacity, {
+              toValue: 0,
+              duration: 500,
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.timing(p.rot, {
+            toValue: p.maxRot,
+            duration: 2000 + Math.random() * 800,
+            delay: p.delay,
+            useNativeDriver: true,
+          }),
+        ]).start()
+      })
+    }
+  }, [])
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {pieces.map((p, i) => {
+        const absMax = Math.abs(p.maxRot)
+        const rotate = p.rot.interpolate({
+          inputRange: p.maxRot < 0 ? [-absMax, 0] : [0, absMax],
+          outputRange: p.maxRot < 0 ? [`-${absMax}deg`, '0deg'] : ['0deg', `${absMax}deg`],
+        })
+        return (
+          <Animated.View
+            key={i}
+            style={{
+              position: 'absolute',
+              left: p.x,
+              top: 0,
+              width: p.w,
+              height: p.h,
+              backgroundColor: p.color,
+              borderRadius: 2,
+              transform: [{ translateY: p.y }, { rotate }],
+              opacity: p.opacity,
+            }}
+          />
+        )
+      })}
+    </View>
+  )
+}
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function RoadmapScreen() {
@@ -76,6 +176,16 @@ export default function RoadmapScreen() {
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null)
 
   const scrollRef = useRef<ScrollView>(null)
+  const confettiTriggerRef = useRef<((isMilestone: boolean) => void) | null>(null)
+  const shakeAnim = useRef(new Animated.Value(0)).current
+
+  const triggerShake = () => {
+    Animated.sequence(
+      [5, -5, 4, -4, 3, -3, 2, -2, 1, 0].map(x =>
+        Animated.timing(shakeAnim, { toValue: x, duration: 35, useNativeDriver: true })
+      )
+    ).start()
+  }
 
   // Build id→index map
   const indexMap = useRef<Map<string, number>>(new Map())
@@ -109,8 +219,11 @@ export default function RoadmapScreen() {
   const handleStart = () => {
     const idx = indexMap.current.get(selectedLesson?.id ?? '') ?? -1
     setModalOpen(false)
-    if (idx === activeIndex)
+    if (idx === activeIndex) {
+      confettiTriggerRef.current?.(selectedLesson?.type === 'milestone')
+      triggerShake()
       setActiveIndex(prev => Math.min(prev + 1, totalLessons))
+    }
   }
 
   // ── Progress path length ────────────────────────────────────────────────
@@ -151,7 +264,7 @@ export default function RoadmapScreen() {
   const progressPct = totalLessons > 0 ? activeIndex / totalLessons : 0
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { transform: [{ translateX: shakeAnim }] }]}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Roadmap</Text>
@@ -216,8 +329,9 @@ export default function RoadmapScreen() {
         </Pressable>
       </View>
 
+      <ConfettiOverlay triggerRef={confettiTriggerRef} />
       {renderModal()}
-    </View>
+    </Animated.View>
   )
 }
 
