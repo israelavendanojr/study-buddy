@@ -1,10 +1,16 @@
 import json
 import os
 import re
+from datetime import datetime, timezone
 
 import anthropic
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from ..database import get_db
+from ..models import UserRoadmap
 
 router = APIRouter()
 
@@ -16,6 +22,7 @@ ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 # ---------------------------------------------------------------------------
 
 class RoadmapRequest(BaseModel):
+    user_id: str | None = None
     goal: str
     buddy_name: str
     experience: int = Field(ge=1, le=5)
@@ -25,6 +32,10 @@ class RoadmapRequest(BaseModel):
     weeks: int = Field(ge=1, le=52)
     success_vision: str
     coaching_result: dict | None = None
+
+
+class ProgressUpdate(BaseModel):
+    active_index: int = Field(ge=0)
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +268,7 @@ def _strip_and_parse(text: str, context: str) -> dict:
 # ---------------------------------------------------------------------------
 
 @router.post("/generate")
-async def generate_roadmap(req: RoadmapRequest) -> dict:  # type: ignore[return]
+async def generate_roadmap(req: RoadmapRequest, db: Session = Depends(get_db)) -> dict:  # type: ignore[return]
     prompt = _build_prompt(req)
 
     # SWAP: replace client.messages.create below with a different provider if needed
@@ -281,7 +292,31 @@ async def generate_roadmap(req: RoadmapRequest) -> dict:  # type: ignore[return]
             detail=f"Anthropic API error: {e.status_code} {e.message}",
         )
 
-    return _strip_and_parse(full_text, "Claude")
+    roadmap = _strip_and_parse(full_text, "Claude")
+
+    roadmap_id: int | None = None
+    if req.user_id:
+        now = datetime.now(timezone.utc)
+        stmt = (
+            pg_insert(UserRoadmap)
+            .values(
+                clerk_user_id=req.user_id,
+                roadmap_json=roadmap,
+                active_index=0,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=["clerk_user_id"],
+                set_={"roadmap_json": roadmap, "active_index": 0, "updated_at": now},
+            )
+            .returning(UserRoadmap.id)
+        )
+        result = db.execute(stmt)
+        db.commit()
+        roadmap_id = result.scalar_one()
+
+    return {"roadmap_id": roadmap_id, "active_index": 0, **roadmap}
 
 
 @router.post("/coach", response_model=CoachResponse)
@@ -417,3 +452,26 @@ Rules:
         )
 
     return _strip_and_parse(full_text, "Summarize")
+
+
+# ---------------------------------------------------------------------------
+# Roadmap persistence endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/{user_id}")
+def get_roadmap(user_id: str, db: Session = Depends(get_db)) -> dict:
+    row = db.query(UserRoadmap).filter(UserRoadmap.clerk_user_id == user_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="No roadmap found for this user.")
+    return {"roadmap_id": row.id, "active_index": row.active_index, **row.roadmap_json}
+
+
+@router.patch("/{user_id}/progress")
+def update_progress(user_id: str, body: ProgressUpdate, db: Session = Depends(get_db)) -> dict:
+    row = db.query(UserRoadmap).filter(UserRoadmap.clerk_user_id == user_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="No roadmap found for this user.")
+    row.active_index = body.active_index
+    row.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"active_index": row.active_index}

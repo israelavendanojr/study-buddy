@@ -12,6 +12,7 @@ import {
 import Svg, { Path, Circle, Rect } from 'react-native-svg'
 import { useRoute } from '@react-navigation/native'
 import type { RouteProp } from '@react-navigation/native'
+import { useUser } from '@clerk/clerk-expo'
 import Companion from '../components/Companion'
 import PathTrail from '../components/PathTrail'
 import PathNode from '../components/PathNode'
@@ -30,8 +31,12 @@ interface Chapter { id: string; title: string; lessons: Lesson[] }
 interface Roadmap { title: string; chapters: Chapter[] }
 interface RoadmapParams {
   goal: string; buddyName: string; roadmap: Roadmap
+  roadmapId?: number | null
+  initialActiveIndex?: number
   [key: string]: unknown
 }
+
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
 
 const { width: SW, height: SH } = Dimensions.get('window')
 
@@ -166,18 +171,30 @@ function ConfettiOverlay({ triggerRef }: { triggerRef: React.MutableRefObject<((
 
 export default function RoadmapScreen() {
   const route = useRoute<RouteProp<{ params: RoadmapParams }, 'params'>>()
-  const { roadmap } = route.params as RoadmapParams
+  const { roadmap, initialActiveIndex } = route.params as RoadmapParams
+  const { user } = useUser()
 
   const allLessons = roadmap.chapters.flatMap(c => c.lessons)
   const totalLessons = allLessons.length
 
-  const [activeIndex, setActiveIndex] = useState(0)
+  const [activeIndex, setActiveIndex] = useState(initialActiveIndex ?? 0)
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null)
 
   const scrollRef = useRef<ScrollView>(null)
   const confettiTriggerRef = useRef<((isMilestone: boolean) => void) | null>(null)
   const shakeAnim = useRef(new Animated.Value(0)).current
+
+  const saveProgress = async (newIndex: number) => {
+    if (!user?.id) return
+    try {
+      await fetch(`${API_BASE}/roadmap/${user.id}/progress`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active_index: newIndex }),
+      })
+    } catch { /* fire-and-forget — UI never blocks on this */ }
+  }
 
   const triggerShake = () => {
     Animated.sequence(
@@ -222,7 +239,9 @@ export default function RoadmapScreen() {
     if (idx === activeIndex) {
       confettiTriggerRef.current?.(selectedLesson?.type === 'milestone')
       triggerShake()
-      setActiveIndex(prev => Math.min(prev + 1, totalLessons))
+      const newIndex = Math.min(activeIndex + 1, totalLessons)
+      setActiveIndex(newIndex)
+      saveProgress(newIndex)
     }
   }
 

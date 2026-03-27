@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
+import { useUser } from '@clerk/clerk-expo'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RouteProp } from '@react-navigation/native'
@@ -54,6 +55,7 @@ export default function ConfirmationScreen() {
   const navigation = useNavigation<StackNavigationProp<any>>()
   const route = useRoute<RouteProp<{ params: ConfirmationParams }, 'params'>>()
   const params = route.params as ConfirmationParams
+  const { user } = useUser()
   const buttonScale = useRef(new Animated.Value(1)).current
   const fadeAnim = useRef(new Animated.Value(0)).current
   const [loading, setLoading] = useState(false)
@@ -194,6 +196,7 @@ export default function ConfirmationScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          user_id: user?.id ?? null,
           goal: params.goal,
           buddy_name: params.buddyName,
           experience: params.experience,
@@ -209,8 +212,14 @@ export default function ConfirmationScreen() {
         const err = await res.json().catch(() => ({ detail: 'Unknown error' }))
         throw new Error(err.detail ?? `Server error ${res.status}`)
       }
-      const roadmap = await res.json()
-      navigation.navigate('Roadmap', { ...params, roadmap })
+      const data = await res.json()
+      const { roadmap_id, active_index, ...roadmapBody } = data
+      navigation.navigate('Roadmap', {
+        ...params,
+        roadmap: roadmapBody,
+        roadmapId: roadmap_id,
+        initialActiveIndex: active_index ?? 0,
+      })
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Something went wrong.'
       Alert.alert('Could not build path', message, [{ text: 'OK' }])

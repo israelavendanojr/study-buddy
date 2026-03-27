@@ -12,6 +12,7 @@ import { colors } from './src/theme'
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo'
 import * as SecureStore from 'expo-secure-store'
 
+import LoadingScreen from './src/screens/LoadingScreen'
 import OnboardingScreen from './src/screens/OnboardingScreen'
 import BuddyNamingScreen from './src/screens/BuddyNamingScreen'
 import GoalTuningScreen from './src/screens/GoalTuningScreen'
@@ -49,6 +50,7 @@ function AppNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
     >
       {isSignedIn ? (
         <>
+          <Stack.Screen name="Loading" component={LoadingScreen} />
           <Stack.Screen name="Onboarding" component={OnboardingScreen} />
           <Stack.Screen name="BuddyNaming" component={BuddyNamingScreen} />
           <Stack.Screen name="GoalTuning" component={GoalTuningScreen} />

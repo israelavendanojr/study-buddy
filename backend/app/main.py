@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from .database import Base, engine, get_db
 from .routers import onboarding, roadmap
+from . import models  # noqa: F401 — registers UserRoadmap with Base.metadata
 
 Base.metadata.create_all(bind=engine)
 
