@@ -59,7 +59,14 @@ const Index: React.FC = () => {
           {screen === 'path' && <MyPath />}
           {screen === 'badges' && <BadgeBoard />}
           {screen === 'customization' && <BuddyCustomization onBack={() => setScreen('home')} />}
-          {screen === 'settings' && <SettingsScreen onBack={() => setScreen('home')} />}
+          {screen === 'settings' && (
+            <SettingsScreen
+              onBack={() => setScreen('home')}
+              onLogout={() => setScreen('onboarding')}
+              email="demo@studbud.app"
+              displayName={buddyName}
+            />
+          )}
         </motion.div>
       </AnimatePresence>
 

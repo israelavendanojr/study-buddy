@@ -9,7 +9,6 @@ import {
   Dimensions,
   Animated,
 } from 'react-native'
-import Svg, { Path, Circle, Rect } from 'react-native-svg'
 import { useRoute, useNavigation } from '@react-navigation/native'
 import type { RouteProp } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
@@ -17,6 +16,7 @@ import { useUser } from '@clerk/clerk-expo'
 import Companion from '../components/Companion'
 import PathTrail from '../components/PathTrail'
 import PathNode from '../components/PathNode'
+import TabBar from '../components/TabBar'
 import { computePathLayout } from '../utils/computePathLayout'
 import { colors, radius, shadows } from '../theme'
 
@@ -45,34 +45,6 @@ interface RoadmapParams {
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
 
 const { width: SW, height: SH } = Dimensions.get('window')
-
-// ── Tab icons (SVG) ───────────────────────────────────────────────────────────
-
-function MapIcon({ active }: { active?: boolean }) {
-  const c = active ? colors.mint : colors.muted
-  return (
-    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
-      <Path d="M9 4L3 7v13l6-3 6 3 6-3V4l-6 3-6-3z" stroke={c} strokeWidth={1.8} strokeLinejoin="round" />
-      <Path d="M9 4v13M15 7v13" stroke={c} strokeWidth={1.8} />
-    </Svg>
-  )
-}
-function HomeIcon() {
-  return (
-    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
-      <Path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z" stroke={colors.muted} strokeWidth={1.8} strokeLinejoin="round" />
-      <Path d="M9 21V12h6v9" stroke={colors.muted} strokeWidth={1.8} strokeLinejoin="round" />
-    </Svg>
-  )
-}
-function BadgeIcon() {
-  return (
-    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
-      <Circle cx="12" cy="9" r="6" stroke={colors.muted} strokeWidth={1.8} />
-      <Path d="M8.5 14.5L7 21l5-2 5 2-1.5-6.5" stroke={colors.muted} strokeWidth={1.8} strokeLinejoin="round" />
-    </Svg>
-  )
-}
 
 // ── Confetti ──────────────────────────────────────────────────────────────────
 
@@ -389,7 +361,7 @@ export default function RoadmapScreen() {
             return (
               <View key={chapter.id} style={[styles.chapterHeader, { top: y }]}>
                 <Text style={[styles.chapterTitle, isLocked && { color: colors.muted }]}>
-                  {isLocked ? '🔒 ' : ''}{chapter.title}
+                  {isLocked ? '' : ''}{chapter.title}
                 </Text>
                 <View style={[styles.chapterUnderline, isLocked && { backgroundColor: colors.border }]} />
               </View>
@@ -413,22 +385,7 @@ export default function RoadmapScreen() {
         </ScrollView>
       )}
 
-      {/* Tab bar */}
-      <View style={styles.tabBar}>
-        <Pressable style={styles.tab}>
-          <MapIcon active />
-          <Text style={[styles.tabLabel, { color: colors.mint }]}>Path</Text>
-          <View style={styles.tabIndicator} />
-        </Pressable>
-        <Pressable style={styles.tab}>
-          <HomeIcon />
-          <Text style={styles.tabLabel}>Home</Text>
-        </Pressable>
-        <Pressable style={styles.tab}>
-          <BadgeIcon />
-          <Text style={styles.tabLabel}>Badges</Text>
-        </Pressable>
-      </View>
+      <TabBar activeTab="path" />
 
       <ConfettiOverlay triggerRef={confettiTriggerRef} />
       {renderModal()}
@@ -526,28 +483,6 @@ const styles = StyleSheet.create({
   startBtnText: { fontFamily: 'FredokaOne_400Regular', fontSize: 18, color: colors.foreground },
   notNow: { paddingVertical: 8 },
   notNowText: { fontFamily: 'Nunito_400Regular', fontSize: 16, color: colors.muted },
-  // Tab bar
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingBottom: 28,
-    paddingTop: 10,
-  },
-  tab: { flex: 1, alignItems: 'center', gap: 3 },
-  tabLabel: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 11,
-    color: colors.muted,
-  },
-  tabIndicator: {
-    width: 20,
-    height: 3,
-    backgroundColor: colors.mint,
-    borderRadius: 2,
-    marginTop: 2,
-  },
   // Completion state (replaces scroll content)
   completionContent: {
     flex: 1,

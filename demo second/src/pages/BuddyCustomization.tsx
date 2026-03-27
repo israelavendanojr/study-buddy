@@ -60,7 +60,7 @@ const BuddyCustomization: React.FC<BuddyCustomizationProps> = ({ onBack }) => {
                 <span className="text-xs font-body text-muted-foreground">{c.name}</span>
                 {!c.unlocked && (
                   <span className="text-[10px] font-body text-muted-foreground">
-                    {c.pro ? '👑 Pro' : `🔒 ${c.cost}`}
+                    {c.pro ? 'Pro' : `${c.cost}`}
                   </span>
                 )}
               </button>
@@ -83,7 +83,7 @@ const BuddyCustomization: React.FC<BuddyCustomizationProps> = ({ onBack }) => {
                 {a.equipped && <span className="text-[10px] text-primary font-body">Equipped</span>}
                 {!a.unlocked && (
                   <span className="text-[10px] text-muted-foreground font-body block">
-                    {(a as any).pro ? '👑 Pro' : `🔒 ${a.cost}`}
+                    {(a as any).pro ? '👑 Pro' : `${a.cost}`}
                   </span>
                 )}
               </div>
