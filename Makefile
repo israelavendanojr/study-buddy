@@ -36,6 +36,10 @@ backend: ## Start FastAPI (requires DB running)
 mobile: ## Start Expo dev server (iOS)
 	cd mobile && npx expo run:ios
 
+mobile-expo: ## Start Expo dev server (iOS)
+	cd mobile && npx expo start
+
+
 dev: ## Start all services (DB + backend + mobile)
 	@$(MAKE) db-wait
 	@echo "Starting backend and mobile..."

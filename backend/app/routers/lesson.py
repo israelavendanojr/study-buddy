@@ -85,13 +85,16 @@ class ValidateRequest(BaseModel):
 # RAG helpers
 # ---------------------------------------------------------------------------
 
-def _retrieve_rag_docs(lesson_title: str, chapter_title: str) -> str:
-    """Scan all .md files under RAG_ROOT, return content of up to 3 most relevant."""
+def _retrieve_rag_docs(lesson_title: str, chapter_title: str, domain: str) -> str:
+    """Scan .md files under rag_resources/{domain}/, falling back to root if missing."""
+    domain_dir = RAG_ROOT / domain
+    scan_root = domain_dir if domain_dir.is_dir() else RAG_ROOT
+
     title_lower = lesson_title.lower()
     chapter_lower = chapter_title.lower()
 
     matches: list[tuple[int, pathlib.Path]] = []
-    for md_file in RAG_ROOT.rglob("*.md"):
+    for md_file in scan_root.rglob("*.md"):
         try:
             content = md_file.read_text(encoding="utf-8")
         except OSError:
@@ -102,7 +105,6 @@ def _retrieve_rag_docs(lesson_title: str, chapter_title: str) -> str:
             score += 2
         if chapter_lower in content_lower:
             score += 1
-        # also check if the stem words appear
         for word in title_lower.split():
             if len(word) > 3 and word in content_lower:
                 score += 1
@@ -213,7 +215,7 @@ Rules:
 # Endpoints
 # ---------------------------------------------------------------------------
 
-XP_MAP = {"lesson": 50, "practice": 75, "milestone": 100}
+XP_BY_TYPE = {"lesson": 50, "practice": 75, "milestone": 150}
 
 
 @router.post("/generate")
@@ -226,7 +228,7 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
         return cached.lesson_json
 
     # RAG retrieval
-    rag_content = _retrieve_rag_docs(req.lesson_title, req.chapter_title)
+    rag_content = _retrieve_rag_docs(req.lesson_title, req.chapter_title, req.domain)
 
     # Video lookup
     video_key = _lookup_video(req.lesson_title)
@@ -241,9 +243,9 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
             model=ANTHROPIC_MODEL,
             max_tokens=2048,
             system=(
-                f"You are a warm, knowledgeable companion helping someone learn {req.goal}. "
+                f"You are a warm, knowledgeable companion helping someone learn {req.goal} ({req.domain}). "
                 f"Your name is {req.buddy_name}. Speak directly to the user, like a knowledgeable "
-                "friend — never like a textbook."
+                f"friend who knows {req.domain} deeply — never like a textbook."
             ),
             messages=[{"role": "user", "content": prompt}],
         )
@@ -329,5 +331,5 @@ async def validate_lesson(req: ValidateRequest) -> dict:
         )
 
     parsed = _strip_and_parse(full_text, "Validate")
-    xp_earned = XP_MAP.get(req.lesson_type, 50)
+    xp_earned = XP_BY_TYPE.get(req.lesson_type, 50)
     return {**parsed, "xp_earned": xp_earned}

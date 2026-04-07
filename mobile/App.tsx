@@ -19,6 +19,7 @@ import BuddyNamingScreen from './src/screens/BuddyNamingScreen'
 import GoalTuningScreen from './src/screens/GoalTuningScreen'
 import ConfirmationScreen from './src/screens/ConfirmationScreen'
 import RoadmapScreen from './src/screens/RoadmapScreen'
+import LessonScreen from './src/screens/LessonScreen'
 import HomeScreen from './src/screens/HomeScreen'
 import BadgesScreen from './src/screens/BadgesScreen'
 import SettingsScreen from './src/screens/SettingsScreen'
@@ -64,6 +65,7 @@ function AppNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
           <Stack.Screen name="GoalTuning" component={GoalTuningScreen} />
           <Stack.Screen name="Confirmation" component={ConfirmationScreen} />
           <Stack.Screen name="Roadmap" component={RoadmapScreen} options={{ cardStyleInterpolator: forFade }} />
+          <Stack.Screen name="LessonScreen" component={LessonScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Home" component={HomeScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="Badges" component={BadgesScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ cardStyleInterpolator: forFade }} />
