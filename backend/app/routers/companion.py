@@ -90,6 +90,8 @@ def get_companion_stats(user_id: str, db: Session = Depends(get_db)):
         "xp": state.xp,
         "mood": state.mood,
         "streak_days": state.streak_days,
+        "coins": state.coins,
+        "gems": state.gems,
         "last_practice_date": state.last_practice_date,
     }
 

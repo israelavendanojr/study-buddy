@@ -83,6 +83,8 @@ class CompanionState(Base):
     xp: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     mood: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
     streak_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    coins: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    gems: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_practice_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_mood_update: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

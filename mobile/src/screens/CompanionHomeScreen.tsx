@@ -376,9 +376,7 @@ export default function CompanionHomeScreen() {
         <View style={styles.actionRow}>
           <Pressable
             style={[styles.actionButton, { backgroundColor: colors.mint }, shadows.mint]}
-            onPress={() => {
-              // TODO: navigation.navigate('CompanionShop')
-            }}
+            onPress={() => navigation.navigate('CompanionShop')}
           >
             <Text style={styles.actionButtonText}>🛍 Go to Shop</Text>
           </Pressable>

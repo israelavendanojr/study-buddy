@@ -21,6 +21,7 @@ import ConfirmationScreen from './src/screens/ConfirmationScreen'
 import RoadmapScreen from './src/screens/RoadmapScreen'
 import LessonScreen from './src/screens/LessonScreen'
 import CompanionHomeScreen from './src/screens/CompanionHomeScreen'
+import CompanionShopScreen from './src/screens/CompanionShopScreen'
 import BadgesScreen from './src/screens/BadgesScreen'
 import SettingsScreen from './src/screens/SettingsScreen'
 import SignInScreen from './src/screens/SignInScreen'
@@ -69,6 +70,7 @@ return <View style={{ flex: 1, backgroundColor: colors.background }} />
           <Stack.Screen name="Home" component={CompanionHomeScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="Badges" component={BadgesScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ cardStyleInterpolator: forFade }} />
+          <Stack.Screen name="CompanionShop" component={CompanionShopScreen} />
         </>
       ) : (
         <>

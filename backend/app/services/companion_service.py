@@ -157,6 +157,8 @@ def initialize_companion(user_id: str, db: Session) -> bool:
         xp=0,
         mood=50,
         streak_days=0,
+        coins=100,
+        gems=0,
     )
     db.add(state)
 
