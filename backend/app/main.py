@@ -7,8 +7,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .database import Base, engine, get_db
-from .routers import onboarding, roadmap, lesson
-from . import models  # noqa: F401 — registers UserRoadmap with Base.metadata
+from .routers import onboarding, roadmap, lesson, companion
+from . import models  # noqa: F401 — registers all models with Base.metadata
 
 Base.metadata.create_all(bind=engine)
 
@@ -30,6 +30,7 @@ app.add_middleware(
 app.include_router(onboarding.router, prefix="/onboarding")
 app.include_router(roadmap.router, prefix="/roadmap")
 app.include_router(lesson.router, prefix="/lesson")
+app.include_router(companion.router, prefix="/companion")
 
 
 @app.get("/health")
