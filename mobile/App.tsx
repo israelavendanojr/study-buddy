@@ -47,7 +47,7 @@ function AppNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
   const { isSignedIn, isLoaded } = useAuth()
 
   if (!fontsLoaded || !isLoaded) {
-    return <View style={{ flex: 1, backgroundColor: colors.background }} />
+return <View style={{ flex: 1, backgroundColor: colors.background }} />
   }
 
   return (

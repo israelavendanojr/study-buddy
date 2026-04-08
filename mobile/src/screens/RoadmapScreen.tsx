@@ -39,7 +39,6 @@ interface RoadmapParams {
   sessionMinutes: number
   weeks: number
   coachingResult?: object | null
-  completedLessonId?: string
   [key: string]: unknown
 }
 
@@ -154,9 +153,15 @@ export default function RoadmapScreen() {
   const { user } = useUser()
   const navigation = useNavigation<StackNavigationProp<any>>()
 
-  const [roadmap] = useState<Roadmap>(initialRoadmap)
+  const [roadmap] = useState<Roadmap | undefined>(initialRoadmap)
 
-  const allLessons = roadmap.chapters.flatMap(c => c.lessons)
+  // Guard: if roadmap is missing (e.g. stack reset after fast-refresh), send back to Loading
+  // so it can re-fetch from the API rather than crashing on .chapters
+  useEffect(() => {
+    if (!roadmap) navigation.replace('Loading')
+  }, [roadmap])
+
+  const allLessons = roadmap?.chapters.flatMap(c => c.lessons) ?? []
   const totalLessons = allLessons.length
 
   const [activeIndex, setActiveIndex] = useState(initialActiveIndex ?? 0)
@@ -164,8 +169,9 @@ export default function RoadmapScreen() {
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null)
   const activeIndexRef = useRef(activeIndex)
   useEffect(() => { activeIndexRef.current = activeIndex })
+  const lastProcessedLessonId = useRef<string | null>(null)
 
-  const allChaptersGenerated = roadmap.chapters.every(ch => ch.lessons.length > 0)
+  const allChaptersGenerated = roadmap?.chapters.every(ch => ch.lessons.length > 0) ?? false
   const isCompleted = allChaptersGenerated && totalLessons > 0 && activeIndex >= totalLessons
 
   const scrollRef = useRef<ScrollView>(null)
@@ -196,39 +202,21 @@ export default function RoadmapScreen() {
   const indexMap = useRef<Map<string, number>>(new Map())
   useEffect(() => {
     let i = 0
-    for (const ch of roadmap.chapters)
+    for (const ch of roadmap?.chapters ?? [])
       for (const l of ch.lessons)
         indexMap.current.set(l.id, i++)
   }, [roadmap])
 
   // Find chapter title for a given lesson id
   const getChapterForLesson = (lessonId: string): string => {
-    for (const ch of roadmap.chapters) {
+    for (const ch of roadmap?.chapters ?? []) {
       if (ch.lessons.find(l => l.id === lessonId)) return ch.title
     }
     return ''
   }
 
-  // Listen for returning from LessonScreen with a completed lesson
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      const completedLessonId = (route.params as RoadmapParams).completedLessonId
-      if (!completedLessonId) return
-      const idx = indexMap.current.get(completedLessonId) ?? -1
-      if (idx === activeIndexRef.current) {
-        confettiTriggerRef.current?.(allLessons[idx]?.type === 'milestone')
-        triggerShake()
-        const newIndex = Math.min(activeIndexRef.current + 1, totalLessons)
-        setActiveIndex(newIndex)
-        saveProgress(newIndex)
-      }
-      navigation.setParams({ completedLessonId: undefined } as Partial<RoadmapParams>)
-    })
-    return unsubscribe
-  }, [navigation])
-
-  // Compute the winding path layout
-  const layout = useMemo(() => computePathLayout(roadmap.chapters), [roadmap.chapters])
+// Compute the winding path layout
+  const layout = useMemo(() => computePathLayout(roadmap?.chapters ?? []), [roadmap?.chapters])
 
   // Auto-scroll to active node
   useEffect(() => {
@@ -240,6 +228,9 @@ export default function RoadmapScreen() {
     }
   }, [activeIndex])
 
+  // All hooks are above this line — safe to early-return for the undefined guard
+  if (!roadmap) return null
+
   const handleNodePress = (lesson: Lesson) => {
     const idx = indexMap.current.get(lesson.id) ?? -1
     if (idx > activeIndex) return
@@ -249,18 +240,31 @@ export default function RoadmapScreen() {
 
   const handleStart = () => {
     if (!selectedLesson) return
+    const lessonId = selectedLesson.id
     setModalOpen(false)
     navigation.navigate('LessonScreen', {
       lessonTitle: selectedLesson.title,
       lessonType: selectedLesson.type,
-      chapterTitle: getChapterForLesson(selectedLesson.id),
+      chapterTitle: getChapterForLesson(lessonId),
       goal: route.params.goal,
       buddyName: (route.params as RoadmapParams).buddyName ?? 'Buddy',
       experience: (route.params as RoadmapParams).experience,
       completedLessonTitles: allLessons.slice(0, activeIndex).map(l => l.title),
       domain: 'cooking',
       userId: user?.id ?? null,
-      lessonId: selectedLesson.id,
+      lessonId,
+      onComplete: (completedId: string) => {
+        if (completedId === lastProcessedLessonId.current) return
+        lastProcessedLessonId.current = completedId
+        const idx = indexMap.current.get(completedId) ?? -1
+        if (idx === activeIndexRef.current) {
+          confettiTriggerRef.current?.(allLessons[idx]?.type === 'milestone')
+          triggerShake()
+          const newIndex = Math.min(activeIndexRef.current + 1, totalLessons)
+          setActiveIndex(newIndex)
+          saveProgress(newIndex)
+        }
+      },
     })
   }
 

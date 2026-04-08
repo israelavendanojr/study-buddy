@@ -35,6 +35,7 @@ interface LessonParams {
   domain: string
   userId: string | null
   lessonId: string
+  onComplete: (lessonId: string) => void
 }
 
 interface LessonContent {
@@ -318,7 +319,8 @@ export default function LessonScreen() {
 
   // ── Complete ────────────────────────────────────────────────────────────────
   const handleComplete = () => {
-    navigation.navigate('Roadmap', { completedLessonId: params.lessonId })
+    params.onComplete(params.lessonId)
+    navigation.goBack()
   }
 
   // ── Interpolations ──────────────────────────────────────────────────────────

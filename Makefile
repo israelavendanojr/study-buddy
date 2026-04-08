@@ -30,6 +30,9 @@ db-wait: db ## Start PostgreSQL and wait until ready
 db-stop: ## Stop PostgreSQL
 	docker compose down
 
+delete-roadmap:
+	psql -h localhost -U studbud studbud -c "DELETE FROM user_roadmaps;"
+	
 backend: ## Start FastAPI (requires DB running)
 	cd backend && venv/bin/uvicorn app.main:app --reload --host 0.0.0.0
 
