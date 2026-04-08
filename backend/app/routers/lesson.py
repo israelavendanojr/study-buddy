@@ -10,6 +10,13 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import LessonCache
+from ..services.companion_service import (
+    _touch_last_practice_timestamp,
+    add_xp_to_companion,
+    initialize_companion,
+    update_last_practice,
+    update_mood_for_user,
+)
 from .roadmap import _strip_and_parse
 
 router = APIRouter()
@@ -71,6 +78,7 @@ class LessonRequest(BaseModel):
 
 
 class ValidateRequest(BaseModel):
+    user_id: str | None = None  # if provided, XP is credited to companion
     photo_base64: str
     photo_media_type: str  # "image/jpeg" | "image/png"
     reflection_choice: str
@@ -277,7 +285,7 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
 
 
 @router.post("/validate")
-async def validate_lesson(req: ValidateRequest) -> dict:
+async def validate_lesson(req: ValidateRequest, db: Session = Depends(get_db)) -> dict:
     prompt = (
         f"The user just completed a lesson on '{req.lesson_title}' as part of learning {req.goal}. "
         f"Their mission was: {req.mission_description}. "
@@ -332,4 +340,35 @@ async def validate_lesson(req: ValidateRequest) -> dict:
 
     parsed = _strip_and_parse(full_text, "Validate")
     xp_earned = XP_BY_TYPE.get(req.lesson_type, 50)
-    return {**parsed, "xp_earned": xp_earned}
+    is_valid = parsed.get("is_valid", False)
+
+    companion_result: dict | None = None
+    if req.user_id:
+        try:
+            initialize_companion(req.user_id, db)  # no-op if already exists
+
+            if is_valid:
+                xp_result = add_xp_to_companion(req.user_id, xp_earned, req.lesson_type, db)
+                streak_result = update_last_practice(req.user_id, db)
+                new_mood = update_mood_for_user(req.user_id, db)
+                companion_result = {
+                    **xp_result,
+                    "mood": new_mood,
+                    "streak_days": streak_result["streak_days"],
+                    "streak_changed": streak_result["streak_changed"],
+                }
+            else:
+                # Invalid attempt: preserve timestamp so mood doesn't decay,
+                # but don't award XP or advance streak
+                _touch_last_practice_timestamp(req.user_id, db)
+                new_mood = update_mood_for_user(req.user_id, db)
+                companion_result = {"mood": new_mood}
+
+        except Exception as e:
+            # Companion hiccup must never block lesson feedback from reaching the user
+            print(f"[companion] update failed for user {req.user_id}: {e}")
+
+    response = {**parsed, "xp_earned": xp_earned}
+    if companion_result is not None:
+        response["companion"] = companion_result
+    return response

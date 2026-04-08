@@ -1,8 +1,13 @@
 """
-Companion mood, streak, and practice tracking logic.
+Companion mood, streak, practice tracking, and XP/leveling logic.
 
 All functions that touch the DB accept a Session and commit their own changes.
 Pure calculation helpers are side-effect-free and fully unit-testable.
+
+XP pacing (with default lesson XP of 50/lesson):
+  ~30 min/day (1 lesson) → level 5 in ~20 days
+  ~60 min/day (2 lessons) → level 5 in ~10 days
+Formula: xp_needed = 100 * current_level  (scales linearly, stays readable)
 """
 
 from datetime import datetime, timezone
@@ -10,7 +15,45 @@ from typing import TypedDict
 
 from sqlalchemy.orm import Session
 
-from ..models import CompanionEquipped, CompanionState, UserInventory
+from ..models import CompanionEquipped, CompanionState, CosmeticItem, UserInventory
+
+
+# ── XP / Level config ─────────────────────────────────────────────────────────
+
+# Levels at which special rewards are granted
+XP_MILESTONES: set[int] = {5, 10, 25, 50, 100}
+
+_MILESTONE_REWARDS: dict[int, str] = {
+    5:   "unlock_uncommon_cosmetics",
+    10:  "unlock_rare_cosmetics",
+    25:  "unlock_legendary_cosmetics",
+    50:  "unlock_prestige_frame",
+    100: "unlock_golden_companion",
+}
+
+
+def xp_to_next_level(current_level: int) -> int:
+    """XP required to advance from current_level to current_level + 1."""
+    return 100 * current_level
+
+
+def check_level_milestones(level: int) -> dict:
+    """Returns milestone metadata for a given level."""
+    if level not in XP_MILESTONES:
+        return {"is_milestone": False}
+    return {
+        "is_milestone": True,
+        "milestone_type": "round",
+        "reward": _MILESTONE_REWARDS.get(level, "milestone_badge"),
+    }
+
+
+def _next_milestone(current_level: int) -> int:
+    """Returns the nearest milestone level above current_level."""
+    for m in sorted(XP_MILESTONES):
+        if m > current_level:
+            return m
+    return sorted(XP_MILESTONES)[-1]  # already past all milestones
 
 
 # ── TypedDicts ────────────────────────────────────────────────────────────────
@@ -99,6 +142,121 @@ def _fetch_state(user_id: str, db: Session) -> CompanionState | None:
     return db.query(CompanionState).filter(CompanionState.clerk_user_id == user_id).first()
 
 
+def initialize_companion(user_id: str, db: Session) -> bool:
+    """
+    Creates CompanionState + CompanionEquipped for a user and grants default cosmetics.
+    Idempotent — returns False immediately if the companion already exists.
+    Returns True if a new companion was created.
+    """
+    if _fetch_state(user_id, db) is not None:
+        return False
+
+    state = CompanionState(
+        clerk_user_id=user_id,
+        level=1,
+        xp=0,
+        mood=50,
+        streak_days=0,
+    )
+    db.add(state)
+
+    equipped = CompanionEquipped(
+        clerk_user_id=user_id,
+        equipped_color_id=None,
+        equipped_outfit_id=None,
+        equipped_accessories=[],
+        equipped_room_decorations=[],
+    )
+
+    default_color = (
+        db.query(CosmeticItem)
+        .filter(CosmeticItem.unlock_condition == "default")
+        .first()
+    )
+    if default_color:
+        equipped.equipped_color_id = default_color.id
+        db.add(UserInventory(
+            clerk_user_id=user_id,
+            cosmetic_item_id=default_color.id,
+            is_equipped=True,
+        ))
+
+    db.add(equipped)
+    db.commit()
+    return True
+
+
+def add_xp_to_companion(user_id: str, xp_amount: int, source: str, db: Session) -> dict:  # noqa: ARG001 (source reserved for analytics)
+    """
+    Adds XP to the companion, handling multi-level-ups in a single transaction.
+    Uses SELECT FOR UPDATE to prevent concurrent double-credit.
+
+    Returns a dict with: level, xp, xp_next_level, level_up, levels_gained,
+    new_level (if leveled up), milestone (bool), milestone_info (if milestone).
+    """
+    if xp_amount <= 0:
+        raise ValueError(f"xp_amount must be positive, got {xp_amount}")
+
+    state = (
+        db.query(CompanionState)
+        .filter(CompanionState.clerk_user_id == user_id)
+        .with_for_update()
+        .first()
+    )
+    if not state:
+        raise LookupError(f"No companion found for user {user_id}")
+
+    original_level = state.level
+    state.xp += xp_amount
+
+    while state.xp >= xp_to_next_level(state.level):
+        state.xp -= xp_to_next_level(state.level)
+        state.level += 1
+
+    state.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(state)
+
+    leveled_up = state.level > original_level
+    levels_gained = state.level - original_level
+    milestone_info = check_level_milestones(state.level) if leveled_up else {"is_milestone": False}
+
+    result: dict = {
+        "level": state.level,
+        "xp": state.xp,
+        "xp_next_level": xp_to_next_level(state.level),
+        "level_up": leveled_up,
+        "levels_gained": levels_gained,
+        "milestone": milestone_info["is_milestone"],
+    }
+    if leveled_up:
+        result["new_level"] = state.level
+    if milestone_info["is_milestone"]:
+        result["milestone_info"] = milestone_info
+    return result
+
+
+def get_companion_progress(user_id: str, db: Session) -> dict | None:
+    """
+    Returns level/XP progress for the home-screen progress bar.
+    Returns None if companion doesn't exist.
+    """
+    state = _fetch_state(user_id, db)
+    if not state:
+        return None
+
+    threshold = xp_to_next_level(state.level)
+    pct = round((state.xp / threshold) * 100, 1) if threshold > 0 else 0.0
+
+    return {
+        "level": state.level,
+        "xp": state.xp,
+        "xp_to_next_level": threshold,
+        "xp_progress_pct": pct,
+        "next_milestone": _next_milestone(state.level),
+    }
+
+
 def update_mood_for_user(user_id: str, db: Session) -> int:
     """
     Recalculates mood from live DB data and persists it if it shifted >= 10 points.
@@ -167,30 +325,49 @@ def check_and_update_streak(user_id: str, db: Session) -> StreakResult:
     return StreakResult(streak_changed=True, streak_days=0, broken=True)
 
 
-def update_last_practice(user_id: str, db: Session) -> None:
+def update_last_practice(user_id: str, db: Session) -> dict:
     """
-    Records a practice event. Increments streak if within the valid window,
-    resets if the gap was too long. Called by the lesson validation endpoint.
+    Records a successful practice event. Increments streak if within the valid
+    window, resets if the gap was too long.
+    Returns { streak_days, streak_changed }.
     """
     state = _fetch_state(user_id, db)
     if not state:
-        return
+        return {"streak_days": 0, "streak_changed": False}
 
     days = _days_since(state.last_practice_date)
     now = datetime.now(timezone.utc)
+    streak_changed = False
 
     if days == 0:
-        # Already practiced today — just refresh timestamp, don't double-count streak
+        # Already practiced today — refresh timestamp, don't double-count streak
         state.last_practice_date = now
     elif days <= 1:
-        # Continuing streak
         state.streak_days += 1
         state.last_practice_date = now
+        streak_changed = True
     else:
         # Gap too large — restart streak
         state.streak_days = 1
         state.last_practice_date = now
+        streak_changed = True
 
+    state.updated_at = now
+    db.commit()
+    return {"streak_days": state.streak_days, "streak_changed": streak_changed}
+
+
+def _touch_last_practice_timestamp(user_id: str, db: Session) -> None:
+    """
+    Updates last_practice_date without touching streak or XP.
+    Used when a submission is invalid (attempted but failed) so mood
+    doesn't decay from perceived inactivity.
+    """
+    state = _fetch_state(user_id, db)
+    if not state:
+        return
+    now = datetime.now(timezone.utc)
+    state.last_practice_date = now
     state.updated_at = now
     db.commit()
 
