@@ -8,7 +8,7 @@ import { colors } from '../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
 
-type ActiveTab = 'path' | 'home' | 'buddy' | 'badges'
+type ActiveTab = 'path' | 'home' | 'badges'
 
 function MapIcon({ active }: { active?: boolean }) {
   const c = active ? colors.mint : colors.muted
@@ -30,19 +30,6 @@ function HomeIcon({ active }: { active?: boolean }) {
   )
 }
 
-function BuddyIcon({ active }: { active?: boolean }) {
-  const c = active ? colors.mint : colors.muted
-  return (
-    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
-      <Circle cx="12" cy="13" r="6" stroke={c} strokeWidth={1.8} />
-      <Circle cx="9" cy="11.5" r="1" fill={c} />
-      <Circle cx="15" cy="11.5" r="1" fill={c} />
-      <Path d="M9.5 15 Q12 17 14.5 15" stroke={c} strokeWidth={1.5} strokeLinecap="round" fill="none" />
-      <Path d="M8 7 Q9 4 11 6" stroke={c} strokeWidth={1.5} strokeLinecap="round" fill="none" />
-      <Path d="M16 7 Q15 4 13 6" stroke={c} strokeWidth={1.5} strokeLinecap="round" fill="none" />
-    </Svg>
-  )
-}
 
 function BadgeIcon({ active }: { active?: boolean }) {
   const c = active ? colors.mint : colors.muted
@@ -115,16 +102,10 @@ export default function TabBar({ activeTab }: TabBarProps) {
         </Animated.View>
       </Pressable>
 
-      <Pressable style={styles.tab} onPress={() => activeTab !== 'home' && navigation.replace('Home')}>
+      <Pressable style={styles.tab} onPress={() => activeTab !== 'home' && navigation.replace('CompanionHome')}>
         <HomeIcon active={activeTab === 'home'} />
         <Text style={[styles.tabLabel, activeTab === 'home' && { color: colors.mint }]}>Home</Text>
         {activeTab === 'home' && <View style={styles.tabIndicator} />}
-      </Pressable>
-
-      <Pressable style={styles.tab} onPress={() => activeTab !== 'buddy' && navigation.replace('CompanionHome')}>
-        <BuddyIcon active={activeTab === 'buddy'} />
-        <Text style={[styles.tabLabel, activeTab === 'buddy' && { color: colors.mint }]}>Buddy</Text>
-        {activeTab === 'buddy' && <View style={styles.tabIndicator} />}
       </Pressable>
 
       <Pressable style={styles.tab} onPress={() => activeTab !== 'badges' && navigation.replace('Badges')}>

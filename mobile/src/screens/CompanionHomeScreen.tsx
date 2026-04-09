@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native'
+import Svg, { Path } from 'react-native-svg'
 import { useIsFocused, useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { useUser } from '@clerk/clerk-expo'
@@ -17,6 +18,23 @@ import TabBar from '../components/TabBar'
 import { colors, radius, shadows } from '../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
+
+// ── Icons ──────────────────────────────────────────────────────────────────────
+
+function CogIcon() {
+  return (
+    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
+      <Path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke={colors.foreground} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+      <Path
+        d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"
+        stroke={colors.foreground}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -225,7 +243,7 @@ export default function CompanionHomeScreen() {
           <ActivityIndicator color={colors.mint} style={{ marginTop: 24 }} />
           <Text style={styles.loadingText}>Waking up your buddy…</Text>
         </View>
-        <TabBar activeTab="buddy" />
+        <TabBar activeTab="home" />
       </View>
     )
   }
@@ -242,7 +260,7 @@ export default function CompanionHomeScreen() {
             <Text style={styles.primaryButtonText}>Retry</Text>
           </Pressable>
         </View>
-        <TabBar activeTab="buddy" />
+        <TabBar activeTab="home" />
       </View>
     )
   }
@@ -269,7 +287,7 @@ export default function CompanionHomeScreen() {
             }
           </Pressable>
         </View>
-        <TabBar activeTab="buddy" />
+        <TabBar activeTab="home" />
       </View>
     )
   }
@@ -289,6 +307,11 @@ export default function CompanionHomeScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Pressable style={styles.cogButton} onPress={() => navigation.navigate('Settings')}>
+          <CogIcon />
+        </Pressable>
+      </View>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -392,7 +415,7 @@ export default function CompanionHomeScreen() {
         </View>
       </ScrollView>
 
-      <TabBar activeTab="buddy" />
+      <TabBar activeTab="home" />
     </View>
   )
 }
@@ -411,8 +434,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     gap: 16,
   },
-  scrollContent: {
+  header: {
     paddingTop: 56,
+    paddingHorizontal: 24,
+    paddingBottom: 14,
+    alignItems: 'flex-end',
+  },
+  cogButton: {
+    padding: 6,
+  },
+  scrollContent: {
+    paddingTop: 8,
     paddingBottom: 24,
     paddingHorizontal: 20,
     gap: 14,
