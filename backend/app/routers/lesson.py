@@ -43,14 +43,16 @@ class Card2Concept(BaseModel):
 
 
 class Card3Why(BaseModel):
-    explanation: str    # 4-6 sentences, companion-voiced
-    tell_me_more: str   # 2-3 additional sentences, hidden by default
+    headline: str       # The single most important insight, 1 sentence
+    points: list[str]   # 3-4 concise bullet points explaining the concept
+    tell_me_more: str   # 2-3 deeper sentences, hidden by default
 
 
 class Mission(BaseModel):
     id: str
     title: str
-    description: str
+    description: str        # 1-2 sentences: what the learner will do
+    why_it_matters: str     # 1 sentence: why this builds the skill
     is_required: bool
     duration_minutes: int
     prompt: str                    # specific question about the photo
@@ -192,14 +194,16 @@ Return JSON matching this exact schema:
     "video_key": "{video_key}"
   }},
   "card3": {{
-    "explanation": "4-6 sentences explaining the concept in companion voice — direct, warm, never textbook",
-    "tell_me_more": "2-3 additional sentences that deepen the idea, revealed on tap"
+    "headline": "The single most important insight in 1 sentence",
+    "points": ["Key point 1 — short and direct", "Key point 2", "Key point 3"],
+    "tell_me_more": "2-3 sentences deepening the concept, revealed on tap"
   }},
   "missions": [
     {{
       "id": "mission_1",
       "title": "Short mission title",
-      "description": "Full task description — specific thing the learner will actually do",
+      "description": "1-2 sentences max: the specific thing the learner will do",
+      "why_it_matters": "1 sentence: why this task builds the skill",
       "is_required": true,
       "duration_minutes": 10,
       "prompt": "A specific question about what they made or discovered — NOT generic like 'How did it go?'",
@@ -208,7 +212,8 @@ Return JSON matching this exact schema:
     {{
       "id": "mission_2",
       "title": "Second mission title",
-      "description": "Another specific task that builds on the first",
+      "description": "1-2 sentences max: another specific task that builds on the first",
+      "why_it_matters": "1 sentence: why this task builds the skill",
       "is_required": true,
       "duration_minutes": 15,
       "prompt": "Specific question about mission 2",
@@ -217,7 +222,8 @@ Return JSON matching this exact schema:
     {{
       "id": "mission_3",
       "title": "Optional challenge",
-      "description": "An optional stretch task for the curious learner",
+      "description": "1-2 sentences max: an optional stretch task for the curious learner",
+      "why_it_matters": "1 sentence: why this stretch task builds deeper mastery",
       "is_required": false,
       "duration_minutes": 10,
       "prompt": "Specific question about mission 3",
@@ -230,11 +236,13 @@ Rules:
 - Generate 2-4 missions total. Must include at least 1-2 required missions
 - Required missions should be core skill-building tasks the learner must do
 - Optional missions should be stretch tasks (teach someone, try a harder version, etc.)
-- Each mission must have a specific description — not generic like "Practice the skill"
+- Each mission description must be 1-2 sentences max — specific, not generic like "Practice the skill"
+- Each mission why_it_matters must be 1 sentence explaining the skill benefit
 - Each mission prompt must reference what should be visible in the photo
 - reflection_choices must be exactly 3-4 options relevant to this specific mission
 - hook (card1) must be 1-2 sentences max
-- explanation (card3) must be 4-6 sentences
+- headline (card3) must be exactly 1 sentence — the core insight
+- points (card3) must be 3-4 items, each under 15 words
 - Speak as {req.buddy_name}, a warm knowledgeable friend helping someone learn {req.goal}
 - Return ONLY the JSON object"""
 

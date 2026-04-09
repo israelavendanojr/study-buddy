@@ -50,12 +50,22 @@ cd mobile && npx expo install <package-name>
 - `app/routers/onboarding.py` — `/onboarding/submit`
 - `app/routers/roadmap.py` — `/roadmap/generate`, `/roadmap/coach`, `/roadmap/summarize`, `/roadmap/{user_id}`, `/roadmap/{user_id}/progress`
 - `app/routers/lesson.py` — `/lesson/generate`, `/lesson/validate`
+- `app/routers/companion.py` — `/companion/{user_id}`, `/companion/{user_id}/stats`, `/companion/{user_id}/initialize`, `/companion/{user_id}/add-xp`, `/companion/{user_id}/progress`, `/companion/{user_id}/mood-breakdown`, `/companion/{user_id}/update-mood`
+- `app/routers/cosmetics.py` — `/cosmetics` (list with optional `?item_type=`), `/cosmetics/{user_id}/inventory`, `/cosmetics/{user_id}/equipped`, `/cosmetics/{user_id}/purchase`, `/cosmetics/{user_id}/equip`, `/cosmetics/{user_id}/unequip`
 
 **Models (`app/models.py`):**
 - `UserRoadmap` — `clerk_user_id` (unique), `roadmap_json` (JSONB), `active_index`, timestamps
 - `LessonCache` — `cache_key` (unique, indexed as `"{lesson_title}::{goal}::{experience}"`), `lesson_json` (JSONB), `created_at`
+- `Lesson` — `lesson_key` (unique), `title`, `chapter_title`, `domain`, `lesson_json` (JSONB), `created_at`
+- `UserLessonProgress` — `clerk_user_id`, `lesson_key`, `completed_missions` (JSONB), `is_required_complete`, `is_fully_complete`, timestamps
+- `CompanionState` — `clerk_user_id` (unique), `level`, `xp`, `mood` (0–100), `streak_days`, `coins`, `gems`, `last_practice_date`, `last_mood_update`, timestamps
+- `CosmeticItem` — `item_key` (unique), `name`, `item_type` (`ItemType` enum: `color|accessory|outfit|room_decoration`), `cost_coins`, `cost_gems`, `rarity` (`Rarity` enum: `common|uncommon|rare|legendary`), `unlock_condition`
+- `UserInventory` — `clerk_user_id` + `cosmetic_item_id` (unique pair), `is_equipped`, `owned_date`
+- `CompanionEquipped` — `clerk_user_id` (unique), `equipped_color_id` (FK), `equipped_outfit_id` (FK), `equipped_accessories` (JSONB list of item_keys), `equipped_room_decorations` (JSONB list of `{item_id, x, y}`)
 
 **AI pattern:** All Claude calls use `anthropic.Anthropic().messages.create`. Model from `ANTHROPIC_MODEL` env var (default `claude-haiku-4-5-20251001`). Responses parsed via `_strip_and_parse()` in `roadmap.py` — import it from there, never duplicate it. Vision calls in `/lesson/validate` hardcode `claude-sonnet-4-6`.
+
+**Companion service (`app/services/companion_service.py`):** All companion business logic lives here — XP/leveling (`add_xp_to_companion` uses `SELECT FOR UPDATE` for concurrency safety), mood calculation (`calculate_mood` is pure/side-effect-free), streak tracking, initialization. XP formula: `xp_needed = 100 * current_level`. Mood = base 50 ± streak bonus (−30 to +20) + cosmetic bonus (up to +20) + room decoration bonus (up to +15). Milestone levels: 5, 10, 25, 50, 100.
 
 **Env vars (`backend/.env`):** `ANTHROPIC_API_KEY` (required), `ANTHROPIC_MODEL` (optional override).
 
@@ -84,7 +94,9 @@ XP values: `lesson=50`, `practice=75`, `milestone=150`.
 
 **Auth:** Clerk (`@clerk/clerk-expo`). Tokens in `expo-secure-store`. `CLERK_PUBLISHABLE_KEY` set directly in `App.tsx`.
 
-**Navigation (`App.tsx`):** Single `createStackNavigator`. Authenticated stack includes: Loading, Onboarding, BuddyNaming, GoalTuning, Confirmation, Roadmap, **LessonScreen**, Home, Badges, Settings. All screens `headerShown: false`. Roadmap/Home/Badges/Settings use `forFade` interpolator.
+**Fonts:** `FredokaOne_400Regular` (headings/numbers), `Nunito_400Regular`, `Nunito_600SemiBold`, `Nunito_700Bold` (body/labels). Loaded via `@expo-google-fonts` in `App.tsx`.
+
+**Navigation (`App.tsx`):** Single `createStackNavigator`. Authenticated stack: Loading, Onboarding, BuddyNaming, GoalTuning, Confirmation, Roadmap, LessonScreen, Home, **CompanionHome**, Badges, Settings, **CompanionShop**. Unauthenticated stack: SignIn, SignUp. All screens `headerShown: false`. Roadmap/Home/CompanionHome/Badges/Settings use `forFade` interpolator; CompanionShop uses default slide.
 
 **API base:** `const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'` — set `EXPO_PUBLIC_API_BASE` in `mobile/.env` or use `make ip` for physical device.
 
@@ -122,6 +134,18 @@ Always use theme tokens — never hardcode colors:
 ### Companion Component (`mobile/src/components/Companion.tsx`)
 
 SVG mascot on every screen. Props: `size`, `mood` (`idle`|`happy`|`excited`|`thinking`|`sad`). Animations use `Animated` API with `useNativeDriver: true`. Wrap in `<Animated.View>` to apply external scale/transform animations on top.
+
+### TabBar Component (`mobile/src/components/TabBar.tsx`)
+
+Bottom tab bar shared across main app tabs. Accepts `activeTab` prop (`'home'|'roadmap'|'buddy'|'badges'|'settings'`). Navigates using `useNavigation` internally.
+
+### CompanionHomeScreen (`mobile/src/screens/CompanionHomeScreen.tsx`)
+
+Buddy tab showing companion level/XP bar, mood gauge (0–100 score mapped to color + emoji), streak card, and shortcuts to CompanionShop. Fetches `/companion/{user_id}/stats` + `/companion/{user_id}/progress` in parallel. XP bar width uses `Animated.Value` (cannot use native driver — pixel width). Companion bounces on mood change between fetches. Handles "not initialized" state with an "Wake Up Buddy" CTA that calls `POST /companion/{user_id}/initialize`.
+
+### CompanionShopScreen (`mobile/src/screens/CompanionShopScreen.tsx`)
+
+Cosmetics shop. Fetches `/cosmetics` catalog + `/cosmetics/{user_id}/inventory` + `/companion/{user_id}/stats` (for coin/gem balances). Purchase via `POST /cosmetics/{user_id}/purchase`; equip via `POST /cosmetics/{user_id}/equip`. Item types: `color`, `accessory`, `outfit`, `room_decoration`.
 
 ### RoadmapScreen
 

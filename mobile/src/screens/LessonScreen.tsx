@@ -29,6 +29,7 @@ interface Mission {
   id: string
   title: string
   description: string
+  why_it_matters: string
   is_required: boolean
   duration_minutes: number
   prompt: string
@@ -53,7 +54,7 @@ interface LessonParams {
 interface LessonContent {
   card1: { companion_message: string }
   card2: { companion_tip: string; video_key: string }
-  card3: { explanation: string; tell_me_more: string }
+  card3: { headline: string; points: string[]; tell_me_more: string }
   missions: Mission[]
 }
 
@@ -556,7 +557,15 @@ export default function LessonScreen() {
         <View style={styles.companionRow}>
           <Companion size={60} mood="idle" />
         </View>
-        <Text style={styles.bodyText}>{card3.explanation}</Text>
+        <Text style={styles.card3Headline}>{card3.headline}</Text>
+        <View style={styles.bulletList}>
+          {card3.points.map((point, i) => (
+            <View key={i} style={styles.bulletRow}>
+              <Text style={styles.bulletDot}>•</Text>
+              <Text style={styles.bulletText}>{point}</Text>
+            </View>
+          ))}
+        </View>
         <Pressable onPress={toggleTellMeMore} style={styles.tellMeMoreToggle}>
           <Animated.Text style={[styles.chevron, { transform: [{ rotate: chevronDeg }] }]}>
             ▾
@@ -696,6 +705,7 @@ export default function LessonScreen() {
             </View>
           )}
           <Text style={styles.sectionHeading}>{mission.title}</Text>
+          <Text style={styles.missionWhyText}>{mission.why_it_matters}</Text>
         </View>
 
         <Text style={styles.bodyText}>{mission.description}</Text>
@@ -1263,5 +1273,43 @@ const styles = StyleSheet.create({
     color: colors.muted,
     textAlign: 'center',
     marginBottom: 8,
+  },
+
+  // ── Card 3: Deep Dive ────────────────────────────────────────────────────────
+  card3Headline: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 22,
+    color: colors.foreground,
+    lineHeight: 28,
+    marginBottom: 12,
+  },
+  bulletList: {
+    gap: 10,
+    marginBottom: 8,
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  bulletDot: {
+    color: colors.mint,
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  bulletText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 15,
+    color: colors.foreground,
+    flex: 1,
+    lineHeight: 22,
+  },
+
+  // ── Card 4: Mission why_it_matters ───────────────────────────────────────────
+  missionWhyText: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 13,
+    color: colors.muted,
+    marginTop: 4,
   },
 })
