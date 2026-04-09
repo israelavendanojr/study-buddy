@@ -24,6 +24,7 @@ interface PathNodeProps {
   y: number
   labelSide: 'left' | 'right'
   isDone: boolean
+  isPartialComplete?: boolean  // required done but optional missions remain
   isActive: boolean
   isLocked: boolean
   onPress: (lesson: Lesson) => void
@@ -50,10 +51,11 @@ function ActiveNodeWrap({ size, children }: { size: number; children: React.Reac
 
 // ── Node content ─────────────────────────────────────────────────────────────
 
-function NodeContent({ isDone, isActive, isMilestone }: {
-  isDone: boolean; isActive: boolean; isMilestone: boolean
+function NodeContent({ isDone, isPartialComplete, isActive, isMilestone }: {
+  isDone: boolean; isPartialComplete: boolean; isActive: boolean; isMilestone: boolean
 }) {
-  if (isDone && isMilestone) return <Text style={styles.nodeIconText}>✓🏆</Text>
+  if (isDone && isMilestone) return <Text style={styles.nodeIconText}>{isPartialComplete ? '◐🏆' : '✓🏆'}</Text>
+  if (isDone && isPartialComplete) return <Text style={styles.nodeCheck}>◐</Text>
   if (isDone) return <Text style={styles.nodeCheck}>✓</Text>
   if (isActive && isMilestone) return <Text style={styles.nodeIconText}>🏆</Text>
   if (isActive) return <Text style={styles.nodeGo}>GO</Text>
@@ -63,14 +65,15 @@ function NodeContent({ isDone, isActive, isMilestone }: {
 
 // ── PathNode ─────────────────────────────────────────────────────────────────
 
-function PathNodeInner({ lesson, x, y, labelSide, isDone, isActive, isLocked, onPress }: PathNodeProps) {
+function PathNodeInner({ lesson, x, y, labelSide, isDone, isPartialComplete = false, isActive, isLocked, onPress }: PathNodeProps) {
   const isMilestone = lesson.type === 'milestone'
   const size = isMilestone ? MILESTONE_SIZE : NODE_SIZE
 
   const nodeStyle = [
     styles.node,
     { width: size, height: size, borderRadius: 16 },
-    isDone && { backgroundColor: colors.mint },
+    isDone && !isPartialComplete && { backgroundColor: colors.mint },
+    isDone && isPartialComplete && { backgroundColor: colors.mint + 'AA' },
     isActive && isMilestone && { backgroundColor: colors.mint },
     isActive && !isMilestone && { backgroundColor: colors.sky },
     isLocked && isMilestone && { backgroundColor: colors.golden + '50' },
@@ -86,7 +89,7 @@ function PathNodeInner({ lesson, x, y, labelSide, isDone, isActive, isLocked, on
 
   const nodeInner = (
     <View style={nodeStyle as object[]}>
-      <NodeContent isDone={isDone} isActive={isActive} isMilestone={isMilestone} />
+      <NodeContent isDone={isDone} isPartialComplete={isPartialComplete} isActive={isActive} isMilestone={isMilestone} />
     </View>
   )
 

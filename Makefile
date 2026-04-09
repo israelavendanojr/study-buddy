@@ -36,14 +36,14 @@ delete-roadmap:
 backend: ## Start FastAPI (requires DB running)
 	cd backend && venv/bin/uvicorn app.main:app --reload --host 0.0.0.0
 
-mobile: ## Start Expo dev server (iOS)
+mobile: sync-ip ## Start Expo dev server (iOS)
 	cd mobile && npx expo run:ios
 
-mobile-expo: ## Start Expo dev server (iOS)
+mobile-expo: sync-ip ## Start Expo dev server (iOS)
 	cd mobile && npx expo start
 
 
-dev: ## Start all services (DB + backend + mobile)
+dev: sync-ip ## Start all services (DB + backend + mobile)
 	@$(MAKE) db-wait
 	@echo "Starting backend and mobile..."
 	@cd backend && venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 & \
@@ -52,6 +52,11 @@ dev: ## Start all services (DB + backend + mobile)
 
 ip: ## Print your local IP for physical device testing
 	@ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $$1}'
+
+sync-ip: ## Write current IP into mobile/.env
+	$(eval IP := $(shell ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $$1}'))
+	@sed -i '' 's|^EXPO_PUBLIC_API_BASE=.*|EXPO_PUBLIC_API_BASE=http://$(IP):8000|' mobile/.env
+	@echo "API base set to http://$(IP):8000"
 
 clean: db-stop ## Stop DB and remove venv + node_modules
 	rm -rf backend/venv mobile/node_modules

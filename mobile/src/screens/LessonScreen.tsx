@@ -24,9 +24,19 @@ const TOTAL_CARDS = 6
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+interface Mission {
+  id: string
+  title: string
+  description: string
+  is_required: boolean
+  duration_minutes: number
+  prompt: string
+  reflection_choices: string[]
+}
+
 interface LessonParams {
+  lessonKey: string
   lessonTitle: string
-  lessonType: 'lesson' | 'practice' | 'milestone'
   chapterTitle: string
   goal: string
   buddyName: string
@@ -36,14 +46,29 @@ interface LessonParams {
   userId: string | null
   lessonId: string
   onComplete: (lessonId: string) => void
+  onFullyComplete?: (lessonKey: string) => void
 }
 
 interface LessonContent {
   card1: { companion_message: string }
   card2: { companion_tip: string; video_key: string }
   card3: { explanation: string; tell_me_more: string }
-  card4: { description: string; duration_minutes: number; focus_point: string }
-  card5: { prompt: string; reflection_choices: string[] }
+  missions: Mission[]
+}
+
+interface MissionProgress {
+  completed_missions: string[]
+  is_required_complete: boolean
+  is_fully_complete: boolean
+}
+
+interface ValidationResult {
+  feedback: string
+  is_valid: boolean
+  xp_earned: number
+  mission_completed: boolean
+  lesson_now_required_complete: boolean
+  lesson_now_fully_complete: boolean
 }
 
 // ── Progress Indicator (dots + animated bar) ───────────────────────────────────
@@ -81,14 +106,6 @@ const piStyles = StyleSheet.create({
   barFill: { height: 3, backgroundColor: colors.mint, borderRadius: 2 },
 })
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function formatElapsed(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
 // ── Main Screen ────────────────────────────────────────────────────────────────
 
 export default function LessonScreen() {
@@ -101,16 +118,18 @@ export default function LessonScreen() {
   const [lessonContent, setLessonContent] = useState<LessonContent | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [missionProgress, setMissionProgress] = useState<MissionProgress | null>(null)
+  const [progressFetched, setProgressFetched] = useState(false)
+  const [currentMissionId, setCurrentMissionId] = useState<string | null>(null)
   const [selectedReflection, setSelectedReflection] = useState<string | null>(null)
   const [photoUri, setPhotoUri] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
-  const [validationResult, setValidationResult] = useState<{ feedback: string; xp_earned: number } | null>(null)
-  const [missionActive, setMissionActive] = useState(false)
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
   const [tellMeMoreOpen, setTellMeMoreOpen] = useState(false)
   const [webViewLoaded, setWebViewLoaded] = useState(false)
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const hasSignaledComplete = useRef(false)
+  const hasInitializedCard = useRef(false)
 
   // ── Animations ─────────────────────────────────────────────────────────────
   const cardOpacity = useRef(new Animated.Value(1)).current
@@ -136,8 +155,8 @@ export default function LessonScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: params.userId,
+          lesson_key: params.lessonKey,
           lesson_title: params.lessonTitle,
-          lesson_type: params.lessonType,
           chapter_title: params.chapterTitle,
           goal: params.goal,
           buddy_name: params.buddyName,
@@ -156,23 +175,46 @@ export default function LessonScreen() {
     }
   }
 
-  useEffect(() => { fetchLesson() }, [])
-
-  // ── Mission timer ───────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (missionActive) {
-      setElapsedSeconds(0)
-      timerRef.current = setInterval(() => setElapsedSeconds(s => s + 1), 1000)
-    } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-        timerRef.current = null
+  // ── Fetch progress ─────────────────────────────────────────────────────────
+  const fetchProgress = async () => {
+    if (!params.userId) {
+      setProgressFetched(true)
+      return
+    }
+    try {
+      const res = await fetch(`${API_BASE}/lesson/${params.lessonKey}/${params.userId}/progress`)
+      if (res.ok) {
+        const data = await res.json()
+        setMissionProgress({
+          completed_missions: data.completed_missions,
+          is_required_complete: data.is_required_complete,
+          is_fully_complete: data.is_fully_complete,
+        })
       }
+    } catch { /* no progress yet is fine */ } finally {
+      setProgressFetched(true)
     }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
+  }
+
+  useEffect(() => {
+    const init = async () => {
+      await fetchLesson()
+      await fetchProgress()
     }
-  }, [missionActive])
+    init()
+  }, [])
+
+  // ── Skip to missions list on revisit ───────────────────────────────────────
+  useEffect(() => {
+    const ready = params.userId ? progressFetched && !!lessonContent : !!lessonContent
+    if (!ready || hasInitializedCard.current) return
+
+    hasInitializedCard.current = true
+    if (missionProgress && missionProgress.completed_missions.length > 0) {
+      setCardIndex(3)
+      progressAnim.setValue(3 / TOTAL_CARDS)
+    }
+  }, [lessonContent, progressFetched, missionProgress])
 
   // ── Card transition ─────────────────────────────────────────────────────────
   const advanceCard = (nextIndex: number) => {
@@ -224,21 +266,18 @@ export default function LessonScreen() {
     }
   }, [validating])
 
-  // ── Card 6 reveal animations ────────────────────────────────────────────────
+  // ── Card 5 reveal animations ────────────────────────────────────────────────
   useEffect(() => {
     if (!validationResult) return
-    // Companion: scale down then spring back up (thinking → excited transition)
     Animated.sequence([
       Animated.timing(companionScale, { toValue: 0.8, duration: 100, useNativeDriver: true }),
       Animated.spring(companionScale, { toValue: 1, friction: 4, tension: 120, useNativeDriver: true }),
     ]).start()
-    // Feedback card: fade in after 300ms
     feedbackOpacity.setValue(0)
     Animated.sequence([
       Animated.delay(300),
       Animated.timing(feedbackOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
     ]).start()
-    // XP badge: spring from 0 with bounce
     xpScale.setValue(0)
     Animated.spring(xpScale, { toValue: 1, friction: 4, tension: 100, useNativeDriver: true }).start()
   }, [validationResult])
@@ -278,9 +317,12 @@ export default function LessonScreen() {
     ])
   }
 
-  // ── Submit ──────────────────────────────────────────────────────────────────
+  // ── Submit mission ──────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!photoUri || !selectedReflection || !lessonContent) return
+    if (!photoUri || !selectedReflection || !lessonContent || !currentMissionId) return
+    const mission = lessonContent.missions.find(m => m.id === currentMissionId)
+    if (!mission) return
+
     setValidating(true)
     advanceCard(5)
 
@@ -294,33 +336,71 @@ export default function LessonScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          user_id: params.userId,
+          lesson_key: params.lessonKey,
+          mission_id: currentMissionId,
           photo_base64: base64,
           photo_media_type: mimeType,
           reflection_choice: selectedReflection,
-          lesson_title: params.lessonTitle,
-          mission_description: lessonContent.card4.description,
           buddy_name: params.buddyName,
           goal: params.goal,
-          lesson_type: params.lessonType,
+          lesson_title: params.lessonTitle,
+          domain: params.domain,
         }),
       })
       if (!res.ok) throw new Error(`Server error ${res.status}`)
-      const data = await res.json()
+      const data: ValidationResult = await res.json()
       setValidationResult(data)
+
+      // Update local mission progress
+      if (data.mission_completed) {
+        setMissionProgress(prev => ({
+          completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
+          is_required_complete: data.lesson_now_required_complete || (prev?.is_required_complete ?? false),
+          is_fully_complete: prev?.is_fully_complete ?? false,
+        }))
+      }
+
+      // Signal roadmap to unlock next lesson
+      if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
+        hasSignaledComplete.current = true
+        params.onComplete(params.lessonId)
+      }
+
+      // Signal roadmap that all missions (including optional) are done
+      if (data.lesson_now_fully_complete) {
+        params.onFullyComplete?.(params.lessonKey)
+      }
+
     } catch {
       setValidationResult({
         feedback: `Good effort on this one! Every session builds on the last — keep it up.`,
-        xp_earned: 50,
+        is_valid: false,
+        xp_earned: 0,
+        mission_completed: false,
+        lesson_now_required_complete: false,
+        lesson_now_fully_complete: false,
       })
     } finally {
       setValidating(false)
     }
   }
 
-  // ── Complete ────────────────────────────────────────────────────────────────
-  const handleComplete = () => {
-    params.onComplete(params.lessonId)
+  // ── Exit lesson ─────────────────────────────────────────────────────────────
+  const handleExit = () => {
+    // Signal completion if required missions are done but we haven't signaled yet
+    if (missionProgress?.is_required_complete && !hasSignaledComplete.current) {
+      hasSignaledComplete.current = true
+      params.onComplete(params.lessonId)
+    }
     navigation.goBack()
+  }
+
+  // ── Reset submission state between missions ─────────────────────────────────
+  const resetSubmission = () => {
+    setPhotoUri(null)
+    setSelectedReflection(null)
+    setValidationResult(null)
   }
 
   // ── Interpolations ──────────────────────────────────────────────────────────
@@ -345,7 +425,8 @@ export default function LessonScreen() {
 
   // ── Card renderers ──────────────────────────────────────────────────────────
 
-  const renderCard1 = () => {
+  // Card 0: Hook
+  const renderCard0 = () => {
     const isReady = !loading && !!lessonContent
     return (
       <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
@@ -370,7 +451,8 @@ export default function LessonScreen() {
     )
   }
 
-  const renderCard2 = () => {
+  // Card 1: Video
+  const renderCard1 = () => {
     if (!lessonContent) return null
     const { card2 } = lessonContent
     const hasVideo = !!card2.video_key
@@ -415,7 +497,8 @@ export default function LessonScreen() {
     )
   }
 
-  const renderCard3 = () => {
+  // Card 2: Deep Dive
+  const renderCard2 = () => {
     if (!lessonContent) return null
     const { card3 } = lessonContent
 
@@ -436,65 +519,141 @@ export default function LessonScreen() {
         </Animated.View>
         <View style={styles.spacer} />
         <Pressable onPress={() => advanceCard(3)} style={[styles.primaryBtn, shadows.mint]}>
-          <Text style={styles.primaryBtnText}>Continue →</Text>
+          <Text style={styles.primaryBtnText}>See missions →</Text>
         </Pressable>
       </ScrollView>
     )
   }
 
-  const renderCard4 = () => {
+  // Card 3: Missions List
+  const renderCard3 = () => {
     if (!lessonContent) return null
-    const { card4 } = lessonContent
+    const { missions } = lessonContent
+    const completedIds = new Set(missionProgress?.completed_missions ?? [])
+    const requiredMissions = missions.filter(m => m.is_required)
+    const optionalMissions = missions.filter(m => !m.is_required)
+    const isRequiredComplete = missionProgress?.is_required_complete ?? false
 
     return (
       <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.companionCenter}>
-          <Companion size={80} mood={missionActive ? 'idle' : 'excited'} />
-        </View>
-        <Text style={styles.sectionHeading}>Your Mission</Text>
-        <Text style={styles.bodyText}>{card4.description}</Text>
-        <View style={styles.focusCallout}>
-          <Text style={styles.focusCalloutText}>{card4.focus_point}</Text>
-        </View>
-        <View style={styles.durationRow}>
-          <View style={styles.durationBadge}>
-            <Text style={styles.durationBadgeText}>~{card4.duration_minutes} min</Text>
+        <View style={styles.missionsHeader}>
+          <Companion size={60} mood={isRequiredComplete ? 'excited' : 'happy'} />
+          <View style={styles.missionsHeaderText}>
+            <Text style={styles.sectionHeading}>Missions</Text>
+            {isRequiredComplete && (
+              <View style={styles.completeBadge}>
+                <Text style={styles.completeBadgeText}>Required done ✓</Text>
+              </View>
+            )}
           </View>
-          {missionActive && (
-            <Text style={styles.elapsedText}>Time elapsed: {formatElapsed(elapsedSeconds)}</Text>
-          )}
         </View>
-        <View style={styles.spacer} />
-        {!missionActive ? (
-          <Pressable
-            onPress={() => setMissionActive(true)}
-            style={[styles.primaryBtn, shadows.mint]}
-          >
-            <Text style={styles.primaryBtnText}>I'm ready →</Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            onPress={() => advanceCard(4)}
-            style={[styles.primaryBtn, styles.peachBtn, shadows.peach]}
-          >
-            <Text style={styles.primaryBtnText}>Complete</Text>
-          </Pressable>
+
+        {requiredMissions.map(mission => {
+          const isDone = completedIds.has(mission.id)
+          return (
+            <Pressable
+              key={mission.id}
+              onPress={() => { setCurrentMissionId(mission.id); advanceCard(4) }}
+              style={[styles.missionItem, isDone && styles.missionItemDone]}
+            >
+              <View style={styles.missionItemBody}>
+                <View style={styles.missionItemTop}>
+                  <View style={styles.requiredBadge}>
+                    <Text style={styles.requiredBadgeText}>Required</Text>
+                  </View>
+                  {isDone && <Text style={styles.missionDoneCheck}>✓</Text>}
+                </View>
+                <Text style={[styles.missionTitle, isDone && styles.missionTitleDone]}>
+                  {mission.title}
+                </Text>
+                <Text style={styles.missionMeta}>~{mission.duration_minutes} min</Text>
+              </View>
+              {!isDone && <Text style={styles.missionArrow}>→</Text>}
+            </Pressable>
+          )
+        })}
+
+        {optionalMissions.length > 0 && (
+          <>
+            <Text style={styles.optionalHeading}>Extra Credit</Text>
+            {optionalMissions.map(mission => {
+              const isDone = completedIds.has(mission.id)
+              return (
+                <Pressable
+                  key={mission.id}
+                  onPress={() => { setCurrentMissionId(mission.id); advanceCard(4) }}
+                  style={[styles.missionItem, styles.missionItemOptional, isDone && styles.missionItemDone]}
+                >
+                  <View style={styles.missionItemBody}>
+                    <Text style={[styles.missionTitle, isDone && styles.missionTitleDone]}>
+                      {mission.title}
+                    </Text>
+                    <Text style={styles.missionMeta}>~{mission.duration_minutes} min · optional</Text>
+                  </View>
+                  {isDone
+                    ? <Text style={styles.missionDoneCheck}>✓</Text>
+                    : <Text style={styles.missionArrow}>→</Text>
+                  }
+                </Pressable>
+              )
+            })}
+          </>
         )}
+
+        <View style={styles.reviewRow}>
+          <Text style={styles.reviewLabel}>Review:</Text>
+          <Pressable onPress={() => advanceCard(0)} style={styles.reviewBtn}>
+            <Text style={styles.reviewBtnText}>Intro</Text>
+          </Pressable>
+          <Pressable onPress={() => advanceCard(1)} style={styles.reviewBtn}>
+            <Text style={styles.reviewBtnText}>Video</Text>
+          </Pressable>
+          <Pressable onPress={() => advanceCard(2)} style={styles.reviewBtn}>
+            <Text style={styles.reviewBtnText}>Deep Dive</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.spacer} />
+        <Pressable onPress={handleExit} style={[styles.primaryBtn, isRequiredComplete ? shadows.mint : styles.exitBtnMuted]}>
+          <Text style={styles.primaryBtnText}>
+            {isRequiredComplete ? 'Back to your path →' : 'Exit lesson'}
+          </Text>
+        </Pressable>
       </ScrollView>
     )
   }
 
-  const renderCard5 = () => {
-    if (!lessonContent) return null
-    const { card5 } = lessonContent
+  // Card 4: Mission Submission
+  const renderCard4 = () => {
+    if (!lessonContent || !currentMissionId) return null
+    const mission = lessonContent.missions.find(m => m.id === currentMissionId)
+    if (!mission) return null
     const canSubmit = !!photoUri && !!selectedReflection
 
     return (
       <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
+        <Pressable onPress={() => advanceCard(3)} style={styles.backLink}>
+          <Text style={styles.backLinkText}>← Back to missions</Text>
+        </Pressable>
+
         <View style={styles.companionRow}>
           <Companion size={60} mood="happy" />
         </View>
-        <Text style={styles.bodyText}>{card5.prompt}</Text>
+
+        <View style={styles.missionBanner}>
+          {mission.is_required && (
+            <View style={styles.requiredBadge}>
+              <Text style={styles.requiredBadgeText}>Required</Text>
+            </View>
+          )}
+          <Text style={styles.sectionHeading}>{mission.title}</Text>
+        </View>
+
+        <Text style={styles.bodyText}>{mission.description}</Text>
+
+        <View style={styles.focusCallout}>
+          <Text style={styles.focusCalloutText}>{mission.prompt}</Text>
+        </View>
 
         {!photoUri ? (
           <Pressable onPress={handleAddPhoto} style={styles.photoPlaceholder}>
@@ -511,7 +670,7 @@ export default function LessonScreen() {
         )}
 
         <View style={styles.reflectionGrid}>
-          {card5.reflection_choices.map((choice, i) => {
+          {mission.reflection_choices.map((choice, i) => {
             const isSelected = selectedReflection === choice
             return (
               <Pressable
@@ -538,7 +697,8 @@ export default function LessonScreen() {
     )
   }
 
-  const renderCard6 = () => {
+  // Card 5: Mission Feedback
+  const renderCard5 = () => {
     if (validating || !validationResult) {
       return (
         <View style={styles.feedbackLoading}>
@@ -553,31 +713,48 @@ export default function LessonScreen() {
       )
     }
 
+    const isRequiredComplete = missionProgress?.is_required_complete ?? false
+
     return (
       <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
         <View style={styles.companionCenter}>
           <Animated.View style={{ transform: [{ scale: companionScale }] }}>
-            <Companion size={100} mood="excited" />
+            <Companion size={100} mood={validationResult.mission_completed ? 'excited' : 'happy'} />
           </Animated.View>
         </View>
         <Animated.View style={[styles.messageCard, { opacity: feedbackOpacity }]}>
           <Text style={styles.bodyText}>{validationResult.feedback}</Text>
         </Animated.View>
-        <View style={styles.xpRow}>
-          <Animated.View style={[styles.xpBadge, { transform: [{ scale: xpScale }] }]}>
-            <Text style={styles.xpBadgeText}>✦ +{validationResult.xp_earned} XP</Text>
+        {validationResult.mission_completed && (
+          <View style={styles.xpRow}>
+            <Animated.View style={[styles.xpBadge, { transform: [{ scale: xpScale }] }]}>
+              <Text style={styles.xpBadgeText}>✦ +{validationResult.xp_earned} XP</Text>
+            </Animated.View>
+          </View>
+        )}
+        {validationResult.lesson_now_required_complete && (
+          <Animated.View style={[styles.requiredCompleteCard, { opacity: feedbackOpacity }]}>
+            <Text style={styles.requiredCompleteText}>Required missions complete! Next lesson unlocked 🎉</Text>
           </Animated.View>
-        </View>
+        )}
         <View style={styles.spacer} />
-        <Pressable onPress={handleComplete} style={[styles.primaryBtn, shadows.mint]}>
-          <Text style={styles.primaryBtnText}>Back to your path →</Text>
+        <Pressable
+          onPress={() => { resetSubmission(); advanceCard(3) }}
+          style={[styles.primaryBtn, shadows.mint]}
+        >
+          <Text style={styles.primaryBtnText}>Next mission →</Text>
         </Pressable>
+        {isRequiredComplete && (
+          <Pressable onPress={handleExit} style={styles.exitBtn}>
+            <Text style={styles.exitBtnText}>Back to your path</Text>
+          </Pressable>
+        )}
       </ScrollView>
     )
   }
 
   // ── Card dispatch ───────────────────────────────────────────────────────────
-  const cards = [renderCard1, renderCard2, renderCard3, renderCard4, renderCard5, renderCard6]
+  const cards = [renderCard0, renderCard1, renderCard2, renderCard3, renderCard4, renderCard5]
 
   return (
     <SafeAreaView style={styles.container}>
@@ -666,9 +843,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  peachBtn: {
-    backgroundColor: colors.peach,
-  },
   btnDisabled: {
     opacity: 0.4,
   },
@@ -676,6 +850,28 @@ const styles = StyleSheet.create({
     fontFamily: 'FredokaOne_400Regular',
     fontSize: 18,
     color: colors.foreground,
+  },
+  exitBtnMuted: {
+    backgroundColor: colors.card,
+  },
+  exitBtn: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  exitBtnText: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 16,
+    color: colors.muted,
+  },
+  backLink: {
+    paddingVertical: 4,
+    paddingBottom: 12,
+  },
+  backLinkText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 14,
+    color: colors.muted,
   },
 
   // Video
@@ -728,14 +924,140 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
 
-  // Card 4 — Mission
+  // Card 3 — Missions header
+  missionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 20,
+  },
+  missionsHeaderText: {
+    flex: 1,
+  },
+  completeBadge: {
+    backgroundColor: colors.mint + '33',
+    borderRadius: radius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignSelf: 'flex-start',
+    marginTop: -4,
+  },
+  completeBadgeText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 12,
+    color: colors.foreground,
+  },
+
+  // Card 3 — Mission items
+  missionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 16,
+    marginBottom: 10,
+  },
+  missionItemOptional: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  missionItemDone: {
+    opacity: 0.6,
+  },
+  missionItemBody: {
+    flex: 1,
+  },
+  missionItemTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  requiredBadge: {
+    backgroundColor: colors.sky + '55',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+  },
+  requiredBadgeText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 11,
+    color: colors.foreground,
+  },
+  missionTitle: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 15,
+    color: colors.foreground,
+    marginBottom: 2,
+  },
+  missionTitleDone: {
+    textDecorationLine: 'line-through',
+    color: colors.muted,
+  },
+  missionMeta: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 12,
+    color: colors.muted,
+  },
+  missionDoneCheck: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 16,
+    color: colors.mint,
+  },
+  missionArrow: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 18,
+    color: colors.muted,
+    marginLeft: 8,
+  },
+  optionalHeading: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 13,
+    color: colors.muted,
+    marginTop: 8,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  // Review earlier cards row
+  reviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  reviewLabel: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 13,
+    color: colors.muted,
+  },
+  reviewBtn: {
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  reviewBtnText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 12,
+    color: colors.muted,
+  },
+
+  // Card 4 — Mission submission
+  missionBanner: {
+    marginBottom: 8,
+  },
   focusCallout: {
     backgroundColor: colors.golden + '33',
     borderLeftWidth: 3,
     borderLeftColor: colors.golden,
     borderRadius: radius.sm,
     padding: 14,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   focusCalloutText: {
     fontFamily: 'Nunito_600SemiBold',
@@ -743,31 +1065,8 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     lineHeight: 22,
   },
-  durationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    marginBottom: 8,
-  },
-  durationBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.card,
-    borderRadius: radius.sm,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  durationBadgeText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 13,
-    color: colors.muted,
-  },
-  elapsedText: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 13,
-    color: colors.muted,
-  },
 
-  // Card 5 — Photo
+  // Photo picker
   photoPlaceholder: {
     borderWidth: 2,
     borderColor: colors.border,
@@ -808,10 +1107,10 @@ const styles = StyleSheet.create({
   changePhotoText: {
     fontFamily: 'Nunito_600SemiBold',
     fontSize: 12,
-    color: colors.white,
+    color: '#fff',
   },
 
-  // Card 5 — Reflection
+  // Reflection
   reflectionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -836,7 +1135,7 @@ const styles = StyleSheet.create({
     color: colors.foreground,
   },
 
-  // Card 6 — Loading
+  // Card 5 — Loading
   feedbackLoading: {
     flex: 1,
     alignItems: 'center',
@@ -859,7 +1158,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.mint,
   },
 
-  // Card 6 — XP badge
+  // Card 5 — XP badge
   xpRow: {
     alignItems: 'center',
     marginTop: 8,
@@ -876,6 +1175,22 @@ const styles = StyleSheet.create({
     fontFamily: 'FredokaOne_400Regular',
     fontSize: 22,
     color: colors.foreground,
+  },
+
+  // Card 5 — Required complete banner
+  requiredCompleteCard: {
+    backgroundColor: colors.mint + '33',
+    borderRadius: radius.md,
+    padding: 14,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  requiredCompleteText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 14,
+    color: colors.foreground,
+    textAlign: 'center',
+    lineHeight: 22,
   },
 
   // Error state

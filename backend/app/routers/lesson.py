@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import LessonCache
+from ..models import Lesson, UserLessonProgress
 from ..services.companion_service import (
     _touch_last_practice_timestamp,
     add_xp_to_companion,
@@ -23,6 +23,7 @@ router = APIRouter()
 
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 VISION_MODEL = "claude-sonnet-4-6"
+XP_PER_MISSION = 20
 
 RAG_ROOT = pathlib.Path(__file__).parent.parent / "rag_resources"
 VIDEO_MAPPING_PATH = RAG_ROOT / "video_mapping.json"
@@ -46,29 +47,27 @@ class Card3Why(BaseModel):
     tell_me_more: str   # 2-3 additional sentences, hidden by default
 
 
-class Card4Mission(BaseModel):
-    description: str        # full task description
-    duration_minutes: int   # estimated minutes
-    focus_point: str        # single highlighted callout, one sentence
-
-
-class Card5Submission(BaseModel):
-    prompt: str                    # specific question about what they made
-    reflection_choices: list[str]  # exactly 3-4 options
+class Mission(BaseModel):
+    id: str
+    title: str
+    description: str
+    is_required: bool
+    duration_minutes: int
+    prompt: str                    # specific question about the photo
+    reflection_choices: list[str]  # 3-4 options
 
 
 class LessonContent(BaseModel):
     card1: Card1Hook
     card2: Card2Concept
     card3: Card3Why
-    card4: Card4Mission
-    card5: Card5Submission
+    missions: list[Mission]
 
 
 class LessonRequest(BaseModel):
     user_id: str | None = None
+    lesson_key: str
     lesson_title: str
-    lesson_type: str  # "lesson" | "practice" | "milestone"
     chapter_title: str
     goal: str
     buddy_name: str
@@ -78,15 +77,16 @@ class LessonRequest(BaseModel):
 
 
 class ValidateRequest(BaseModel):
-    user_id: str | None = None  # if provided, XP is credited to companion
+    user_id: str | None = None
+    lesson_key: str
+    mission_id: str
     photo_base64: str
     photo_media_type: str  # "image/jpeg" | "image/png"
     reflection_choice: str
-    lesson_title: str
-    mission_description: str
     buddy_name: str
     goal: str
-    lesson_type: str = "lesson"  # for XP calculation
+    lesson_title: str
+    domain: str = "cooking"
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +177,6 @@ def _build_lesson_prompt(req: LessonRequest, rag_content: str, video_key: str) -
 Lesson context:
 - Lesson title: {req.lesson_title}
 - Chapter: {req.chapter_title}
-- Type: {req.lesson_type}
 - Goal: {req.goal}
 - Experience: {req.experience}/5 ({exp_label})
 - {completed_block}
@@ -196,25 +195,46 @@ Return JSON matching this exact schema:
     "explanation": "4-6 sentences explaining the concept in companion voice — direct, warm, never textbook",
     "tell_me_more": "2-3 additional sentences that deepen the idea, revealed on tap"
   }},
-  "card4": {{
-    "description": "Full mission description — specific task the learner will actually do",
-    "duration_minutes": 15,
-    "focus_point": "One sentence callout highlighting the single most important thing to get right"
-  }},
-  "card5": {{
-    "prompt": "A specific question about what they made or discovered — NOT 'How did it go?'",
-    "reflection_choices": [
-      "Option relevant to this specific skill (3-4 total)"
-    ]
-  }}
+  "missions": [
+    {{
+      "id": "mission_1",
+      "title": "Short mission title",
+      "description": "Full task description — specific thing the learner will actually do",
+      "is_required": true,
+      "duration_minutes": 10,
+      "prompt": "A specific question about what they made or discovered — NOT generic like 'How did it go?'",
+      "reflection_choices": ["Option 1 specific to this skill", "Option 2", "Option 3"]
+    }},
+    {{
+      "id": "mission_2",
+      "title": "Second mission title",
+      "description": "Another specific task that builds on the first",
+      "is_required": true,
+      "duration_minutes": 15,
+      "prompt": "Specific question about mission 2",
+      "reflection_choices": ["Option 1", "Option 2", "Option 3"]
+    }},
+    {{
+      "id": "mission_3",
+      "title": "Optional challenge",
+      "description": "An optional stretch task for the curious learner",
+      "is_required": false,
+      "duration_minutes": 10,
+      "prompt": "Specific question about mission 3",
+      "reflection_choices": ["Option 1", "Option 2", "Option 3"]
+    }}
+  ]
 }}
 
 Rules:
+- Generate 2-4 missions total. Must include at least 1-2 required missions
+- Required missions should be core skill-building tasks the learner must do
+- Optional missions should be stretch tasks (teach someone, try a harder version, etc.)
+- Each mission must have a specific description — not generic like "Practice the skill"
+- Each mission prompt must reference what should be visible in the photo
+- reflection_choices must be exactly 3-4 options relevant to this specific mission
 - hook (card1) must be 1-2 sentences max
 - explanation (card3) must be 4-6 sentences
-- mission (card4) must be specific and timed
-- submission prompt (card5) must be specific, NOT generic like 'How did it go?'
-- reflection_choices must be exactly 3-4 options relevant to this specific skill
 - Speak as {req.buddy_name}, a warm knowledgeable friend helping someone learn {req.goal}
 - Return ONLY the JSON object"""
 
@@ -223,15 +243,10 @@ Rules:
 # Endpoints
 # ---------------------------------------------------------------------------
 
-XP_BY_TYPE = {"lesson": 50, "practice": 75, "milestone": 150}
-
-
 @router.post("/generate")
 async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> dict:
-    cache_key = f"{req.lesson_title}::{req.goal}::{req.experience}"
-
-    # Check cache
-    cached = db.query(LessonCache).filter(LessonCache.cache_key == cache_key).first()
+    # Check cache by lesson_key
+    cached = db.query(Lesson).filter(Lesson.lesson_key == req.lesson_key).first()
     if cached:
         return cached.lesson_json
 
@@ -272,9 +287,12 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
 
     lesson_data = _strip_and_parse(full_text, "Lesson")
 
-    # Store in cache
-    row = LessonCache(
-        cache_key=cache_key,
+    # Cache in Lesson table
+    row = Lesson(
+        lesson_key=req.lesson_key,
+        title=req.lesson_title,
+        chapter_title=req.chapter_title,
+        domain=req.domain,
         lesson_json=lesson_data,
         created_at=datetime.now(timezone.utc),
     )
@@ -284,11 +302,63 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
     return lesson_data
 
 
+@router.get("/{lesson_key}")
+async def get_lesson(lesson_key: str, db: Session = Depends(get_db)) -> dict:
+    lesson = db.query(Lesson).filter(Lesson.lesson_key == lesson_key).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    return lesson.lesson_json
+
+
+@router.get("/{lesson_key}/{user_id}/progress")
+async def get_lesson_progress(lesson_key: str, user_id: str, db: Session = Depends(get_db)) -> dict:
+    lesson = db.query(Lesson).filter(Lesson.lesson_key == lesson_key).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+
+    progress = db.query(UserLessonProgress).filter(
+        UserLessonProgress.clerk_user_id == user_id,
+        UserLessonProgress.lesson_key == lesson_key,
+    ).first()
+
+    missions = lesson.lesson_json.get("missions", [])
+    completed_set = set(progress.completed_missions if progress else [])
+
+    missions_list = [
+        {
+            "id": m["id"],
+            "title": m["title"],
+            "is_required": m.get("is_required", True),
+            "is_completed": m["id"] in completed_set,
+        }
+        for m in missions
+    ]
+
+    return {
+        "lesson_key": lesson_key,
+        "is_required_complete": progress.is_required_complete if progress else False,
+        "is_fully_complete": progress.is_fully_complete if progress else False,
+        "completed_missions": progress.completed_missions if progress else [],
+        "missions_list": missions_list,
+        "last_visited_at": progress.last_visited_at.isoformat() if progress else None,
+    }
+
+
 @router.post("/validate")
 async def validate_lesson(req: ValidateRequest, db: Session = Depends(get_db)) -> dict:
+    # Fetch lesson and find mission
+    lesson_row = db.query(Lesson).filter(Lesson.lesson_key == req.lesson_key).first()
+    if not lesson_row:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+
+    missions = lesson_row.lesson_json.get("missions", [])
+    mission = next((m for m in missions if m["id"] == req.mission_id), None)
+    if not mission:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
     prompt = (
-        f"The user just completed a lesson on '{req.lesson_title}' as part of learning {req.goal}. "
-        f"Their mission was: {req.mission_description}. "
+        f"The user is learning '{req.lesson_title}' as part of their goal: {req.goal}. "
+        f"Their mission was: {mission['description']}. "
         f"They selected this reflection: '{req.reflection_choice}'. "
         "Here is their photo. Give specific, warm feedback in 2-3 sentences that references something "
         "visible in the photo OR directly acknowledges their reflection choice. "
@@ -339,36 +409,94 @@ async def validate_lesson(req: ValidateRequest, db: Session = Depends(get_db)) -
         )
 
     parsed = _strip_and_parse(full_text, "Validate")
-    xp_earned = XP_BY_TYPE.get(req.lesson_type, 50)
     is_valid = parsed.get("is_valid", False)
 
+    # Update UserLessonProgress
+    was_required_complete = False
+    progress: UserLessonProgress | None = None
+
+    if req.user_id:
+        progress = db.query(UserLessonProgress).filter(
+            UserLessonProgress.clerk_user_id == req.user_id,
+            UserLessonProgress.lesson_key == req.lesson_key,
+        ).first()
+
+        if not progress:
+            progress = UserLessonProgress(
+                clerk_user_id=req.user_id,
+                lesson_key=req.lesson_key,
+                completed_missions=[],
+                is_required_complete=False,
+                is_fully_complete=False,
+            )
+            db.add(progress)
+
+        was_required_complete = progress.is_required_complete
+
+        if is_valid and req.mission_id not in progress.completed_missions:
+            progress.completed_missions = [*progress.completed_missions, req.mission_id]
+
+            required_ids = {m["id"] for m in missions if m.get("is_required")}
+            all_ids = {m["id"] for m in missions}
+            completed_set = set(progress.completed_missions)
+
+            if not progress.is_required_complete and required_ids.issubset(completed_set):
+                progress.is_required_complete = True
+                progress.first_required_completed_at = datetime.now(timezone.utc)
+
+            if all_ids.issubset(completed_set):
+                progress.is_fully_complete = True
+
+        progress.last_visited_at = datetime.now(timezone.utc)
+        progress.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+    lesson_now_required_complete = bool(
+        req.user_id
+        and progress
+        and not was_required_complete
+        and progress.is_required_complete
+    )
+
+    # XP and companion update
     companion_result: dict | None = None
     if req.user_id:
         try:
-            initialize_companion(req.user_id, db)  # no-op if already exists
+            initialize_companion(req.user_id, db)
 
             if is_valid:
-                xp_result = add_xp_to_companion(req.user_id, xp_earned, req.lesson_type, db)
-                streak_result = update_last_practice(req.user_id, db)
-                new_mood = update_mood_for_user(req.user_id, db)
-                companion_result = {
-                    **xp_result,
-                    "mood": new_mood,
-                    "streak_days": streak_result["streak_days"],
-                    "streak_changed": streak_result["streak_changed"],
-                }
+                xp_result = add_xp_to_companion(req.user_id, XP_PER_MISSION, "lesson", db)
+                companion_result = {**xp_result}
+
+                if lesson_now_required_complete:
+                    streak_result = update_last_practice(req.user_id, db)
+                    new_mood = update_mood_for_user(req.user_id, db)
+                    companion_result = {
+                        **xp_result,
+                        "mood": new_mood,
+                        "streak_days": streak_result["streak_days"],
+                        "streak_changed": streak_result["streak_changed"],
+                    }
             else:
-                # Invalid attempt: preserve timestamp so mood doesn't decay,
-                # but don't award XP or advance streak
                 _touch_last_practice_timestamp(req.user_id, db)
                 new_mood = update_mood_for_user(req.user_id, db)
                 companion_result = {"mood": new_mood}
 
         except Exception as e:
-            # Companion hiccup must never block lesson feedback from reaching the user
             print(f"[companion] update failed for user {req.user_id}: {e}")
 
-    response = {**parsed, "xp_earned": xp_earned}
+    lesson_now_fully_complete = bool(
+        req.user_id and progress and progress.is_fully_complete
+        and is_valid  # only true when this submission triggered full completion
+    )
+
+    response = {
+        **parsed,
+        "xp_earned": XP_PER_MISSION,
+        "mission_completed": is_valid,
+        "lesson_now_required_complete": lesson_now_required_complete,
+        "lesson_now_fully_complete": lesson_now_fully_complete,
+    }
     if companion_result is not None:
         response["companion"] = companion_result
     return response

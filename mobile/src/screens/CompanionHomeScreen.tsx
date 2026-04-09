@@ -225,7 +225,7 @@ export default function CompanionHomeScreen() {
           <ActivityIndicator color={colors.mint} style={{ marginTop: 24 }} />
           <Text style={styles.loadingText}>Waking up your buddy…</Text>
         </View>
-        <TabBar activeTab="home" />
+        <TabBar activeTab="buddy" />
       </View>
     )
   }
@@ -242,7 +242,7 @@ export default function CompanionHomeScreen() {
             <Text style={styles.primaryButtonText}>Retry</Text>
           </Pressable>
         </View>
-        <TabBar activeTab="home" />
+        <TabBar activeTab="buddy" />
       </View>
     )
   }
@@ -269,7 +269,7 @@ export default function CompanionHomeScreen() {
             }
           </Pressable>
         </View>
-        <TabBar activeTab="home" />
+        <TabBar activeTab="buddy" />
       </View>
     )
   }
@@ -392,7 +392,7 @@ export default function CompanionHomeScreen() {
         </View>
       </ScrollView>
 
-      <TabBar activeTab="home" />
+      <TabBar activeTab="buddy" />
     </View>
   )
 }

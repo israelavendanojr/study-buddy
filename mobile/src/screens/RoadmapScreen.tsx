@@ -167,6 +167,7 @@ export default function RoadmapScreen() {
   const [activeIndex, setActiveIndex] = useState(initialActiveIndex ?? 0)
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null)
+  const [fullyCompleteKeys, setFullyCompleteKeys] = useState<Set<string>>(new Set())
   const activeIndexRef = useRef(activeIndex)
   useEffect(() => { activeIndexRef.current = activeIndex })
   const lastProcessedLessonId = useRef<string | null>(null)
@@ -241,10 +242,11 @@ export default function RoadmapScreen() {
   const handleStart = () => {
     if (!selectedLesson) return
     const lessonId = selectedLesson.id
+    const lessonKey = selectedLesson.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')
     setModalOpen(false)
     navigation.navigate('LessonScreen', {
+      lessonKey,
       lessonTitle: selectedLesson.title,
-      lessonType: selectedLesson.type,
       chapterTitle: getChapterForLesson(lessonId),
       goal: route.params.goal,
       buddyName: (route.params as RoadmapParams).buddyName ?? 'Buddy',
@@ -264,6 +266,9 @@ export default function RoadmapScreen() {
           setActiveIndex(newIndex)
           saveProgress(newIndex)
         }
+      },
+      onFullyComplete: (key: string) => {
+        setFullyCompleteKeys(prev => new Set([...prev, key]))
       },
     })
   }
@@ -360,19 +365,24 @@ export default function RoadmapScreen() {
           })}
 
           {/* Nodes along the path */}
-          {layout.nodePositions.map(({ x, y, lesson, globalIndex, labelSide }) => (
-            <PathNode
-              key={lesson.id}
-              lesson={lesson}
-              x={x}
-              y={y}
-              labelSide={labelSide}
-              isDone={globalIndex < activeIndex}
-              isActive={globalIndex === activeIndex}
-              isLocked={globalIndex > activeIndex}
-              onPress={handleNodePress}
-            />
-          ))}
+          {layout.nodePositions.map(({ x, y, lesson, globalIndex, labelSide }) => {
+            const isDone = globalIndex < activeIndex
+            const lessonKey = lesson.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')
+            return (
+              <PathNode
+                key={lesson.id}
+                lesson={lesson}
+                x={x}
+                y={y}
+                labelSide={labelSide}
+                isDone={isDone}
+                isPartialComplete={isDone && !fullyCompleteKeys.has(lessonKey)}
+                isActive={globalIndex === activeIndex}
+                isLocked={globalIndex > activeIndex}
+                onPress={handleNodePress}
+              />
+            )
+          })}
         </ScrollView>
       )}
 

@@ -36,6 +36,49 @@ class LessonCache(Base):
     )
 
 
+class Lesson(Base):
+    __tablename__ = "lessons"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    lesson_key: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    chapter_title: Mapped[str] = mapped_column(String, nullable=False)
+    domain: Mapped[str] = mapped_column(String, nullable=False)
+    lesson_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class UserLessonProgress(Base):
+    __tablename__ = "user_lesson_progress"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    clerk_user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    lesson_key: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    completed_missions: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    is_required_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_fully_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    first_required_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_visited_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
 class UserRoadmap(Base):
     __tablename__ = "user_roadmaps"
 

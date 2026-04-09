@@ -20,6 +20,7 @@ import GoalTuningScreen from './src/screens/GoalTuningScreen'
 import ConfirmationScreen from './src/screens/ConfirmationScreen'
 import RoadmapScreen from './src/screens/RoadmapScreen'
 import LessonScreen from './src/screens/LessonScreen'
+import HomeScreen from './src/screens/HomeScreen'
 import CompanionHomeScreen from './src/screens/CompanionHomeScreen'
 import CompanionShopScreen from './src/screens/CompanionShopScreen'
 import BadgesScreen from './src/screens/BadgesScreen'
@@ -67,7 +68,8 @@ return <View style={{ flex: 1, backgroundColor: colors.background }} />
           <Stack.Screen name="Confirmation" component={ConfirmationScreen} />
           <Stack.Screen name="Roadmap" component={RoadmapScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="LessonScreen" component={LessonScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Home" component={CompanionHomeScreen} options={{ cardStyleInterpolator: forFade }} />
+          <Stack.Screen name="Home" component={HomeScreen} options={{ cardStyleInterpolator: forFade }} />
+          <Stack.Screen name="CompanionHome" component={CompanionHomeScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="Badges" component={BadgesScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="CompanionShop" component={CompanionShopScreen} />
