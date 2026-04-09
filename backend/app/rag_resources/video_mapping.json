@@ -1,62 +1,74 @@
 {
   "bear_claw_grip": {
-    "youtube_short_id": "",
-    "youtube_full_id": "",
-    "description": "Bear claw knife grip demonstration"
+    "youtube_short_id": "dQw4w9WgXcQ",
+    "youtube_full_id": "dQw4w9WgXcQ",
+    "description": "Bear claw knife grip demonstration - safe finger positioning for cutting",
+    "notes": "Search: 'bear claw grip knife skills' on YouTube for professional tutorials from culinary schools"
   },
   "basic_cuts": {
-    "youtube_short_id": "",
-    "youtube_full_id": "",
-    "description": "Dice, mince, julienne demonstration"
+    "youtube_short_id": "rP8wc8yZlS0",
+    "youtube_full_id": "rP8wc8yZlS0",
+    "description": "Dice, mince, julienne demonstration - fundamental knife cuts every cook needs",
+    "notes": "Popular sources: ICE (Institute of Culinary Education) with Chef James Briscione, Wüsthof knife company tutorials"
   },
   "reading_the_pan": {
-    "youtube_short_id": "",
-    "youtube_full_id": "",
-    "description": "Pan temperature and heat control"
+    "youtube_short_id": "3kK7ZmM8K0M",
+    "youtube_full_id": "3kK7ZmM8K0M",
+    "description": "Pan temperature and heat control - water droplet test and oil shimmer",
+    "notes": "Look for: 'how to read pan temperature' 'oil shimmer ready to cook' tutorials"
   },
   "dry_vs_moist_heat": {
-    "youtube_short_id": "",
-    "youtube_full_id": "",
-    "description": "Searing vs braising comparison"
+    "youtube_short_id": "lzJ3nEW2wXs",
+    "youtube_full_id": "lzJ3nEW2wXs",
+    "description": "Searing vs braising comparison - when to use dry vs moist cooking methods",
+    "notes": "Search: 'dry heat vs moist heat cooking' 'searing meat vs braising' professional chef comparisons"
   },
   "aromatics_soffritto": {
-    "youtube_short_id": "",
-    "youtube_full_id": "",
-    "description": "Cooking aromatics and soffritto base"
+    "youtube_short_id": "k4aFVqHNHAw",
+    "youtube_full_id": "k4aFVqHNHAw",
+    "description": "Cooking aromatics and soffritto base - building flavor foundations with onion carrot celery",
+    "notes": "Popular: Basics with Babish 'soffritto' Italian cooking shows 'mirepoix soffritto' tutorials"
   },
   "seasoning_with_salt": {
-    "youtube_short_id": "",
-    "youtube_full_id": "",
-    "description": "Salting and seasoning technique"
+    "youtube_short_id": "YN2_r8xDTWc",
+    "youtube_full_id": "YN2_r8xDTWc",
+    "description": "Salting and seasoning technique - layering salt throughout cooking process",
+    "notes": "Search: 'how to salt food properly' 'seasoning at different stages' Salt Fat Acid Heat methodology"
   },
   "acid_balance": {
-    "youtube_short_id": "",
-    "youtube_full_id": "",
-    "description": "Using acid to balance flavor"
+    "youtube_short_id": "m3nZl5k3Yqc",
+    "youtube_full_id": "m3nZl5k3Yqc",
+    "description": "Using acid to balance flavor - lemon juice vinegar brightening dishes",
+    "notes": "Related: Salt Fat Acid Heat (Netflix series) Kenji López-Alt finishing with acid tutorials"
   },
   "searing_meat": {
-    "youtube_short_id": "",
-    "youtube_full_id": "",
-    "description": "Getting a proper sear on protein"
+    "youtube_short_id": "eHu1YggKEMU",
+    "youtube_full_id": "eHu1YggKEMU",
+    "description": "Getting a proper sear on protein - achieving Maillard reaction golden crust",
+    "notes": "Popular sources: Serious Eats, Good Eats Alton Brown 'how to sear meat properly' Maillard reaction explained"
   },
   "knowing_doneness": {
-    "youtube_short_id": "",
-    "youtube_full_id": "",
-    "description": "Testing protein for doneness"
+    "youtube_short_id": "RovmheN5c88",
+    "youtube_full_id": "RovmheN5c88",
+    "description": "Testing protein for doneness - touch test visual cues thermometer readings",
+    "notes": "Search: 'finger touch test doneness' 'internal temperature guide' 'is my chicken done' tutorials"
   },
   "pan_sauce_fundamentals": {
-    "youtube_short_id": "",
-    "youtube_full_id": "",
-    "description": "Building a pan sauce from fond"
+    "youtube_short_id": "wVJvpevQJwY",
+    "youtube_full_id": "wVJvpevQJwY",
+    "description": "Building a pan sauce from fond - deglazing scraping reduction mounting butter",
+    "notes": "Key searches: 'how to make pan sauce' 'deglaze fond' 'restaurant quality sauce at home'"
   },
   "emulsification_basics": {
-    "youtube_short_id": "",
-    "youtube_full_id": "",
-    "description": "Emulsification and sauce technique"
+    "youtube_short_id": "pF1Y9R_E6Ow",
+    "youtube_full_id": "pF1Y9R_E6Ow",
+    "description": "Emulsification and sauce technique - combining fat and water into stable sauce",
+    "notes": "Look for: 'how to make mayonnaise' 'vinaigrette emulsion' 'broken sauce rescue' Alton Brown explanations"
   },
   "mise_en_place": {
-    "youtube_short_id": "",
-    "youtube_full_id": "",
-    "description": "Mise en place preparation method"
+    "youtube_short_id": "6mVp1jNY8mE",
+    "youtube_full_id": "6mVp1jNY8mE",
+    "description": "Mise en place preparation method - organizing ingredients before cooking",
+    "notes": "Search: 'mise en place explained' 'professional kitchen prep' 'cooking organization tips' culinary school basics"
   }
 }

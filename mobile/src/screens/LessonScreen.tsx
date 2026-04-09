@@ -9,6 +9,7 @@ import {
   Alert,
   Image,
   Animated,
+  PanResponder,
 } from 'react-native'
 import { useRoute, useNavigation } from '@react-navigation/native'
 import type { RouteProp } from '@react-navigation/native'
@@ -131,6 +132,14 @@ export default function LessonScreen() {
   const hasSignaledComplete = useRef(false)
   const hasInitializedCard = useRef(false)
 
+  // ── Swipe nav ──────────────────────────────────────────────────────────────
+  // Tracks current swipe permissions — updated every render so PanResponder callbacks
+  // always see fresh values without being recreated.
+  const canSwipeRef = useRef({ forward: false, back: false, index: 0 })
+  const canSwipeForward = cardIndex < 3 && (cardIndex > 0 || (!loading && !!lessonContent))
+  const canSwipeBack = cardIndex >= 1 && cardIndex <= 5
+  canSwipeRef.current = { forward: canSwipeForward, back: canSwipeBack, index: cardIndex }
+
   // ── Animations ─────────────────────────────────────────────────────────────
   const cardOpacity = useRef(new Animated.Value(1)).current
   const cardTranslateX = useRef(new Animated.Value(0)).current
@@ -144,6 +153,42 @@ export default function LessonScreen() {
   const dot2 = useRef(new Animated.Value(0.3)).current
   const dot3 = useRef(new Animated.Value(0.3)).current
   const dotLoops = useRef<Animated.CompositeAnimation[]>([])
+
+  // ── Swipe responder ────────────────────────────────────────────────────────
+  const snapBack = () =>
+    Animated.spring(cardTranslateX, { toValue: 0, useNativeDriver: true, tension: 120, friction: 10 }).start()
+
+  const swipeResponder = useRef(
+    PanResponder.create({
+      // Only claim gesture if clearly horizontal
+      onMoveShouldSetPanResponder: (_, { dx, dy }) =>
+        Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.5,
+      onPanResponderMove: (_, { dx }) => {
+        const { forward, back } = canSwipeRef.current
+        const allowed = dx < 0 ? forward : back
+        if (allowed) cardTranslateX.setValue(dx * 0.35)
+      },
+      onPanResponderRelease: (_, { dx, vx }) => {
+        const { forward, back, index } = canSwipeRef.current
+        const swipedLeft  = dx < -60 || vx < -0.4
+        const swipedRight = dx >  60 || vx >  0.4
+        if (swipedLeft && forward) {
+          advanceCardRef.current(index + 1)
+        } else if (swipedRight && back) {
+          if (index === 5) { resetSubmissionRef.current(); advanceCardRef.current(3) }
+          else if (index === 4) advanceCardRef.current(3)
+          else advanceCardRef.current(index - 1)
+        } else {
+          snapBack()
+        }
+      },
+      onPanResponderTerminate: () => snapBack(),
+    })
+  ).current
+
+  // Stable refs so PanResponder callbacks can call the latest versions of these
+  const advanceCardRef = useRef<(n: number) => void>(() => {})
+  const resetSubmissionRef = useRef<() => void>(() => {})
 
   // ── Fetch lesson ───────────────────────────────────────────────────────────
   const fetchLesson = async () => {
@@ -218,6 +263,7 @@ export default function LessonScreen() {
 
   // ── Card transition ─────────────────────────────────────────────────────────
   const advanceCard = (nextIndex: number) => {
+    const fromIndex = canSwipeRef.current.index
     Animated.timing(cardOpacity, { toValue: 0, duration: 150, useNativeDriver: true }).start(() => {
       setCardIndex(nextIndex)
       Animated.timing(progressAnim, {
@@ -225,13 +271,15 @@ export default function LessonScreen() {
         duration: 300,
         useNativeDriver: false,
       }).start()
-      cardTranslateX.setValue(20)
+      // Slide in from the correct direction
+      cardTranslateX.setValue(nextIndex > fromIndex ? 20 : -20)
       Animated.parallel([
         Animated.timing(cardOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
         Animated.timing(cardTranslateX, { toValue: 0, duration: 250, useNativeDriver: true }),
       ]).start()
     })
   }
+  advanceCardRef.current = advanceCard
 
   // ── Tell me more ────────────────────────────────────────────────────────────
   const toggleTellMeMore = () => {
@@ -402,6 +450,7 @@ export default function LessonScreen() {
     setSelectedReflection(null)
     setValidationResult(null)
   }
+  resetSubmissionRef.current = resetSubmission
 
   // ── Interpolations ──────────────────────────────────────────────────────────
   const chevronDeg = chevronRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] })
@@ -764,6 +813,7 @@ export default function LessonScreen() {
           styles.cardWrapper,
           { opacity: cardOpacity, transform: [{ translateX: cardTranslateX }] },
         ]}
+        {...swipeResponder.panHandlers}
       >
         {cards[cardIndex]?.()}
       </Animated.View>
