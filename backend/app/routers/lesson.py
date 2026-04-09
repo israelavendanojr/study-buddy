@@ -253,10 +253,14 @@ Rules:
 
 @router.post("/generate")
 async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> dict:
-    # Check cache by lesson_key
+    # Check cache by lesson_key — skip stale entries that predate the missions schema
     cached = db.query(Lesson).filter(Lesson.lesson_key == req.lesson_key).first()
     if cached:
-        return cached.lesson_json
+        if "missions" in cached.lesson_json:
+            return cached.lesson_json
+        # Old format (no missions key) — delete and regenerate
+        db.delete(cached)
+        db.commit()
 
     # RAG retrieval
     rag_content = _retrieve_rag_docs(req.lesson_title, req.chapter_title, req.domain)
@@ -370,9 +374,10 @@ async def validate_lesson(req: ValidateRequest, db: Session = Depends(get_db)) -
         f"They selected this reflection: '{req.reflection_choice}'. "
         "Here is their photo. Give specific, warm feedback in 2-3 sentences that references something "
         "visible in the photo OR directly acknowledges their reflection choice. "
-        "Never give generic feedback like 'Great job!'. "
-        "If the photo is unrelated to the task, gently note it but stay encouraging. "
-        "Also determine if this submission is valid (did they attempt the task).\n\n"
+        "Never give generic feedback like 'Great job!'.\n\n"
+        "Set is_valid to true if the photo shows any genuine attempt at the task — food, cooking, "
+        "ingredients, equipment, or a result. Set is_valid to false ONLY if the photo is completely "
+        "blank, a UI screenshot, or has absolutely nothing to do with cooking or food.\n\n"
         "Return ONLY valid JSON:\n"
         '{"feedback": "string", "is_valid": true}'
     )
@@ -418,46 +423,53 @@ async def validate_lesson(req: ValidateRequest, db: Session = Depends(get_db)) -
 
     parsed = _strip_and_parse(full_text, "Validate")
     is_valid = parsed.get("is_valid", False)
+    print(f"[validate] lesson={req.lesson_key} mission={req.mission_id} user={req.user_id} is_valid={is_valid}")
 
     # Update UserLessonProgress
     was_required_complete = False
+    was_fully_complete = False
     progress: UserLessonProgress | None = None
 
     if req.user_id:
-        progress = db.query(UserLessonProgress).filter(
-            UserLessonProgress.clerk_user_id == req.user_id,
-            UserLessonProgress.lesson_key == req.lesson_key,
-        ).first()
+        try:
+            progress = db.query(UserLessonProgress).filter(
+                UserLessonProgress.clerk_user_id == req.user_id,
+                UserLessonProgress.lesson_key == req.lesson_key,
+            ).first()
 
-        if not progress:
-            progress = UserLessonProgress(
-                clerk_user_id=req.user_id,
-                lesson_key=req.lesson_key,
-                completed_missions=[],
-                is_required_complete=False,
-                is_fully_complete=False,
-            )
-            db.add(progress)
+            if not progress:
+                progress = UserLessonProgress(
+                    clerk_user_id=req.user_id,
+                    lesson_key=req.lesson_key,
+                    completed_missions=[],
+                    is_required_complete=False,
+                    is_fully_complete=False,
+                )
+                db.add(progress)
 
-        was_required_complete = progress.is_required_complete
+            was_required_complete = progress.is_required_complete
+            was_fully_complete = progress.is_fully_complete
 
-        if is_valid and req.mission_id not in progress.completed_missions:
-            progress.completed_missions = [*progress.completed_missions, req.mission_id]
+            if is_valid and req.mission_id not in progress.completed_missions:
+                progress.completed_missions = [*progress.completed_missions, req.mission_id]
 
-            required_ids = {m["id"] for m in missions if m.get("is_required")}
-            all_ids = {m["id"] for m in missions}
-            completed_set = set(progress.completed_missions)
+                required_ids = {m["id"] for m in missions if m.get("is_required")}
+                all_ids = {m["id"] for m in missions}
+                completed_set = set(progress.completed_missions)
 
-            if not progress.is_required_complete and required_ids.issubset(completed_set):
-                progress.is_required_complete = True
-                progress.first_required_completed_at = datetime.now(timezone.utc)
+                if not progress.is_required_complete and required_ids.issubset(completed_set):
+                    progress.is_required_complete = True
+                    progress.first_required_completed_at = datetime.now(timezone.utc)
 
-            if all_ids.issubset(completed_set):
-                progress.is_fully_complete = True
+                if all_ids.issubset(completed_set):
+                    progress.is_fully_complete = True
 
-        progress.last_visited_at = datetime.now(timezone.utc)
-        progress.updated_at = datetime.now(timezone.utc)
-        db.commit()
+            progress.last_visited_at = datetime.now(timezone.utc)
+            progress.updated_at = datetime.now(timezone.utc)
+            db.commit()
+        except Exception as e:
+            print(f"[validate] progress DB error for user {req.user_id}: {e}")
+            db.rollback()
 
     lesson_now_required_complete = bool(
         req.user_id
@@ -494,8 +506,10 @@ async def validate_lesson(req: ValidateRequest, db: Session = Depends(get_db)) -
             print(f"[companion] update failed for user {req.user_id}: {e}")
 
     lesson_now_fully_complete = bool(
-        req.user_id and progress and progress.is_fully_complete
-        and is_valid  # only true when this submission triggered full completion
+        req.user_id
+        and progress
+        and not was_fully_complete
+        and progress.is_fully_complete
     )
 
     response = {

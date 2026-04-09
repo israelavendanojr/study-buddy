@@ -16,7 +16,7 @@ import type { RouteProp } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { WebView } from 'react-native-webview'
 import * as ImagePicker from 'expo-image-picker'
-import * as FileSystem from 'expo-file-system'
+import { File } from 'expo-file-system'
 import Companion from '../components/Companion'
 import { colors, radius, shadows } from '../theme'
 
@@ -125,8 +125,10 @@ export default function LessonScreen() {
   const [currentMissionId, setCurrentMissionId] = useState<string | null>(null)
   const [selectedReflection, setSelectedReflection] = useState<string | null>(null)
   const [photoUri, setPhotoUri] = useState<string | null>(null)
+  const [photoMimeType, setPhotoMimeType] = useState<string>('image/jpeg')
   const [validating, setValidating] = useState(false)
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [tellMeMoreOpen, setTellMeMoreOpen] = useState(false)
   const [webViewLoaded, setWebViewLoaded] = useState(false)
 
@@ -343,7 +345,10 @@ export default function LessonScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.7,
       })
-      if (!result.canceled && result.assets[0]) setPhotoUri(result.assets[0].uri)
+      if (!result.canceled && result.assets[0]) {
+        setPhotoUri(result.assets[0].uri)
+        setPhotoMimeType(result.assets[0].mimeType ?? 'image/jpeg')
+      }
     } else {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
       if (status !== 'granted') {
@@ -354,7 +359,10 @@ export default function LessonScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.7,
       })
-      if (!result.canceled && result.assets[0]) setPhotoUri(result.assets[0].uri)
+      if (!result.canceled && result.assets[0]) {
+        setPhotoUri(result.assets[0].uri)
+        setPhotoMimeType(result.assets[0].mimeType ?? 'image/jpeg')
+      }
     }
   }
 
@@ -376,10 +384,7 @@ export default function LessonScreen() {
     advanceCard(5)
 
     try {
-      const base64 = await FileSystem.readAsStringAsync(photoUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      })
-      const mimeType = photoUri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'
+      const base64 = await new File(photoUri).base64()
 
       const res = await fetch(`${API_BASE}/lesson/validate`, {
         method: 'POST',
@@ -389,7 +394,7 @@ export default function LessonScreen() {
           lesson_key: params.lessonKey,
           mission_id: currentMissionId,
           photo_base64: base64,
-          photo_media_type: mimeType,
+          photo_media_type: photoMimeType,
           reflection_choice: selectedReflection,
           buddy_name: params.buddyName,
           goal: params.goal,
@@ -421,15 +426,8 @@ export default function LessonScreen() {
         params.onFullyComplete?.(params.lessonKey)
       }
 
-    } catch {
-      setValidationResult({
-        feedback: `Good effort on this one! Every session builds on the last — keep it up.`,
-        is_valid: false,
-        xp_earned: 0,
-        mission_completed: false,
-        lesson_now_required_complete: false,
-        lesson_now_fully_complete: false,
-      })
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : 'Something went wrong')
     } finally {
       setValidating(false)
     }
@@ -448,8 +446,10 @@ export default function LessonScreen() {
   // ── Reset submission state between missions ─────────────────────────────────
   const resetSubmission = () => {
     setPhotoUri(null)
+    setPhotoMimeType('image/jpeg')
     setSelectedReflection(null)
     setValidationResult(null)
+    setSubmitError(null)
   }
   resetSubmissionRef.current = resetSubmission
 
@@ -483,7 +483,8 @@ export default function LessonScreen() {
         <View style={styles.companionCenter}>
           <Companion size={100} mood={isReady ? 'happy' : 'thinking'} />
         </View>
-        <View style={styles.messageCard}>
+        <View style={styles.speechBubbleTail} />
+        <View style={styles.speechBubble}>
           <Text style={styles.bodyText}>
             {isReady
               ? lessonContent!.card1.companion_message
@@ -512,8 +513,9 @@ export default function LessonScreen() {
         <View style={styles.companionRow}>
           <Companion size={60} mood="idle" />
         </View>
-        <View style={styles.messageCard}>
-          <Text style={styles.bodyText}>{card2.companion_tip}</Text>
+        <View style={styles.watchCallout}>
+          <Text style={styles.watchCalloutLabel}>Watch for</Text>
+          <Text style={styles.watchCalloutText}>{card2.companion_tip}</Text>
         </View>
         <View style={styles.videoContainer}>
           {hasVideo ? (
@@ -708,7 +710,9 @@ export default function LessonScreen() {
           <Text style={styles.missionWhyText}>{mission.why_it_matters}</Text>
         </View>
 
-        <Text style={styles.bodyText}>{mission.description}</Text>
+        <View style={styles.descriptionCallout}>
+          <Text style={styles.bodyText}>{mission.description}</Text>
+        </View>
 
         <View style={styles.focusCallout}>
           <Text style={styles.focusCalloutText}>{mission.prompt}</Text>
@@ -758,6 +762,22 @@ export default function LessonScreen() {
 
   // Card 5: Mission Feedback
   const renderCard5 = () => {
+    if (submitError) {
+      return (
+        <View style={styles.feedbackLoading}>
+          <Companion size={100} mood="sad" />
+          <Text style={styles.loadingText}>Submission failed</Text>
+          <Text style={[styles.bodyTextMuted, { textAlign: 'center', marginTop: 8 }]}>{submitError}</Text>
+          <Pressable
+            onPress={() => { setSubmitError(null); advanceCard(4) }}
+            style={[styles.primaryBtn, shadows.mint, { marginTop: 24 }]}
+          >
+            <Text style={styles.primaryBtnText}>Try again</Text>
+          </Pressable>
+        </View>
+      )
+    }
+
     if (validating || !validationResult) {
       return (
         <View style={styles.feedbackLoading}>
@@ -803,11 +823,11 @@ export default function LessonScreen() {
         >
           <Text style={styles.primaryBtnText}>Next mission →</Text>
         </Pressable>
-        {isRequiredComplete && (
-          <Pressable onPress={handleExit} style={styles.exitBtn}>
-            <Text style={styles.exitBtnText}>Back to your path</Text>
-          </Pressable>
-        )}
+        <Pressable onPress={handleExit} style={styles.exitBtn}>
+          <Text style={[styles.exitBtnText, !isRequiredComplete && { color: colors.muted }]}>
+            {isRequiredComplete ? 'Back to your path' : 'Exit lesson'}
+          </Text>
+        </Pressable>
       </ScrollView>
     )
   }
@@ -1311,5 +1331,57 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.muted,
     marginTop: 4,
+  },
+
+  // ── Card 0: Speech bubble ────────────────────────────────────────────────────
+  speechBubbleTail: {
+    alignSelf: 'center',
+    width: 0,
+    height: 0,
+    borderLeftWidth: 10,
+    borderRightWidth: 10,
+    borderBottomWidth: 14,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: colors.card,
+    marginBottom: -1,
+  },
+  speechBubble: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 20,
+    marginBottom: 24,
+  },
+
+  // ── Card 1: Watch for callout ────────────────────────────────────────────────
+  watchCallout: {
+    backgroundColor: colors.card,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.mint,
+    borderRadius: radius.sm,
+    padding: 16,
+    marginBottom: 20,
+  },
+  watchCalloutLabel: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 11,
+    color: colors.mint,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  watchCalloutText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 15,
+    color: colors.foreground,
+    lineHeight: 22,
+  },
+
+  // ── Card 4: Description accent ───────────────────────────────────────────────
+  descriptionCallout: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.peach,
+    paddingLeft: 14,
+    marginBottom: 16,
   },
 })
