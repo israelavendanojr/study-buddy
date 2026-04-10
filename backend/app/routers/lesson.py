@@ -1,4 +1,3 @@
-import json
 import os
 import pathlib
 from datetime import datetime, timezone
@@ -26,7 +25,6 @@ VISION_MODEL = "claude-sonnet-4-6"
 XP_PER_MISSION = 20
 
 RAG_ROOT = pathlib.Path(__file__).parent.parent / "rag_resources"
-VIDEO_MAPPING_PATH = RAG_ROOT / "video_mapping.json"
 
 
 # ---------------------------------------------------------------------------
@@ -35,11 +33,6 @@ VIDEO_MAPPING_PATH = RAG_ROOT / "video_mapping.json"
 
 class Card1Hook(BaseModel):
     companion_message: str  # 1-2 sentences
-
-
-class Card2Concept(BaseModel):
-    companion_tip: str  # 1-2 sentences: what to watch for in the video
-    video_key: str     # matched from video_mapping.json, may be empty string
 
 
 class Card3Why(BaseModel):
@@ -61,7 +54,6 @@ class Mission(BaseModel):
 
 class LessonContent(BaseModel):
     card1: Card1Hook
-    card2: Card2Concept
     card3: Card3Why
     missions: list[Mission]
 
@@ -133,31 +125,11 @@ def _retrieve_rag_docs(lesson_title: str, chapter_title: str, domain: str) -> st
     return "\n\n".join(parts)
 
 
-def _lookup_video(lesson_title: str) -> str:
-    """Fuzzy-match lesson_title against video_mapping.json keys."""
-    try:
-        mapping: dict = json.loads(VIDEO_MAPPING_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return ""
-
-    normalized = lesson_title.lower().replace(" ", "_")
-    # exact match first
-    if normalized in mapping:
-        return mapping[normalized].get("youtube_short_id", "")
-
-    # substring match both ways
-    for key, value in mapping.items():
-        if key in normalized or normalized in key:
-            return value.get("youtube_short_id", "")
-
-    return ""
-
-
 # ---------------------------------------------------------------------------
 # Prompt builder
 # ---------------------------------------------------------------------------
 
-def _build_lesson_prompt(req: LessonRequest, rag_content: str, video_key: str) -> str:
+def _build_lesson_prompt(req: LessonRequest, rag_content: str) -> str:
     exp_label = (
         "total beginner" if req.experience <= 1
         else "some experience" if req.experience <= 3
@@ -188,10 +160,6 @@ Return JSON matching this exact schema:
 {{
   "card1": {{
     "companion_message": "1-2 sentences max — hook the learner on why this specific skill matters right now"
-  }},
-  "card2": {{
-    "companion_tip": "1-2 sentences: what specific thing to watch for or focus on in the video",
-    "video_key": "{video_key}"
   }},
   "card3": {{
     "headline": "The single most important insight in 1 sentence",
@@ -256,20 +224,17 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
     # Check cache by lesson_key — skip stale entries that predate the missions schema
     cached = db.query(Lesson).filter(Lesson.lesson_key == req.lesson_key).first()
     if cached:
-        if "missions" in cached.lesson_json:
+        if "missions" in cached.lesson_json and "card2" not in cached.lesson_json:
             return cached.lesson_json
-        # Old format (no missions key) — delete and regenerate
+        # Old format (has card2/no missions) — delete and regenerate
         db.delete(cached)
         db.commit()
 
     # RAG retrieval
     rag_content = _retrieve_rag_docs(req.lesson_title, req.chapter_title, req.domain)
 
-    # Video lookup
-    video_key = _lookup_video(req.lesson_title)
-
     # Build prompt
-    prompt = _build_lesson_prompt(req, rag_content, video_key)
+    prompt = _build_lesson_prompt(req, rag_content)
 
     # Call Claude
     try:

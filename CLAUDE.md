@@ -49,7 +49,7 @@ cd mobile && npx expo install <package-name>
 **Routers:**
 - `app/routers/onboarding.py` — `/onboarding/submit`
 - `app/routers/roadmap.py` — `/roadmap/generate`, `/roadmap/coach`, `/roadmap/summarize`, `/roadmap/{user_id}`, `/roadmap/{user_id}/progress`
-- `app/routers/lesson.py` — `/lesson/generate`, `/lesson/validate`
+- `app/routers/lesson.py` — `/lesson/generate`, `/lesson/validate`, `/lesson/{lesson_key}`, `/lesson/{lesson_key}/{user_id}/progress`
 - `app/routers/companion.py` — `/companion/{user_id}`, `/companion/{user_id}/stats`, `/companion/{user_id}/initialize`, `/companion/{user_id}/add-xp`, `/companion/{user_id}/progress`, `/companion/{user_id}/mood-breakdown`, `/companion/{user_id}/update-mood`
 - `app/routers/cosmetics.py` — `/cosmetics` (list with optional `?item_type=`), `/cosmetics/{user_id}/inventory`, `/cosmetics/{user_id}/equipped`, `/cosmetics/{user_id}/purchase`, `/cosmetics/{user_id}/equip`, `/cosmetics/{user_id}/unequip`
 
@@ -76,11 +76,12 @@ cd mobile && npx expo install <package-name>
 { title, chapters[{ id, title, lessons[{ id, title, type: "lesson"|"practice"|"milestone", estimatedMinutes }] }] }
 ```
 
-**Lesson JSON schema from LLM (6 cards):**
+**Lesson JSON schema from LLM:**
 ```
-{ card1: { companion_message }, card2: { companion_tip, video_key }, card3: { explanation, tell_me_more },
-  card4: { description, duration_minutes, focus_point }, card5: { prompt, reflection_choices[] } }
+{ card1: { companion_message }, card3: { headline, points[], tell_me_more },
+  missions: [{ id, title, description, why_it_matters, is_required, duration_minutes, prompt, reflection_choices[] }] }
 ```
+Missions: 2–4 total, at least 1–2 `is_required: true`. XP per validated mission: `XP_PER_MISSION = 20`. Lesson is cached by `lesson_key`; old cache entries with `card2` or without `missions` are auto-deleted and regenerated.
 
 ### RAG System (`backend/app/rag_resources/`)
 
@@ -103,16 +104,15 @@ XP values: `lesson=50`, `practice=75`, `milestone=150`.
 **Params flow:**
 - Onboarding screens chain params forward via `navigation.navigate()`
 - GoalTuning → Confirmation passes `coachingResult` (from `/roadmap/coach`)
-- RoadmapScreen → LessonScreen passes `{ lessonTitle, lessonType, chapterTitle, goal, buddyName, experience, completedLessonTitles, domain, userId, lessonId }`
+- RoadmapScreen → LessonScreen passes `{ lessonKey, lessonTitle, chapterTitle, goal, buddyName, experience, completedLessonTitles, domain, userId, lessonId }`
 - LessonScreen → RoadmapScreen navigates back with `{ completedLessonId }` param, which the Roadmap focus listener picks up to fire confetti and advance `active_index`
 
-**LessonScreen card flow (6 cards):**
-1. Hook — companion message, shown immediately with loading state until API responds
-2. Concept + Video — YouTube embed via `react-native-webview`, falls back to placeholder if `video_key` is empty
-3. Why It Matters — explanation + expandable "Tell me more"
-4. Mission — task description, focus callout, elapsed timer starts on "I'm ready →"
-5. Submission — photo (`expo-image-picker`) + reflection choice; base64 via `expo-file-system`; submits to `/lesson/validate`
-6. Feedback — validation result with companion scale pulse, feedback fade-in, XP spring animation
+**LessonScreen card flow (5 cards, indices 0–4):**
+1. (0) Hook — `card1.companion_message`, loading state until API responds
+2. (1) Why It Matters — `card3.headline` + `card3.points[]` bullets + expandable "Tell me more"
+3. (2) Missions List — tap any mission to open it; review shortcuts to cards 0/1
+4. (3) Mission Submission — photo (`expo-image-picker`) + reflection choice; base64 via `expo-file-system`; submits to `/lesson/validate`
+5. (4) Feedback — validation result with companion scale pulse, feedback fade-in, XP spring animation; `lesson_now_required_complete` triggers roadmap advance
 
 Card transitions: fade out 150ms → set index + reset translateX to 20px → fade+slide in 250ms. Progress bar (animated width) + dots at top, rendered at screen level above card wrapper.
 

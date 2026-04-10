@@ -14,14 +14,13 @@ import {
 import { useRoute, useNavigation } from '@react-navigation/native'
 import type { RouteProp } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
-import { WebView } from 'react-native-webview'
 import * as ImagePicker from 'expo-image-picker'
 import { File } from 'expo-file-system'
 import Companion from '../components/Companion'
 import { colors, radius, shadows } from '../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
-const TOTAL_CARDS = 6
+const TOTAL_CARDS = 5
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -53,7 +52,6 @@ interface LessonParams {
 
 interface LessonContent {
   card1: { companion_message: string }
-  card2: { companion_tip: string; video_key: string }
   card3: { headline: string; points: string[]; tell_me_more: string }
   missions: Mission[]
 }
@@ -130,8 +128,6 @@ export default function LessonScreen() {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [tellMeMoreOpen, setTellMeMoreOpen] = useState(false)
-  const [webViewLoaded, setWebViewLoaded] = useState(false)
-
   const hasSignaledComplete = useRef(false)
   const hasInitializedCard = useRef(false)
 
@@ -139,8 +135,8 @@ export default function LessonScreen() {
   // Tracks current swipe permissions — updated every render so PanResponder callbacks
   // always see fresh values without being recreated.
   const canSwipeRef = useRef({ forward: false, back: false, index: 0 })
-  const canSwipeForward = cardIndex < 3 && (cardIndex > 0 || (!loading && !!lessonContent))
-  const canSwipeBack = cardIndex >= 1 && cardIndex <= 5
+  const canSwipeForward = cardIndex < 2 && (cardIndex > 0 || (!loading && !!lessonContent))
+  const canSwipeBack = cardIndex >= 1 && cardIndex <= 4
   canSwipeRef.current = { forward: canSwipeForward, back: canSwipeBack, index: cardIndex }
 
   // ── Animations ─────────────────────────────────────────────────────────────
@@ -178,8 +174,8 @@ export default function LessonScreen() {
         if (swipedLeft && forward) {
           advanceCardRef.current(index + 1)
         } else if (swipedRight && back) {
-          if (index === 5) { resetSubmissionRef.current(); advanceCardRef.current(3) }
-          else if (index === 4) advanceCardRef.current(3)
+          if (index === 4) { resetSubmissionRef.current(); advanceCardRef.current(2) }
+          else if (index === 3) advanceCardRef.current(2)
           else advanceCardRef.current(index - 1)
         } else {
           snapBack()
@@ -259,8 +255,8 @@ export default function LessonScreen() {
 
     hasInitializedCard.current = true
     if (missionProgress && missionProgress.completed_missions.length > 0) {
-      setCardIndex(3)
-      progressAnim.setValue(3 / TOTAL_CARDS)
+      setCardIndex(2)
+      progressAnim.setValue(2 / TOTAL_CARDS)
     }
   }, [lessonContent, progressFetched, missionProgress])
 
@@ -381,7 +377,7 @@ export default function LessonScreen() {
     if (!mission) return
 
     setValidating(true)
-    advanceCard(5)
+    advanceCard(4)
 
     try {
       const base64 = await new File(photoUri).base64()
@@ -502,54 +498,7 @@ export default function LessonScreen() {
     )
   }
 
-  // Card 1: Video
-  const renderCard1 = () => {
-    if (!lessonContent) return null
-    const { card2 } = lessonContent
-    const hasVideo = !!card2.video_key
-
-    return (
-      <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.companionRow}>
-          <Companion size={60} mood="idle" />
-        </View>
-        <View style={styles.watchCallout}>
-          <Text style={styles.watchCalloutLabel}>Watch for</Text>
-          <Text style={styles.watchCalloutText}>{card2.companion_tip}</Text>
-        </View>
-        <View style={styles.videoContainer}>
-          {hasVideo ? (
-            <>
-              <WebView
-                style={styles.webView}
-                source={{ uri: `https://www.youtube.com/embed/${card2.video_key}?autoplay=0&playsinline=1` }}
-                allowsInlineMediaPlayback
-                mediaPlaybackRequiresUserAction
-                onLoad={() => setWebViewLoaded(true)}
-              />
-              {!webViewLoaded && (
-                <View style={[styles.videoPlaceholder, StyleSheet.absoluteFill]}>
-                  <Text style={styles.videoPlaceholderIcon}>▶</Text>
-                  <Text style={styles.videoPlaceholderText}>Video loading...</Text>
-                </View>
-              )}
-            </>
-          ) : (
-            <View style={styles.videoPlaceholder}>
-              <Text style={styles.videoPlaceholderIcon}>🎬</Text>
-              <Text style={styles.videoPlaceholderText}>Video coming soon</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.spacer} />
-        <Pressable onPress={() => advanceCard(2)} style={[styles.primaryBtn, shadows.mint]}>
-          <Text style={styles.primaryBtnText}>Continue →</Text>
-        </Pressable>
-      </ScrollView>
-    )
-  }
-
-  // Card 2: Deep Dive
+  // Card 1: Deep Dive
   const renderCard2 = () => {
     if (!lessonContent) return null
     const { card3 } = lessonContent
@@ -578,7 +527,7 @@ export default function LessonScreen() {
           <Text style={styles.bodyTextMuted}>{card3.tell_me_more}</Text>
         </Animated.View>
         <View style={styles.spacer} />
-        <Pressable onPress={() => advanceCard(3)} style={[styles.primaryBtn, shadows.mint]}>
+        <Pressable onPress={() => advanceCard(2)} style={[styles.primaryBtn, shadows.mint]}>
           <Text style={styles.primaryBtnText}>See missions →</Text>
         </Pressable>
       </ScrollView>
@@ -613,7 +562,7 @@ export default function LessonScreen() {
           return (
             <Pressable
               key={mission.id}
-              onPress={() => { setCurrentMissionId(mission.id); advanceCard(4) }}
+              onPress={() => { setCurrentMissionId(mission.id); advanceCard(3) }}
               style={[styles.missionItem, isDone && styles.missionItemDone]}
             >
               <View style={styles.missionItemBody}>
@@ -641,7 +590,7 @@ export default function LessonScreen() {
               return (
                 <Pressable
                   key={mission.id}
-                  onPress={() => { setCurrentMissionId(mission.id); advanceCard(4) }}
+                  onPress={() => { setCurrentMissionId(mission.id); advanceCard(3) }}
                   style={[styles.missionItem, styles.missionItemOptional, isDone && styles.missionItemDone]}
                 >
                   <View style={styles.missionItemBody}>
@@ -666,9 +615,6 @@ export default function LessonScreen() {
             <Text style={styles.reviewBtnText}>Intro</Text>
           </Pressable>
           <Pressable onPress={() => advanceCard(1)} style={styles.reviewBtn}>
-            <Text style={styles.reviewBtnText}>Video</Text>
-          </Pressable>
-          <Pressable onPress={() => advanceCard(2)} style={styles.reviewBtn}>
             <Text style={styles.reviewBtnText}>Deep Dive</Text>
           </Pressable>
         </View>
@@ -692,7 +638,7 @@ export default function LessonScreen() {
 
     return (
       <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
-        <Pressable onPress={() => advanceCard(3)} style={styles.backLink}>
+        <Pressable onPress={() => advanceCard(2)} style={styles.backLink}>
           <Text style={styles.backLinkText}>← Back to missions</Text>
         </Pressable>
 
@@ -769,7 +715,7 @@ export default function LessonScreen() {
           <Text style={styles.loadingText}>Submission failed</Text>
           <Text style={[styles.bodyTextMuted, { textAlign: 'center', marginTop: 8 }]}>{submitError}</Text>
           <Pressable
-            onPress={() => { setSubmitError(null); advanceCard(4) }}
+            onPress={() => { setSubmitError(null); advanceCard(3) }}
             style={[styles.primaryBtn, shadows.mint, { marginTop: 24 }]}
           >
             <Text style={styles.primaryBtnText}>Try again</Text>
@@ -818,7 +764,7 @@ export default function LessonScreen() {
         )}
         <View style={styles.spacer} />
         <Pressable
-          onPress={() => { resetSubmission(); advanceCard(3) }}
+          onPress={() => { resetSubmission(); advanceCard(2) }}
           style={[styles.primaryBtn, shadows.mint]}
         >
           <Text style={styles.primaryBtnText}>Next mission →</Text>
@@ -833,7 +779,7 @@ export default function LessonScreen() {
   }
 
   // ── Card dispatch ───────────────────────────────────────────────────────────
-  const cards = [renderCard0, renderCard1, renderCard2, renderCard3, renderCard4, renderCard5]
+  const cards = [renderCard0, renderCard2, renderCard3, renderCard4, renderCard5]
 
   return (
     <SafeAreaView style={styles.container}>
@@ -950,36 +896,6 @@ const styles = StyleSheet.create({
   },
   backLinkText: {
     fontFamily: 'Nunito_600SemiBold',
-    fontSize: 14,
-    color: colors.muted,
-  },
-
-  // Video
-  videoContainer: {
-    width: '100%',
-    height: 320,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    backgroundColor: colors.card,
-    marginBottom: 20,
-  },
-  webView: {
-    flex: 1,
-  },
-  videoPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-  },
-  videoPlaceholderIcon: {
-    fontSize: 36,
-    marginBottom: 8,
-    color: colors.muted,
-  },
-  videoPlaceholderText: {
-    fontFamily: 'Nunito_400Regular',
     fontSize: 14,
     color: colors.muted,
   },
@@ -1353,31 +1269,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
 
-  // ── Card 1: Watch for callout ────────────────────────────────────────────────
-  watchCallout: {
-    backgroundColor: colors.card,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.mint,
-    borderRadius: radius.sm,
-    padding: 16,
-    marginBottom: 20,
-  },
-  watchCalloutLabel: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 11,
-    color: colors.mint,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 6,
-  },
-  watchCalloutText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 15,
-    color: colors.foreground,
-    lineHeight: 22,
-  },
-
-  // ── Card 4: Description accent ───────────────────────────────────────────────
+  // ── Card 3: Description accent ───────────────────────────────────────────────
   descriptionCallout: {
     borderLeftWidth: 3,
     borderLeftColor: colors.peach,
