@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Lesson, UserLessonProgress
+from ..models import Lesson, UserLessonProgress, UserRoadmap
 from ..services.companion_service import (
     _touch_last_practice_timestamp,
     add_xp_to_companion,
@@ -292,6 +292,14 @@ async def get_incomplete_missions(user_id: str, db: Session = Depends(get_db)) -
         .all()
     )
 
+    # Pull roadmap meta (goal, buddy_name, experience) stored during generation
+    roadmap_row = db.query(UserRoadmap).filter(UserRoadmap.clerk_user_id == user_id).first()
+    meta = (roadmap_row.roadmap_json.get("_meta") or {}) if roadmap_row else {}
+    goal = meta.get("goal", "")
+    buddy_name = meta.get("buddy_name", "Buddy")
+    experience = meta.get("experience", 1)
+    domain = meta.get("domain", "cooking")
+
     results: list[dict] = []
     for progress in progress_records:
         lesson = db.query(Lesson).filter(Lesson.lesson_key == progress.lesson_key).first()
@@ -304,6 +312,11 @@ async def get_incomplete_missions(user_id: str, db: Session = Depends(get_db)) -
                 results.append({
                     "lesson_key": progress.lesson_key,
                     "lesson_title": lesson.title,
+                    "chapter_title": lesson.chapter_title,
+                    "domain": lesson.domain or domain,
+                    "goal": goal,
+                    "buddy_name": buddy_name,
+                    "experience": experience,
                     "mission_id": mission["id"],
                     "mission_title": mission["title"],
                     "mission_description": mission.get("description", ""),

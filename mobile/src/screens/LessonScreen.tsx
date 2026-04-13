@@ -48,6 +48,7 @@ interface LessonParams {
   lessonId: string
   onComplete: (lessonId: string) => void
   onFullyComplete?: (lessonKey: string) => void
+  initialMissionId?: string  // when set, open directly at mission submission card
 }
 
 interface LessonContent {
@@ -248,13 +249,19 @@ export default function LessonScreen() {
     init()
   }, [])
 
-  // ── Skip to missions list on revisit ───────────────────────────────────────
+  // ── Skip to missions list on revisit, or deep-link to a specific mission ────
   useEffect(() => {
     const ready = params.userId ? progressFetched && !!lessonContent : !!lessonContent
     if (!ready || hasInitializedCard.current) return
 
     hasInitializedCard.current = true
-    if (missionProgress && missionProgress.completed_missions.length > 0) {
+
+    if (params.initialMissionId) {
+      // Deep-link: open directly at mission submission for this mission
+      setCurrentMissionId(params.initialMissionId)
+      setCardIndex(3)
+      progressAnim.setValue(3 / TOTAL_CARDS)
+    } else if (missionProgress && missionProgress.completed_missions.length > 0) {
       setCardIndex(2)
       progressAnim.setValue(2 / TOTAL_CARDS)
     }

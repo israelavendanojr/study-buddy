@@ -61,6 +61,11 @@ interface CompanionData {
 interface IncompleteMission {
   lesson_key: string
   lesson_title: string
+  chapter_title: string
+  domain: string
+  goal: string
+  buddy_name: string
+  experience: number
   mission_id: string
   mission_title: string
   mission_description: string
@@ -257,19 +262,16 @@ const ringStyles = StyleSheet.create({
 
 // ── Mission Card ───────────────────────────────────────────────────────────────
 
-function MissionCard({ mission }: { mission: IncompleteMission }) {
+function MissionCard({ mission, onPress }: { mission: IncompleteMission; onPress: () => void }) {
   const dotColor = getDotColor(mission.is_required)
 
   return (
-    <View style={missionStyles.card}>
+    <Pressable style={({ pressed }) => [missionStyles.card, pressed && { opacity: 0.75 }]} onPress={onPress}>
       {/* Left dot */}
       <View style={[missionStyles.dot, { backgroundColor: dotColor }]} />
 
-      {/* Title + lesson name */}
-      <View style={{ flex: 1 }}>
-        <Text style={missionStyles.title} numberOfLines={1}>{mission.mission_title}</Text>
-        <Text style={missionStyles.lessonLabel} numberOfLines={1}>{mission.lesson_title}</Text>
-      </View>
+      {/* Title */}
+      <Text style={missionStyles.title} numberOfLines={2}>{mission.mission_title}</Text>
 
       {/* XP badge */}
       <View style={missionStyles.xpBadge}>
@@ -279,9 +281,11 @@ function MissionCard({ mission }: { mission: IncompleteMission }) {
         <Text style={missionStyles.xpText}>20</Text>
       </View>
 
-      {/* Empty circle (not completed) */}
-      <View style={missionStyles.emptyCircle} />
-    </View>
+      {/* Chevron */}
+      <Svg width={16} height={16} viewBox="0 0 16 16" style={{ marginLeft: 2 }}>
+        <Path d="M6 4l4 4-4 4" stroke={colors.muted} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      </Svg>
+    </Pressable>
   )
 }
 
@@ -615,13 +619,49 @@ export default function CompanionHomeScreen() {
             <View style={styles.noMissions}>
               <Text style={styles.noMissionsText}>No missions yet — start a lesson!</Text>
             </View>
-          ) : (
-            <View style={styles.missionsList}>
-              {missions.map((mission) => (
-                <MissionCard key={`${mission.lesson_key}-${mission.mission_id}`} mission={mission} />
-              ))}
-            </View>
-          )}
+          ) : (() => {
+            // Group by lesson_key, preserving order of first appearance
+            const lessonOrder: string[] = []
+            const grouped: Record<string, IncompleteMission[]> = {}
+            for (const m of missions) {
+              if (!grouped[m.lesson_key]) {
+                lessonOrder.push(m.lesson_key)
+                grouped[m.lesson_key] = []
+              }
+              grouped[m.lesson_key].push(m)
+            }
+            return lessonOrder.map((key) => {
+              const group = grouped[key]
+              const lessonTitle = group[0].lesson_title
+              return (
+                <View key={key} style={styles.lessonGroup}>
+                  <Text style={styles.lessonGroupHeader} numberOfLines={1}>{lessonTitle}</Text>
+                  <View style={styles.missionsList}>
+                    {group.map((mission) => (
+                      <MissionCard
+                        key={`${mission.lesson_key}-${mission.mission_id}`}
+                        mission={mission}
+                        onPress={() => navigation.navigate('LessonScreen', {
+                          lessonKey: mission.lesson_key,
+                          lessonTitle: mission.lesson_title,
+                          chapterTitle: mission.chapter_title,
+                          goal: mission.goal,
+                          buddyName: mission.buddy_name,
+                          experience: mission.experience,
+                          completedLessonTitles: [],
+                          domain: mission.domain,
+                          userId: user?.id ?? null,
+                          lessonId: mission.lesson_key,
+                          initialMissionId: mission.mission_id,
+                          onComplete: () => {},
+                        })}
+                      />
+                    ))}
+                  </View>
+                </View>
+              )
+            })
+          })()}
         </View>
 
         {/* ── Go to Shop ────────────────────────────────────────────────────── */}
@@ -703,6 +743,16 @@ const styles = StyleSheet.create({
   },
   missionsList: {
     gap: 8,
+  },
+  lessonGroup: {
+    gap: 6,
+  },
+  lessonGroupHeader: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 12,
+    color: colors.foreground,
+    paddingHorizontal: 2,
+    paddingTop: 4,
   },
   noMissions: {
     backgroundColor: colors.card,

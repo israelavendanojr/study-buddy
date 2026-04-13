@@ -305,6 +305,17 @@ async def generate_roadmap(req: RoadmapRequest, db: Session = Depends(get_db)) -
         "coaching_result": req.coaching_result,
     }
 
+    # Embed goal/buddy context so it can be retrieved later (e.g. mission deep-links)
+    roadmap_with_meta = {
+        **roadmap,
+        "_meta": {
+            "goal": req.goal,
+            "buddy_name": req.buddy_name,
+            "experience": req.experience,
+            "domain": "cooking",
+        },
+    }
+
     roadmap_id: int | None = None
     if req.user_id:
         now = datetime.now(timezone.utc)
@@ -312,14 +323,14 @@ async def generate_roadmap(req: RoadmapRequest, db: Session = Depends(get_db)) -
             pg_insert(UserRoadmap)
             .values(
                 clerk_user_id=req.user_id,
-                roadmap_json=roadmap,
+                roadmap_json=roadmap_with_meta,
                 active_index=0,
                 created_at=now,
                 updated_at=now,
             )
             .on_conflict_do_update(
                 index_elements=["clerk_user_id"],
-                set_={"roadmap_json": roadmap, "active_index": 0, "updated_at": now},
+                set_={"roadmap_json": roadmap_with_meta, "active_index": 0, "updated_at": now},
             )
             .returning(UserRoadmap.id)
         )
