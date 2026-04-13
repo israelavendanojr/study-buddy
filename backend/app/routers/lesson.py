@@ -279,6 +279,41 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
     return lesson_data
 
 
+@router.get("/user/{user_id}/missions")
+async def get_incomplete_missions(user_id: str, db: Session = Depends(get_db)) -> list[dict]:
+    """Return all unfinished missions across every lesson the user has started."""
+    progress_records = (
+        db.query(UserLessonProgress)
+        .filter(
+            UserLessonProgress.clerk_user_id == user_id,
+            UserLessonProgress.is_fully_complete == False,  # noqa: E712
+        )
+        .order_by(UserLessonProgress.last_visited_at.desc())
+        .all()
+    )
+
+    results: list[dict] = []
+    for progress in progress_records:
+        lesson = db.query(Lesson).filter(Lesson.lesson_key == progress.lesson_key).first()
+        if not lesson:
+            continue
+        missions = lesson.lesson_json.get("missions", [])
+        completed_set = set(progress.completed_missions or [])
+        for mission in missions:
+            if mission["id"] not in completed_set:
+                results.append({
+                    "lesson_key": progress.lesson_key,
+                    "lesson_title": lesson.title,
+                    "mission_id": mission["id"],
+                    "mission_title": mission["title"],
+                    "mission_description": mission.get("description", ""),
+                    "is_required": mission.get("is_required", True),
+                    "duration_minutes": mission.get("duration_minutes", 10),
+                })
+
+    return results
+
+
 @router.get("/{lesson_key}")
 async def get_lesson(lesson_key: str, db: Session = Depends(get_db)) -> dict:
     lesson = db.query(Lesson).filter(Lesson.lesson_key == lesson_key).first()

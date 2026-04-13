@@ -9,7 +9,14 @@ import {
   Text,
   View,
 } from 'react-native'
-import Svg, { Path } from 'react-native-svg'
+import Svg, {
+  Circle,
+  Ellipse,
+  Line,
+  Path,
+  Rect,
+  Text as SvgText,
+} from 'react-native-svg'
 import { useIsFocused, useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { useUser } from '@clerk/clerk-expo'
@@ -26,7 +33,7 @@ function CogIcon() {
     <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
       <Path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke={colors.foreground} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
       <Path
-        d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"
+        d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"
         stroke={colors.foreground}
         strokeWidth={1.8}
         strokeLinecap="round"
@@ -51,20 +58,22 @@ interface CompanionData {
   next_milestone: number
 }
 
+interface IncompleteMission {
+  lesson_key: string
+  lesson_title: string
+  mission_id: string
+  mission_title: string
+  mission_description: string
+  is_required: boolean
+  duration_minutes: number
+}
+
 // ── Pure helpers ───────────────────────────────────────────────────────────────
 
 function moodToCompanionMood(mood: number): CompanionMood {
   if (mood <= 40) return 'sad'
   if (mood <= 70) return 'idle'
   return 'happy'
-}
-
-function getMoodEmoji(mood: number): string {
-  if (mood <= 20) return '😢'
-  if (mood <= 40) return '😐'
-  if (mood <= 60) return '🙂'
-  if (mood <= 85) return '😊'
-  return '😄'
 }
 
 function getMoodBarColor(mood: number): string {
@@ -75,28 +84,253 @@ function getMoodBarColor(mood: number): string {
   return '#5CCB8F'
 }
 
-function formatLastPractice(dateStr: string | null): string {
-  if (!dateStr) return 'No practice yet — start a lesson!'
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffHours = diffMs / (1000 * 60 * 60)
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-
-  if (diffHours < 1) return 'Just now'
-  if (diffDays < 1) return `Today at ${timeStr}`
-  if (diffDays === 1) return `Yesterday at ${timeStr}`
-  return `${diffDays} days ago`
+function getXpLabel(data: CompanionData): string {
+  return `${data.xp}/${data.xp_to_next_level} XP`
 }
 
-function getStreakLabel(streak: number, lastPractice: string | null): string {
-  if (streak === 0) {
-    if (!lastPractice) return 'Start your first lesson!'
-    return 'Streak broken — get back on track!'
-  }
-  return streak === 1 ? '1-Day Streak' : `${streak}-Day Streak`
+function getDotColor(isRequired: boolean): string {
+  return isRequired ? colors.mint : colors.muted
 }
+
+// ── Room Scene ─────────────────────────────────────────────────────────────────
+
+function RoomScene({ children }: { children: React.ReactNode }) {
+  return (
+    <View style={roomStyles.container}>
+      <Svg width="100%" height={260} viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice" style={StyleSheet.absoluteFillObject}>
+        {/* Wall */}
+        <Rect width={400} height={260} fill="#FFF8EE" />
+
+        {/* Floor */}
+        <Path d="M0 185 L400 185 L400 260 L0 260Z" fill="#B8E6D0" />
+        <Path d="M0 185 L400 185 L400 196 L0 196Z" fill="#A0D4B8" opacity={0.5} />
+
+        {/* Round window behind companion */}
+        <Circle cx={200} cy={78} r={48} fill="#B8D8F8" opacity={0.55} />
+        <Circle cx={200} cy={78} r={48} fill="none" stroke="#EDE7DF" strokeWidth={5} />
+        <Line x1={200} y1={30} x2={200} y2={126} stroke="#EDE7DF" strokeWidth={2.5} />
+        <Line x1={152} y1={78} x2={248} y2={78} stroke="#EDE7DF" strokeWidth={2.5} />
+        {/* Clouds in window */}
+        <Circle cx={183} cy={62} r={8} fill="white" opacity={0.5} />
+        <Circle cx={213} cy={58} r={6} fill="white" opacity={0.4} />
+
+        {/* Lamp — left */}
+        <Rect x={55} y={98} width={6} height={88} rx={3} fill="#D4A574" />
+        <Path d="M40 98 Q58 78, 76 98 Z" fill="#FFE082" opacity={0.9} />
+        <Circle cx={58} cy={93} r={20} fill="#FFE082" opacity={0.12} />
+
+        {/* Nest / floor pad under companion */}
+        <Ellipse cx={200} cy={225} rx={52} ry={17} fill="#D4A574" opacity={0.55} />
+        <Ellipse cx={200} cy={221} rx={47} ry={13} fill="#E8C9A0" />
+        <Ellipse cx={200} cy={219} rx={42} ry={9} fill="#F0D9B5" />
+
+        {/* Plant — right */}
+        <Rect x={318} y={168} width={16} height={22} rx={4} fill="#D4A574" />
+        <Circle cx={326} cy={160} r={14} fill="#A8E6C3" opacity={0.75} />
+        <Circle cx={320} cy={155} r={10} fill="#8BD4A8" opacity={0.6} />
+
+        {/* Tiny rug — left */}
+        <Ellipse cx={110} cy={236} rx={28} ry={9} fill="#FFCBA4" opacity={0.4} />
+
+        {/* Wall stars */}
+        <Circle cx={95} cy={48} r={2} fill="#FFE082" opacity={0.5} />
+        <Circle cx={308} cy={38} r={1.5} fill="#FFE082" opacity={0.4} />
+        <Circle cx={338} cy={68} r={2} fill="#FFE082" opacity={0.3} />
+      </Svg>
+
+      {/* Floor shadow under companion */}
+      <View style={roomStyles.companionWrapper}>
+        <View style={roomStyles.shadowEllipse} />
+        {children}
+      </View>
+    </View>
+  )
+}
+
+const roomStyles = StyleSheet.create({
+  container: {
+    width: '100%',
+    height: 260,
+    overflow: 'hidden',
+    borderRadius: radius.md,
+  },
+  companionWrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 24,
+    alignItems: 'center',
+  },
+  shadowEllipse: {
+    width: 90,
+    height: 18,
+    borderRadius: 45,
+    backgroundColor: 'rgba(180,140,100,0.18)',
+    position: 'absolute',
+    bottom: -6,
+  },
+})
+
+// ── Radial Ring ────────────────────────────────────────────────────────────────
+
+const RING_R = 30
+const RING_STROKE = 7
+const RING_SIZE = (RING_R + RING_STROKE + 2) * 2
+const CIRCUMFERENCE = 2 * Math.PI * RING_R
+
+interface RadialRingProps {
+  progress: number   // 0–1
+  color: string
+  centerLabel: string
+  bottomLabel: string
+  subLabel?: string
+}
+
+function RadialRing({ progress, color, centerLabel, bottomLabel, subLabel }: RadialRingProps) {
+  const dash = Math.max(0, Math.min(1, progress)) * CIRCUMFERENCE
+  const cx = RING_SIZE / 2
+  const cy = RING_SIZE / 2
+
+  return (
+    <View style={ringStyles.wrapper}>
+      <View style={{ width: RING_SIZE, height: RING_SIZE }}>
+        <Svg width={RING_SIZE} height={RING_SIZE}>
+          {/* Background track */}
+          <Circle
+            cx={cx}
+            cy={cy}
+            r={RING_R}
+            fill="none"
+            stroke={color}
+            strokeWidth={RING_STROKE}
+            strokeOpacity={0.18}
+          />
+          {/* Progress arc — rotated -90° so it starts from top */}
+          <Circle
+            cx={cx}
+            cy={cy}
+            r={RING_R}
+            fill="none"
+            stroke={color}
+            strokeWidth={RING_STROKE}
+            strokeDasharray={`${dash} ${CIRCUMFERENCE}`}
+            strokeLinecap="round"
+            transform={`rotate(-90, ${cx}, ${cy})`}
+          />
+          {/* Center label — y offset ~5 for visual centering without dominantBaseline */}
+          <SvgText
+            x={cx}
+            y={cy + 5}
+            textAnchor="middle"
+            fontFamily="FredokaOne_400Regular"
+            fontSize={13}
+            fill={colors.foreground}
+          >
+            {centerLabel}
+          </SvgText>
+        </Svg>
+      </View>
+      <Text style={ringStyles.bottomLabel}>{bottomLabel}</Text>
+      {subLabel ? <Text style={ringStyles.subLabel}>{subLabel}</Text> : null}
+    </View>
+  )
+}
+
+const ringStyles = StyleSheet.create({
+  wrapper: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  bottomLabel: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 11,
+    color: colors.foreground,
+    textAlign: 'center',
+  },
+  subLabel: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 10,
+    color: colors.muted,
+    textAlign: 'center',
+  },
+})
+
+// ── Mission Card ───────────────────────────────────────────────────────────────
+
+function MissionCard({ mission }: { mission: IncompleteMission }) {
+  const dotColor = getDotColor(mission.is_required)
+
+  return (
+    <View style={missionStyles.card}>
+      {/* Left dot */}
+      <View style={[missionStyles.dot, { backgroundColor: dotColor }]} />
+
+      {/* Title + lesson name */}
+      <View style={{ flex: 1 }}>
+        <Text style={missionStyles.title} numberOfLines={1}>{mission.mission_title}</Text>
+        <Text style={missionStyles.lessonLabel} numberOfLines={1}>{mission.lesson_title}</Text>
+      </View>
+
+      {/* XP badge */}
+      <View style={missionStyles.xpBadge}>
+        <Svg width={12} height={12} viewBox="0 0 16 16">
+          <Path d="M8 1L10 6H15L11 9.5L12.5 15L8 11.5L3.5 15L5 9.5L1 6H6Z" fill={colors.golden} />
+        </Svg>
+        <Text style={missionStyles.xpText}>20</Text>
+      </View>
+
+      {/* Empty circle (not completed) */}
+      <View style={missionStyles.emptyCircle} />
+    </View>
+  )
+}
+
+const missionStyles = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radius.sm,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    gap: 10,
+  },
+  dot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    flexShrink: 0,
+  },
+  title: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 14,
+    color: colors.foreground,
+  },
+  lessonLabel: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  xpBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  xpText: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 12,
+    color: colors.foreground,
+  },
+  emptyCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: 'transparent',
+  },
+})
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
@@ -111,6 +345,7 @@ export default function CompanionHomeScreen() {
   const [notFound, setNotFound] = useState(false)
   const [initializing, setInitializing] = useState(false)
   const [data, setData] = useState<CompanionData | null>(null)
+  const [missions, setMissions] = useState<IncompleteMission[]>([])
 
   // XP bar: driven by pixel width, resolved after container lays out
   const xpBarAnim = useRef(new Animated.Value(0)).current
@@ -124,7 +359,7 @@ export default function CompanionHomeScreen() {
   // Skip focus-refetch on the very first render (initial fetch handles it)
   const isMounted = useRef(false)
 
-  // ── Fetch ────────────────────────────────────────────────────────────────────
+  // ── Fetch companion ───────────────────────────────────────────────────────────
 
   const fetchCompanion = useCallback(async (silent = false) => {
     if (!user) return
@@ -164,16 +399,34 @@ export default function CompanionHomeScreen() {
     }
   }, [user])
 
+  // ── Fetch incomplete missions ─────────────────────────────────────────────────
+
+  const fetchRoadmap = useCallback(async () => {
+    if (!user) return
+    try {
+      const res = await fetch(`${API_BASE}/lesson/user/${user.id}/missions`)
+      if (!res.ok) return
+      const data: IncompleteMission[] = await res.json()
+      setMissions(data)
+    } catch {
+      // Silently ignore — missions section shows fallback
+    }
+  }, [user])
+
   // Initial load
   useEffect(() => {
     fetchCompanion()
+    fetchRoadmap()
     isMounted.current = true
-  }, [fetchCompanion])
+  }, [fetchCompanion, fetchRoadmap])
 
-  // Refetch silently when screen regains focus (e.g. returning from LessonScreen)
+  // Refetch silently when screen regains focus
   useEffect(() => {
     if (!isMounted.current) return
-    if (isFocused) fetchCompanion(true)
+    if (isFocused) {
+      fetchCompanion(true)
+      fetchRoadmap()
+    }
   }, [isFocused])
 
   // ── XP bar animation ──────────────────────────────────────────────────────────
@@ -184,14 +437,13 @@ export default function CompanionHomeScreen() {
       Animated.timing(xpBarAnim, {
         toValue: targetWidth,
         duration: 600,
-        useNativeDriver: false, // width cannot use native driver
+        useNativeDriver: false,
       }).start()
     } else {
       xpBarAnim.setValue(targetWidth)
     }
   }
 
-  // Fires when xp or level changes (level change resets pct to 0 → fills again)
   useEffect(() => {
     if (!data || xpBarContainerWidth.current === 0) return
     if (prevXpPct.current === data.xp_progress_pct) return
@@ -220,7 +472,6 @@ export default function CompanionHomeScreen() {
     setInitializing(true)
     try {
       const res = await fetch(`${API_BASE}/companion/${user.id}/initialize`, { method: 'POST' })
-      // 400 = already initialized — refetch either way
       if (res.ok || res.status === 400) {
         await fetchCompanion()
       } else {
@@ -265,7 +516,7 @@ export default function CompanionHomeScreen() {
     )
   }
 
-  // ── Not-found state (no companion yet) ────────────────────────────────────────
+  // ── Not-found state ───────────────────────────────────────────────────────────
 
   if (notFound) {
     return (
@@ -297,122 +548,89 @@ export default function CompanionHomeScreen() {
   // ── Derived values ────────────────────────────────────────────────────────────
 
   const companionMood = moodToCompanionMood(data.mood)
-  const moodEmoji = getMoodEmoji(data.mood)
   const moodBarColor = getMoodBarColor(data.mood)
-  const streakLabel = getStreakLabel(data.streak_days, data.last_practice_date)
-  const lastPracticeText = formatLastPractice(data.last_practice_date)
-  const streakIsActive = data.streak_days >= 3
+  const streakProgress = Math.min(data.streak_days / 30, 1)
+  const xpProgress = data.xp_progress_pct / 100
+  const moodProgress = data.mood / 100
 
   // ── Main render ───────────────────────────────────────────────────────────────
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
+        <Text style={styles.headerTitle}>My Buddy</Text>
         <Pressable style={styles.cogButton} onPress={() => navigation.navigate('Settings')}>
           <CogIcon />
         </Pressable>
       </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); fetchCompanion(true) }}
+            onRefresh={() => { setRefreshing(true); fetchCompanion(true); fetchRoadmap() }}
             tintColor={colors.mint}
           />
         }
       >
-        {/* ── Companion visual ─────────────────────────────────────────────── */}
-        <View style={styles.companionSection}>
+        {/* ── Room scene ────────────────────────────────────────────────────── */}
+        <RoomScene>
           <Animated.View style={{ transform: [{ scale: companionScale }] }}>
-            <Companion size={140} mood={companionMood} />
+            <Companion size={130} mood={companionMood} />
           </Animated.View>
+        </RoomScene>
+
+        {/* ── Stats rings ───────────────────────────────────────────────────── */}
+        <View style={styles.statsRow}>
+          <RadialRing
+            progress={streakProgress}
+            color={colors.golden}
+            centerLabel={`${data.streak_days}`}
+            bottomLabel={`${data.streak_days} days`}
+            subLabel="Streak"
+          />
+          <RadialRing
+            progress={xpProgress}
+            color={colors.mint}
+            centerLabel={`Lv.${data.level}`}
+            bottomLabel={getXpLabel(data)}
+            subLabel="Level"
+          />
+          <RadialRing
+            progress={moodProgress}
+            color={moodBarColor}
+            centerLabel={`${data.mood}`}
+            bottomLabel="Mood"
+          />
         </View>
 
-        {/* ── Level + XP bar ───────────────────────────────────────────────── */}
-        <View style={[styles.card, shadows.mint]}>
-          <View style={styles.levelRow}>
-            <Text style={styles.levelLabel}>Level</Text>
-            <Text style={styles.levelNumber}>{data.level}</Text>
-            {data.next_milestone > data.level && (
-              <Text style={styles.nextMilestone}>Next milestone: lvl {data.next_milestone}</Text>
-            )}
-          </View>
+        {/* ── Missions section ──────────────────────────────────────────────── */}
+        <View style={styles.missionsSection}>
+          <Text style={styles.missionsHeading}>YOUR MISSIONS</Text>
 
-          <View
-            style={styles.xpBarTrack}
-            onLayout={(e) => {
-              const w = e.nativeEvent.layout.width
-              if (w > 0 && w !== xpBarContainerWidth.current) {
-                xpBarContainerWidth.current = w
-                // Snap bar to current value on first layout (no intro animation)
-                animateXpBar(data.xp_progress_pct, w, false)
-                prevXpPct.current = data.xp_progress_pct
-              }
-            }}
-          >
-            <Animated.View style={[styles.xpBarFill, { width: xpBarAnim }]} />
-          </View>
-
-          <Text style={styles.xpNumbers}>
-            {data.xp} / {data.xp_to_next_level} XP
-          </Text>
+          {missions.length === 0 ? (
+            <View style={styles.noMissions}>
+              <Text style={styles.noMissionsText}>No missions yet — start a lesson!</Text>
+            </View>
+          ) : (
+            <View style={styles.missionsList}>
+              {missions.map((mission) => (
+                <MissionCard key={`${mission.lesson_key}-${mission.mission_id}`} mission={mission} />
+              ))}
+            </View>
+          )}
         </View>
 
-        {/* ── Mood gauge ───────────────────────────────────────────────────── */}
-        <View style={[styles.card, { shadowColor: moodBarColor, shadowOpacity: 0.22, shadowRadius: 12, elevation: 4 }]}>
-          <View style={styles.moodHeader}>
-            <Text style={styles.cardLabel}>Mood</Text>
-            <Text style={styles.moodEmoji}>{moodEmoji}</Text>
-            <Text style={styles.moodValue}>{data.mood}/100</Text>
-          </View>
-
-          <View style={styles.moodBarTrack}>
-            {/* Percentage width: RN accepts string dimensions, cast needed for TS */}
-            <View
-              style={[
-                styles.moodBarFill,
-                { width: `${data.mood}%` as unknown as number, backgroundColor: moodBarColor },
-              ]}
-            />
-          </View>
-        </View>
-
-        {/* ── Streak ───────────────────────────────────────────────────────── */}
-        <View style={[styles.card, streakIsActive ? shadows.golden : {}]}>
-          <View style={styles.streakRow}>
-            <Text style={styles.streakFlame}>🔥</Text>
-            <Text
-              style={[
-                styles.streakLabel,
-                { color: streakIsActive ? '#E6A817' : colors.muted },
-              ]}
-            >
-              {streakLabel}
-            </Text>
-          </View>
-          <Text style={styles.lastPracticed}>Last practiced: {lastPracticeText}</Text>
-        </View>
-
-        {/* ── Action buttons ────────────────────────────────────────────────── */}
-        <View style={styles.actionRow}>
-          <Pressable
-            style={[styles.actionButton, { backgroundColor: colors.mint }, shadows.mint]}
-            onPress={() => navigation.navigate('CompanionShop')}
-          >
-            <Text style={styles.actionButtonText}>🛍 Go to Shop</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.actionButton, { backgroundColor: colors.golden }, shadows.golden]}
-            onPress={() => {
-              // TODO: navigation.navigate('CompanionRewards')
-            }}
-          >
-            <Text style={styles.actionButtonText}>🏆 Rewards</Text>
-          </Pressable>
-        </View>
+        {/* ── Go to Shop ────────────────────────────────────────────────────── */}
+        <Pressable
+          style={[styles.shopButton, shadows.mint]}
+          onPress={() => navigation.navigate('CompanionShop')}
+        >
+          <Text style={styles.shopButtonText}>Go to Shop</Text>
+        </Pressable>
       </ScrollView>
 
       <TabBar activeTab="home" />
@@ -434,20 +652,82 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     gap: 16,
   },
+
+  // ── Header ──────────────────────────────────────────────────────────────────
   header: {
     paddingTop: 56,
     paddingHorizontal: 24,
-    paddingBottom: 14,
-    alignItems: 'flex-end',
+    paddingBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerTitle: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 22,
+    color: colors.foreground,
   },
   cogButton: {
     padding: 6,
   },
+
+  // ── Scroll ──────────────────────────────────────────────────────────────────
   scrollContent: {
-    paddingTop: 8,
     paddingBottom: 24,
-    paddingHorizontal: 20,
-    gap: 14,
+    paddingHorizontal: 16,
+    gap: 16,
+  },
+
+  // ── Stats row ───────────────────────────────────────────────────────────────
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignItems: 'flex-start',
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    paddingVertical: 18,
+    paddingHorizontal: 8,
+  },
+
+  // ── Missions ────────────────────────────────────────────────────────────────
+  missionsSection: {
+    gap: 10,
+  },
+  missionsHeading: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 11,
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    paddingHorizontal: 2,
+  },
+  missionsList: {
+    gap: 8,
+  },
+  noMissions: {
+    backgroundColor: colors.card,
+    borderRadius: radius.sm,
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  noMissionsText: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 14,
+    color: colors.muted,
+  },
+
+  // ── Shop button ─────────────────────────────────────────────────────────────
+  shopButton: {
+    backgroundColor: colors.mint,
+    paddingVertical: 17,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  shopButtonText: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 16,
+    color: colors.foreground,
   },
 
   // ── Loading / error / not-found ─────────────────────────────────────────────
@@ -487,132 +767,6 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontFamily: 'Nunito_700Bold',
     fontSize: 16,
-    color: colors.foreground,
-  },
-
-  // ── Companion section ───────────────────────────────────────────────────────
-  companionSection: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-
-  // ── Shared card ─────────────────────────────────────────────────────────────
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 20,
-    gap: 10,
-  },
-  cardLabel: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 12,
-    color: colors.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-
-  // ── Level + XP ──────────────────────────────────────────────────────────────
-  levelRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 8,
-  },
-  levelLabel: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 15,
-    color: colors.muted,
-  },
-  levelNumber: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 40,
-    color: colors.foreground,
-    lineHeight: 44,
-  },
-  nextMilestone: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 12,
-    color: colors.muted,
-    marginLeft: 'auto',
-  },
-  xpBarTrack: {
-    height: 10,
-    backgroundColor: colors.border,
-    borderRadius: 5,
-    overflow: 'hidden',
-  },
-  xpBarFill: {
-    height: '100%',
-    backgroundColor: colors.mint,
-    borderRadius: 5,
-  },
-  xpNumbers: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 13,
-    color: colors.muted,
-    textAlign: 'right',
-  },
-
-  // ── Mood ────────────────────────────────────────────────────────────────────
-  moodHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  moodEmoji: {
-    fontSize: 22,
-  },
-  moodValue: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 15,
-    color: colors.foreground,
-    marginLeft: 'auto',
-  },
-  moodBarTrack: {
-    height: 8,
-    backgroundColor: colors.border,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  moodBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-
-  // ── Streak ──────────────────────────────────────────────────────────────────
-  streakRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  streakFlame: {
-    fontSize: 28,
-  },
-  streakLabel: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 20,
-    color: colors.foreground,
-  },
-  lastPracticed: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 13,
-    color: colors.muted,
-  },
-
-  // ── Action buttons ───────────────────────────────────────────────────────────
-  actionRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 4,
-  },
-  actionButton: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: radius.md,
-    alignItems: 'center',
-  },
-  actionButtonText: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 15,
     color: colors.foreground,
   },
 })
