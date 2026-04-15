@@ -1,0 +1,49 @@
+{
+  "lesson_key": "seasoning_with_salt",
+  "lesson_type": "technique",
+  "title": "Seasoning with Salt",
+  "chapter_title": "Flavor Building",
+  "domain": "cooking",
+  "skill_tags": ["seasoning", "flavor", "fundamentals"],
+  "prerequisite_keys": [],
+  "estimated_minutes": 15,
+  "content": {
+    "headline": "Under-seasoned food doesn't just taste bland — it tastes flat in a way that adding more of anything else can't fix.",
+    "points": [
+      "Salt added during cooking integrates into the food; salt added at the table just sits on top",
+      "Season in small increments — a pinch at a time — and wait 30 seconds before tasting again",
+      "Properly seasoned food doesn't taste salty, it tastes like itself: tomatoes taste more tomato-y, garlic comes through",
+      "Table salt is roughly twice as dense as kosher salt by volume — they are not interchangeable teaspoon for teaspoon"
+    ],
+    "tell_me_more": "Salt suppresses bitterness, enhances sweetness, and amplifies savory flavors simultaneously — which is why a pinch in coffee or chocolate makes sense. The chemical mechanism involves sodium ions blocking bitter taste receptors on your tongue, which lets the other flavors register more clearly. This is why 'just a pinch' at the right moment can completely transform a dish that tasted one-dimensional, not by making it saltier, but by letting the other flavors be heard."
+  },
+  "missions": [
+    {
+      "id": "mission_1",
+      "mission_type": "photo_submission",
+      "title": "Three-Stage Seasoning",
+      "description": "Make a simple sautéed vegetable — zucchini, mushrooms, or green beans work well — and season it in three separate stages: when it goes in the pan, halfway through cooking, and just before plating. Taste at each stage.",
+      "why_it_matters": "Tasting at each stage makes the progression from flat to dimensional concrete rather than theoretical.",
+      "is_required": true,
+      "duration_minutes": 15,
+      "prompt": "Show the finished sautéed vegetable plated or in the pan. It should have some color or browning on the surface — not just steamed. The photo should look like food you'd actually want to eat, not a pale pile.",
+      "reflection_choices": [
+        "Tasted at all three stages and noticed a clear flavor improvement at each one",
+        "Tasted at two stages but forgot to taste mid-cook",
+        "Seasoned in stages but couldn't really tell a difference between tastings",
+        "Added all the salt at the end — didn't manage the staged approach"
+      ]
+    },
+    {
+      "id": "mission_2",
+      "mission_type": "reflection_journal",
+      "title": "Flat vs. Dimensional",
+      "description": "Reflect on what the food tasted like before the final seasoning adjustments versus after.",
+      "why_it_matters": "Building the ability to describe the before and after gives you a mental benchmark for what 'properly seasoned' actually feels like.",
+      "is_required": false,
+      "duration_minutes": 5,
+      "prompt": "At the point when you thought the dish was done but before the final taste adjustment, did the food taste flat, one-dimensional, or 'missing something'? After the final seasoning, what specifically changed — did one flavor come forward that wasn't there before, or did the whole dish just brighten?",
+      "min_words": 30
+    }
+  ]
+}

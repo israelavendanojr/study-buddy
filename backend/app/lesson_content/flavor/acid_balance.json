@@ -1,0 +1,49 @@
+{
+  "lesson_key": "acid_balance",
+  "lesson_type": "technique",
+  "title": "Acid Balance",
+  "chapter_title": "Flavor Building",
+  "domain": "cooking",
+  "skill_tags": ["seasoning", "flavor", "finishing"],
+  "prerequisite_keys": ["seasoning_with_salt"],
+  "estimated_minutes": 15,
+  "content": {
+    "headline": "A dish can be perfectly salted and beautifully cooked and still taste flat — that's almost always an acid problem.",
+    "points": [
+      "Acid lifts and sharpens flavors rather than amplifying them — lemon doesn't make food taste lemony, it makes it taste more like itself",
+      "Add acid at the very end — lemon or vinegar cooked for 10 minutes loses most of its brightening effect",
+      "The right amount is invisible: you shouldn't taste lemon, you should just notice the whole dish suddenly makes sense",
+      "Red wine vinegar suits red meat and tomatoes; lemon suits fish and vegetables; apple cider vinegar suits pork and grains"
+    ],
+    "tell_me_more": "Acid does something unusual in flavor science: it literally changes the shape of flavor molecules, making some taste receptors more sensitive and others less. It also cuts through richness by stimulating saliva production, which clears fat from the tongue and lets you taste what's underneath. This is why a squeeze of lemon over a rich butter sauce, or a splash of vinegar into a heavy braise, suddenly makes the whole dish feel lighter and more balanced without actually removing any of the fat."
+  },
+  "missions": [
+    {
+      "id": "mission_1",
+      "mission_type": "photo_submission",
+      "title": "Acid Test on Tomato Sauce",
+      "description": "Make a simple tomato sauce — canned tomatoes, garlic, olive oil, salt — and taste it twice: once before and once after adding a small squeeze of lemon juice. Notice what changes.",
+      "why_it_matters": "Tomato sauce is a perfect test case because the before and after difference is dramatic and unmistakable if you're paying attention.",
+      "is_required": true,
+      "duration_minutes": 20,
+      "prompt": "Show the finished tomato sauce in a pan or bowl. It should look glossy, deeply red, and reduced — not thin and watery. Show a spoon coated in the sauce if possible, to show its consistency.",
+      "reflection_choices": [
+        "Clear difference after acid — the sauce tasted sharper and more alive without tasting sour",
+        "Noticed a difference but it was subtle — may have added too little acid",
+        "Sauce tasted sour after acid — added too much",
+        "Couldn't tell a difference — may have added acid too early in the cooking"
+      ]
+    },
+    {
+      "id": "mission_2",
+      "mission_type": "reflection_journal",
+      "title": "Before and After the Squeeze",
+      "description": "Describe what the sauce tasted like before adding acid versus after.",
+      "why_it_matters": "Building a vocabulary for what 'needs acid' versus 'needs salt' sounds like helps you diagnose dishes faster and more accurately.",
+      "is_required": false,
+      "duration_minutes": 5,
+      "prompt": "Before adding acid, was the sauce more flat, heavy, or dull? After adding it, did you notice specific flavors coming forward that weren't there before — like the tomato flavor sharpening, or the garlic becoming more distinct? Describe the change in as specific terms as you can.",
+      "min_words": 30
+    }
+  ]
+}

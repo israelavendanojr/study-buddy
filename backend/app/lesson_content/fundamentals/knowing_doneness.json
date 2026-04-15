@@ -1,0 +1,49 @@
+{
+  "lesson_key": "knowing_doneness",
+  "lesson_type": "technique",
+  "title": "Knowing Doneness",
+  "chapter_title": "Heat & Cooking Methods",
+  "domain": "cooking",
+  "skill_tags": ["proteins", "heat control", "technique"],
+  "prerequisite_keys": ["dry_vs_moist_heat", "reading_the_pan"],
+  "estimated_minutes": 25,
+  "content": {
+    "headline": "Dry, rubbery chicken and chalky pork are doneness failures — they were perfectly safe to eat five minutes earlier.",
+    "points": [
+      "Use the hand test: press the base of your thumb with each finger to feel rare, medium, and well-done resistance",
+      "Meat tells you it's approaching done by releasing cleanly from the pan — sticking stubbornly means it's not ready",
+      "Carryover cooking raises internal temp 5–10°F after you pull the protein — always pull slightly early",
+      "Rest every protein at least 5 minutes before cutting — meat cut immediately loses 30–40% more juice"
+    ],
+    "tell_me_more": "A thermometer is the most reliable tool for doneness — use one whenever the protein is thick enough to probe accurately. But the touch test matters because it builds an intuitive model of what happening inside the meat, not just what the number says. Experienced cooks feel the resistance changing in real time while something cooks. That continuous feedback loop is impossible with a thermometer, which only gives you a snapshot. The goal is both: the test for feel, the thermometer to confirm."
+  },
+  "missions": [
+    {
+      "id": "mission_1",
+      "mission_type": "photo_submission",
+      "title": "Chicken Thigh Doneness Check",
+      "description": "Cook two bone-in chicken thighs all the way through. Before cutting into them, use the touch test to guess whether they're done, then confirm by cutting at the thickest point near the bone.",
+      "why_it_matters": "Making a prediction before confirming forces you to actually develop the skill instead of just waiting for a timer.",
+      "is_required": true,
+      "duration_minutes": 25,
+      "prompt": "Show one chicken thigh cut open at the thickest point near the bone. The flesh should be white or pale tan all the way through with no pink. The cut surface should look juicy, not dried out. Show the inside clearly.",
+      "reflection_choices": [
+        "Fully cooked through, touch prediction was correct, meat looked juicy when cut",
+        "Fully cooked but slightly dry inside — probably left it on a minute or two too long",
+        "Touch test said done but still pink inside — needed more time",
+        "Overcooked — very firm and dry, wish I had pulled it earlier"
+      ]
+    },
+    {
+      "id": "mission_2",
+      "mission_type": "reflection_journal",
+      "title": "What the Touch Told You",
+      "description": "Reflect on how the feel of the chicken changed over the course of cooking, and whether your touch-test prediction matched reality.",
+      "why_it_matters": "Comparing your prediction to the result is the core feedback loop for building doneness intuition.",
+      "is_required": false,
+      "duration_minutes": 5,
+      "prompt": "When you pressed the chicken partway through cooking versus when you thought it was done, did you notice the resistance change? Did your touch-test guess turn out to be right? What would you do differently next time based on what the cut revealed?",
+      "min_words": 30
+    }
+  ]
+}

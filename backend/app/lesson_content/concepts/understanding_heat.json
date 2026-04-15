@@ -1,0 +1,77 @@
+{
+  "lesson_key": "understanding_heat",
+  "lesson_type": "concept",
+  "title": "Understanding Heat",
+  "chapter_title": "Food Science",
+  "domain": "cooking",
+  "skill_tags": ["food science", "heat control", "technique"],
+  "prerequisite_keys": ["dry_vs_moist_heat"],
+  "estimated_minutes": 10,
+  "content": {
+    "headline": "Heat doesn't travel the same way through every pan material — what works on stainless steel will burn on cast iron and barely register on thin aluminum.",
+    "points": [
+      "Cast iron heats slowly, holds heat intensely, and recovers fast after cold food is added — ideal for searing",
+      "Stainless steel heats quickly, responds fast to dial adjustments, and shows fond clearly — ideal for pan sauces",
+      "Thin aluminum and nonstick pans have poor heat retention — they drop temperature fast when cold food hits them",
+      "Crowding a pan cools it below the browning threshold — one layer of food in a hot pan, never stacked"
+    ],
+    "tell_me_more": "The technical property that matters most in cookware is thermal mass — how much heat the material can hold relative to its weight. Cast iron has extremely high thermal mass, which is why it holds its temperature when cold food hits it. Thin stainless or aluminum has low thermal mass, which is why a crowd of cold chicken thighs can instantly drop a thin pan below browning range. This is also why restaurant kitchens use thick, heavy-bottomed pans: they can absorb the temperature shock of cold ingredients and recover without losing the sear."
+  },
+  "missions": [
+    {
+      "id": "mission_1",
+      "mission_type": "pop_quiz",
+      "title": "Quick Check",
+      "description": "Test your understanding of how different pan materials behave with heat.",
+      "why_it_matters": "Checking what you understand now makes it stick.",
+      "is_required": true,
+      "duration_minutes": 3,
+      "questions": [
+        {
+          "question_text": "Why does adding too many pieces of cold chicken to a pan prevent browning?",
+          "options": [
+            "The chicken releases water which prevents the Maillard reaction from starting",
+            "Cold food drops the pan temperature below the browning threshold",
+            "The pieces crowd each other and prevent even heat distribution",
+            "Cold meat sticks to the pan and tears the surface before a crust can form"
+          ],
+          "correct_index": 1,
+          "explanation": "Every cold piece of food you add to a pan absorbs heat from it. Add enough cold mass at once and the pan temperature drops below the ~285°F needed for browning. The food then sits in a too-cool pan, releases moisture, and steams instead of searing. Crowding is the visible cause; temperature drop is the actual mechanism."
+        },
+        {
+          "question_text": "Which pan material is best for building a pan sauce after searing?",
+          "options": [
+            "Nonstick, because nothing sticks and the fond releases easily",
+            "Cast iron, because it holds heat through the deglazing step",
+            "Stainless steel, because it develops fond clearly and responds quickly to heat adjustments",
+            "Thin aluminum, because it heats and cools fastest"
+          ],
+          "correct_index": 2,
+          "explanation": "Stainless steel is ideal for pan sauces because it develops a visible fond — the browned deposits that are the flavor base of the sauce. Nonstick pans have a coating that prevents fond from forming, which means there's almost nothing to deglaze. Cast iron works but is heavy and harder to control at the low heat needed when mounting butter."
+        },
+        {
+          "question_text": "You turn up the heat on your burner and nothing seems to change after 10 seconds. What should you do?",
+          "options": [
+            "Turn it up further — the burner clearly isn't working",
+            "Wait another 20–30 seconds before making another adjustment",
+            "Switch to a different burner that responds faster",
+            "Add more oil to help distribute the heat"
+          ],
+          "correct_index": 1,
+          "explanation": "Burners — especially gas — take 20–40 seconds to fully respond to dial changes. The most common mistake is turning up the heat, not seeing an immediate change, turning it up again, and then suddenly having it way too hot. Make one small adjustment, wait for the pan to respond, and only then decide if more adjustment is needed."
+        }
+      ]
+    },
+    {
+      "id": "mission_2",
+      "mission_type": "reflection_journal",
+      "title": "Your Pan's Personality",
+      "description": "Think about the pans you cook with most often and how their heat behavior has affected your cooking.",
+      "why_it_matters": "Cookware knowledge is useless unless it's connected to the specific pans you actually cook with.",
+      "is_required": false,
+      "duration_minutes": 5,
+      "prompt": "What pan do you cook in most often? Has it ever surprised you — either by holding heat much longer than you expected, or losing it much faster? Based on what you learned in this lesson, what material do you think it's made of, and how does that explain its behavior?",
+      "min_words": 30
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "lesson_key": "seared_salmon",
+  "lesson_type": "recipe",
+  "title": "Seared Salmon",
+  "chapter_title": "First Recipes",
+  "domain": "cooking",
+  "skill_tags": ["proteins", "fish", "technique"],
+  "prerequisite_keys": ["searing_meat", "knowing_doneness"],
+  "estimated_minutes": 25,
+  "content": {
+    "headline": "Salmon is the most forgiving fish to sear, but it still has a narrow doneness window — 30 seconds past perfect and it goes from silky to chalky.",
+    "points": [
+      "Salmon sears skin-side first and stays there for most of the cooking — the skin acts as a heat shield",
+      "The flesh turns from translucent deep orange to opaque lighter pink as it cooks — watch the sides for progress",
+      "Perfect salmon has a very slightly translucent center — it will finish cooking from residual heat off the pan",
+      "A squeeze of lemon right before serving is not optional — salmon without acid is one-dimensional"
+    ],
+    "tell_me_more": "Salmon is unusual among proteins because its fat content is high enough that the texture at different doneness levels is dramatic. At 125°F internal, the fat is melted into a silky, buttery texture and the flesh pulls apart in large, juicy flakes. At 145°F, most of that fat has rendered out, the fibers have contracted, and it feels dry and chewy. This is a 20-degree window. A thermometer helps, but the visual cue — watching the translucent line move up the side of the fillet as it cooks — is reliable and beautiful in its own way.",
+    "ingredients": [
+      {"amount": "2", "unit": null, "item": "salmon fillets, skin-on, about 6oz each"},
+      {"amount": "1", "unit": "tsp", "item": "kosher salt"},
+      {"amount": "0.5", "unit": "tsp", "item": "black pepper, freshly ground"},
+      {"amount": "1", "unit": "tbsp", "item": "high smoke-point oil (avocado or vegetable)"},
+      {"amount": "1", "unit": "tbsp", "item": "unsalted butter"},
+      {"amount": "2", "unit": "cloves", "item": "garlic, lightly smashed"},
+      {"amount": "3", "unit": "sprigs", "item": "fresh thyme"},
+      {"amount": "1", "unit": null, "item": "lemon, halved"}
+    ],
+    "steps": [
+      {
+        "step_number": 1,
+        "instruction": "Remove salmon from the refrigerator 15 minutes before cooking. Pat both sides completely dry with paper towels, including the skin. Season generously with salt and pepper on all sides.",
+        "technique_callout": "searing_meat",
+        "tip": "Drying the skin is especially important for salmon — wet skin steams and never crisps up."
+      },
+      {
+        "step_number": 2,
+        "instruction": "Heat a stainless steel or cast iron pan over medium-high heat until very hot, 2–3 minutes. Add the oil and let it shimmer. You want the oil almost at the point of smoking.",
+        "technique_callout": "reading_the_pan",
+        "tip": null
+      },
+      {
+        "step_number": 3,
+        "instruction": "Place the salmon skin-side down in the pan. Immediately press gently on each fillet with a spatula for 10–15 seconds — this prevents the skin from curling away from the heat. Then leave it completely alone.",
+        "technique_callout": null,
+        "tip": "The skin will want to curl. That one gentle press is all it takes to prevent it."
+      },
+      {
+        "step_number": 4,
+        "instruction": "Cook skin-side down for 4–5 minutes. Watch the side of each fillet — the flesh will turn from translucent dark orange to opaque lighter pink as it cooks. When the opaque line has crept about 75% of the way up the side of the fillet, it's time to flip.",
+        "technique_callout": "knowing_doneness",
+        "tip": "The side is your timer. A translucent center when you flip means it will finish cooking off the heat — that's correct."
+      },
+      {
+        "step_number": 5,
+        "instruction": "Flip the salmon. Reduce heat to medium. Add the butter, garlic, and thyme to the pan. As the butter melts and foams, tilt the pan and use a spoon to baste the flesh side of the salmon with the foaming butter for 60–90 seconds.",
+        "technique_callout": null,
+        "tip": "Basting with butter adds flavor and helps the flesh side cook gently from the top without drying out."
+      },
+      {
+        "step_number": 6,
+        "instruction": "Remove the salmon from the heat when the flesh side is just barely set and the center still has the faintest give when pressed — it should feel like a firm pillow, not like pressing cardboard. Let it rest on the plate for 2 minutes.",
+        "technique_callout": "knowing_doneness",
+        "tip": "Salmon will continue cooking from residual heat for 1–2 minutes after leaving the pan. Pull it early."
+      },
+      {
+        "step_number": 7,
+        "instruction": "Squeeze fresh lemon over both fillets just before serving. Taste and add a pinch of flaky salt if available. Serve immediately — salmon deteriorates fast once it cools.",
+        "technique_callout": "acid_balance",
+        "tip": null
+      }
+    ]
+  },
+  "missions": [
+    {
+      "id": "mission_1",
+      "mission_type": "photo_submission",
+      "title": "Seared Salmon, Plated",
+      "description": "Cook the full recipe and plate the finished salmon.",
+      "why_it_matters": "Salmon is the ideal fish for learning doneness cues — the color change as it cooks is clear, and the difference between properly cooked and overdone is unmistakable in the texture.",
+      "is_required": true,
+      "duration_minutes": 25,
+      "prompt": "Show the finished salmon fillet plated, skin-side up if possible so the crust is visible. The skin should be golden-brown and crisp-looking, not pale or wet. If you cut into one fillet, show the cross-section — it should be lightly opaque throughout with no gray, dried-out color.",
+      "reflection_choices": [
+        "Crispy golden skin, flesh was silky and just cooked through with no gray dryness",
+        "Good crust but slightly overcooked — flesh was a bit firmer and drier than ideal",
+        "Undercooked — still very translucent in the center after resting",
+        "Skin didn't crisp — wet skin or pan wasn't hot enough"
+      ]
+    },
+    {
+      "id": "mission_2",
+      "mission_type": "reflection_journal",
+      "title": "Reading the Side of the Fillet",
+      "description": "Reflect on using the translucent line as a doneness cue instead of a timer or cutting into the fish.",
+      "why_it_matters": "Fish doneness is one of the harder skills to develop, and the visual cue on the side of the fillet is what separates cooks who nail it every time from those who cut in and hope.",
+      "is_required": true,
+      "duration_minutes": 5,
+      "prompt": "When you were watching the side of the salmon as it cooked, did you actually see the opaque line moving upward? Did you flip it based on that cue or did you use a timer or just guess? And when you tasted it — was the texture silky or did it feel a bit dry? What would you do differently next time?",
+      "min_words": 30
+    }
+  ]
+}

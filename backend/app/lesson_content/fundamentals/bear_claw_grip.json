@@ -1,0 +1,49 @@
+{
+  "lesson_key": "bear_claw_grip",
+  "lesson_type": "technique",
+  "title": "The Bear Claw Grip",
+  "chapter_title": "Knife Skills",
+  "domain": "cooking",
+  "skill_tags": ["knife skills", "safety", "fundamentals"],
+  "prerequisite_keys": [],
+  "estimated_minutes": 15,
+  "content": {
+    "headline": "Every knife injury involving the guiding hand happens because the fingers were flat — the bear claw makes that physically impossible.",
+    "points": [
+      "Fingertips curl under, knuckles face the blade — the knuckle acts as a physical fence for every cut",
+      "The flat side of the blade rests lightly against the middle knuckle, which guides the slice",
+      "Your thumb hides behind your index finger — if you can see it from the front, tuck it back",
+      "Walk your knuckles backward after each cut, re-establishing the claw before you move"
+    ],
+    "tell_me_more": "The bear claw does something counterintuitive: it makes you faster, not just safer. When the blade stays in contact with your knuckles, it can't drift sideways, so your slices come out more even without having to slow down to aim. Cooks with great knife speed aren't being careful in spite of going fast — the claw is doing the guiding for them."
+  },
+  "missions": [
+    {
+      "id": "mission_1",
+      "mission_type": "photo_submission",
+      "title": "Carrot Rounds",
+      "description": "Slice one whole carrot into rounds using only the bear claw grip. Go slowly enough to maintain the claw on every single cut.",
+      "why_it_matters": "Repetition on a single vegetable builds muscle memory without the distraction of a full recipe.",
+      "is_required": true,
+      "duration_minutes": 10,
+      "prompt": "Show your cutting board with the sliced carrot spread out. The rounds should look roughly uniform in thickness — no pieces dramatically thicker or thinner than the others. Aim for about a quarter-inch each.",
+      "reflection_choices": [
+        "Claw maintained throughout, pieces look even, hand felt controlled the whole time",
+        "Kept the claw most of the time but caught my fingers flattening a few times",
+        "Finished the carrot but my thumb escaped the claw more than once",
+        "Struggled to hold the grip — pieces are very uneven"
+      ]
+    },
+    {
+      "id": "mission_2",
+      "mission_type": "reflection_journal",
+      "title": "What Felt Awkward",
+      "description": "The bear claw feels unnatural at first for almost everyone. Reflect on what specifically felt difficult about holding it.",
+      "why_it_matters": "Naming what's hard helps you practice more deliberately instead of just hoping the technique improves on its own.",
+      "is_required": false,
+      "duration_minutes": 5,
+      "prompt": "What part of the grip felt most unnatural — was it curling the fingers, keeping the thumb tucked, maintaining blade contact, or walking the hand backward? Describe exactly what your hand wanted to do instead.",
+      "min_words": 30
+    }
+  ]
+}

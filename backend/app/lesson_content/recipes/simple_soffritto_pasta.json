@@ -1,0 +1,107 @@
+{
+  "lesson_key": "simple_soffritto_pasta",
+  "lesson_type": "recipe",
+  "title": "Simple Soffritto Pasta",
+  "chapter_title": "First Recipes",
+  "domain": "cooking",
+  "skill_tags": ["flavor", "technique", "pasta"],
+  "prerequisite_keys": ["aromatics_soffritto", "seasoning_with_salt"],
+  "estimated_minutes": 35,
+  "content": {
+    "headline": "This pasta proves that soffritto isn't just prep work — it's the entire flavor of the dish, and without the full 10 minutes of cooking it's a completely different meal.",
+    "points": [
+      "Salt the pasta water until it tastes like mild seawater — this is the only chance pasta has to absorb salt",
+      "The soffritto needs to be completely soft and fragrant before anything else goes in the pan",
+      "Reserve a cup of starchy pasta water before draining — it's the secret to sauce that clings instead of pools",
+      "Finish the pasta in the sauce, not on a separate plate — 60 seconds together in the pan makes it a unified dish"
+    ],
+    "tell_me_more": "The reason pasta water works as a sauce binder is starch. As pasta boils, it releases starch into the water, making it slightly cloudy and viscous. When you add this to a pan sauce and toss aggressively, the starch emulsifies the fat and water together into a coating that clings to each noodle. This is how Italian nonnas make pasta look saucy without adding cream — they're using starch as their emulsifier. The best pasta is finished in the pan, not plated dry with sauce ladled over it.",
+    "ingredients": [
+      {"amount": "320", "unit": "g", "item": "spaghetti or linguine"},
+      {"amount": "1", "unit": null, "item": "medium yellow onion, small dice"},
+      {"amount": "2", "unit": null, "item": "medium carrots, small dice"},
+      {"amount": "2", "unit": "stalks", "item": "celery, small dice"},
+      {"amount": "4", "unit": "cloves", "item": "garlic, finely minced"},
+      {"amount": "4", "unit": "tbsp", "item": "olive oil"},
+      {"amount": "1", "unit": "can (400g)", "item": "whole peeled tomatoes, crushed by hand"},
+      {"amount": "0.5", "unit": "tsp", "item": "red pepper flakes (optional)"},
+      {"amount": "1", "unit": "tbsp", "item": "kosher salt (for pasta water)"},
+      {"amount": null, "unit": null, "item": "salt and black pepper to taste"},
+      {"amount": "30", "unit": "g", "item": "Parmigiano-Reggiano, freshly grated"},
+      {"amount": "1", "unit": "tbsp", "item": "cold butter (optional, for finishing)"}
+    ],
+    "steps": [
+      {
+        "step_number": 1,
+        "instruction": "Dice the onion, carrots, and celery into an even small dice — about quarter-inch pieces. The more uniform the dice, the more evenly everything will soften. Mince the garlic separately and keep it aside.",
+        "technique_callout": "knife_skills_basics",
+        "tip": null
+      },
+      {
+        "step_number": 2,
+        "instruction": "Heat a wide, deep pan or pot over medium-low heat. Add the olive oil and let it warm — not shimmer, just warm. Add the onion, carrot, and celery and stir to coat with oil. Spread them out and let them cook.",
+        "technique_callout": "aromatics_soffritto",
+        "tip": "Medium-low is correct. Higher heat browns the aromatics before they soften, which is a different dish entirely."
+      },
+      {
+        "step_number": 3,
+        "instruction": "Cook the soffritto for 8–12 minutes, stirring occasionally, until the onion is fully translucent, the vegetables are completely soft, and the kitchen smells sweet and savory. In the last 2 minutes, add the garlic and red pepper flakes and stir until fragrant.",
+        "technique_callout": "aromatics_soffritto",
+        "tip": "Taste a piece of onion — it should press flat with almost no resistance. If it's still slightly firm, give it more time."
+      },
+      {
+        "step_number": 4,
+        "instruction": "Add the crushed tomatoes and stir everything together. Season with a pinch of salt. Bring to a gentle simmer and cook, stirring occasionally, for 15–20 minutes until the sauce has thickened and darkened slightly.",
+        "technique_callout": null,
+        "tip": "Crush whole tomatoes by hand before adding — it gives better texture than using pre-crushed, which can taste sharp and underdeveloped."
+      },
+      {
+        "step_number": 5,
+        "instruction": "While the sauce simmers, bring a large pot of water to a rolling boil. Add the salt — the water should taste pleasantly salty, like mild seawater. Add the pasta and cook according to package directions until 1 minute before al dente.",
+        "technique_callout": "seasoning_with_salt",
+        "tip": "Don't skip the salting. Pasta cooked in plain water tastes flat no matter what sauce you put on it."
+      },
+      {
+        "step_number": 6,
+        "instruction": "Before draining, reserve a full cup of pasta water. Drain the pasta and immediately transfer it to the pan with the tomato sauce. Add a splash of pasta water. Toss aggressively over medium heat for 60–90 seconds until the sauce coats every strand and no water pools at the bottom.",
+        "technique_callout": null,
+        "tip": "If the pasta looks dry, add more pasta water a splash at a time while tossing. If it looks soupy, keep tossing — the starch will tighten it."
+      },
+      {
+        "step_number": 7,
+        "instruction": "Take the pan off the heat. If using the butter, add it now and toss quickly until it melts. Taste and adjust salt. Serve immediately with the grated Parmigiano on top.",
+        "technique_callout": "seasoning_with_salt",
+        "tip": null
+      }
+    ]
+  },
+  "missions": [
+    {
+      "id": "mission_1",
+      "mission_type": "photo_submission",
+      "title": "Plated Soffritto Pasta",
+      "description": "Cook the full recipe and plate the finished pasta.",
+      "why_it_matters": "The finished dish is a direct reflection of whether the soffritto was cooked long enough — the flavor depth is unmistakable when you get it right.",
+      "is_required": true,
+      "duration_minutes": 40,
+      "prompt": "Show the plated pasta twirled in a bowl or on a plate. The sauce should be coating the noodles — not pooling at the bottom of the bowl. The color should be a deep, rich red-orange. Grated cheese on top. The pasta should look glossy and unified, not dry or soupy.",
+      "reflection_choices": [
+        "Sauce clung to the pasta, deep flavor from the soffritto, tasted complex and satisfying",
+        "Good flavor but sauce was a bit watery — needed more pasta water tossing time or more reduction",
+        "A little flat — soffritto may not have cooked long enough or pasta water wasn't salty",
+        "Sauce pooled in the bowl instead of coating the noodles — didn't toss in the pan long enough"
+      ]
+    },
+    {
+      "id": "mission_2",
+      "mission_type": "reflection_journal",
+      "title": "What the Soffritto Did",
+      "description": "Reflect on how the soffritto affected the final flavor of the pasta compared to what it would taste like with just tomatoes, garlic, and oil.",
+      "why_it_matters": "Understanding the soffritto's contribution to the finished dish is the whole point of the lesson — this reflection closes the loop.",
+      "is_required": true,
+      "duration_minutes": 5,
+      "prompt": "When you tasted the finished sauce, could you taste depth that wasn't just tomato and garlic — something sweeter and more complex underneath? How does this sauce compare in flavor to a simpler version you've had before, or to a jarred sauce? What do you think the soffritto actually contributed?",
+      "min_words": 30
+    }
+  ]
+}

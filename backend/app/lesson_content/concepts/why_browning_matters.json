@@ -1,0 +1,77 @@
+{
+  "lesson_key": "why_browning_matters",
+  "lesson_type": "concept",
+  "title": "Why Browning Matters",
+  "chapter_title": "Food Science",
+  "domain": "cooking",
+  "skill_tags": ["food science", "maillard reaction", "flavor"],
+  "prerequisite_keys": [],
+  "estimated_minutes": 10,
+  "content": {
+    "headline": "Browning isn't cosmetic — it's the creation of hundreds of new flavor compounds that don't exist in raw or steamed food.",
+    "points": [
+      "The Maillard reaction requires a surface temperature above about 285°F — water on the surface prevents this by capping temperature at 212°F",
+      "One raw ingredient produces one flavor; one browned ingredient produces hundreds through Maillard chemistry",
+      "Caramelization is different from Maillard — caramelization involves only sugars; Maillard involves amino acids and sugars together",
+      "Pan browning also creates fond — the concentrated flavor deposit that becomes the foundation of every pan sauce"
+    ],
+    "tell_me_more": "The Maillard reaction was discovered by a French chemist named Louis-Camille Maillard in 1912, who wasn't even studying cooking — he was trying to understand how amino acids combine in the body. It took food scientists another fifty years to realize this chemistry was responsible for the flavor of seared meat, toasted bread, roasted coffee, and browned butter. There are now over 1,000 identified Maillard compounds in cooked food. The reason a perfectly seared steak and a steamed steak taste nothing alike despite being the same cut from the same animal comes down entirely to whether that reaction happened."
+  },
+  "missions": [
+    {
+      "id": "mission_1",
+      "mission_type": "pop_quiz",
+      "title": "Quick Check",
+      "description": "Test your understanding of why browning creates flavor.",
+      "why_it_matters": "Checking what you understand now makes it stick.",
+      "is_required": true,
+      "duration_minutes": 3,
+      "questions": [
+        {
+          "question_text": "Why does surface moisture on meat prevent browning?",
+          "options": [
+            "Water keeps the surface temperature at 212°F, below the threshold the Maillard reaction requires",
+            "Water makes the meat stick to the pan, which disrupts the crust",
+            "Water dilutes the amino acids needed for the reaction",
+            "Water causes the outside to steam before it can brown"
+          ],
+          "correct_index": 0,
+          "explanation": "Water boils at 212°F, which is the maximum temperature a wet surface can reach. The Maillard reaction needs above 285°F — so as long as surface moisture is present, browning literally cannot happen. The steam answers aren't wrong in a general sense, but the real mechanism is the temperature cap, not dilution or sticking."
+        },
+        {
+          "question_text": "What is the fond?",
+          "options": [
+            "The layer of fat that renders out of meat during searing",
+            "The browned deposits stuck to the pan after searing protein",
+            "The natural juices that run from meat when it rests",
+            "The oil residue left in the pan after cooking"
+          ],
+          "correct_index": 1,
+          "explanation": "Fond is the French word for 'base' or 'foundation,' and in cooking it refers specifically to the browned, stuck-on bits of caramelized protein and sugars left in the pan. These are pure concentrated Maillard flavor — the starting point for every great pan sauce. Fat, juices, and oil residue are all different things."
+        },
+        {
+          "question_text": "What's the key difference between the Maillard reaction and caramelization?",
+          "options": [
+            "Maillard happens faster at lower temperatures than caramelization",
+            "Caramelization only involves sugars; Maillard involves amino acids and sugars together",
+            "Caramelization creates more flavor compounds than the Maillard reaction",
+            "Maillard requires liquid; caramelization happens only in dry heat"
+          ],
+          "correct_index": 1,
+          "explanation": "Caramelization is purely a sugar reaction — it's why onions turn sweet and golden, or why sugar syrup turns amber. The Maillard reaction is more complex because it involves both amino acids and sugars reacting together, which is why seared meat develops such deep, savory complexity. Both can happen simultaneously, but they're chemically distinct."
+        }
+      ]
+    },
+    {
+      "id": "mission_2",
+      "mission_type": "reflection_journal",
+      "title": "The Difference Browning Makes",
+      "description": "Think back to a time when food you cooked was pale and soft-surfaced versus when it had real browning. Reflect on the flavor difference.",
+      "why_it_matters": "Connecting the science to a real cooking experience you've had makes it memorable rather than abstract.",
+      "is_required": false,
+      "duration_minutes": 5,
+      "prompt": "Can you think of a dish you've cooked that came out pale instead of browned — maybe chicken that never got a crust, or onions that were soft but stayed white? What did it taste like compared to when the same ingredient browns properly? Describe the flavor difference as specifically as you can.",
+      "min_words": 30
+    }
+  ]
+}

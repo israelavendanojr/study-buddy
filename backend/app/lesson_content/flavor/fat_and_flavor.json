@@ -1,0 +1,49 @@
+{
+  "lesson_key": "fat_and_flavor",
+  "lesson_type": "technique",
+  "title": "Fat and Flavor",
+  "chapter_title": "Flavor Building",
+  "domain": "cooking",
+  "skill_tags": ["flavor", "technique", "fundamentals"],
+  "prerequisite_keys": ["seasoning_with_salt", "acid_balance"],
+  "estimated_minutes": 15,
+  "content": {
+    "headline": "Fat isn't just calories — it's the vehicle that carries and delivers flavor throughout a dish, and the fat you choose sets the dish's character before anything else goes in.",
+    "points": [
+      "Butter adds nutty richness and browns beautifully — but burns above medium heat, so it needs watching",
+      "Olive oil is fruity and grassy with a lower smoke point than neutral oils — use it where its flavor belongs, not for high-heat searing",
+      "Fat-soluble flavor compounds in garlic, thyme, and rosemary only bloom fully when cooked in fat, not water",
+      "Fat coats the tongue and lingers, giving dishes persistence — too little fat and flavors taste sharp and fleeting"
+    ],
+    "tell_me_more": "There's a reason restaurant pasta always tastes richer than the same dish made at home with the same ingredients: restaurants mount butter into sauces as a finishing step. A tablespoon of cold butter swirled in at the end doesn't just add richness — it emulsifies with the pasta water and sauce into a glossy coating that clings to each noodle and carries every other flavor with it. This is also why fat-free recipes taste bright at first and hollow afterward: the acid and salt are there, but there's nothing to carry them."
+  },
+  "missions": [
+    {
+      "id": "mission_1",
+      "mission_type": "photo_submission",
+      "title": "Brown Butter Test",
+      "description": "Make brown butter: melt two tablespoons of butter in a light-colored pan over medium heat and cook, swirling occasionally, until it turns amber and smells nutty. Use it immediately to dress a simple vegetable or drizzle over toast.",
+      "why_it_matters": "Brown butter is the most dramatic demonstration of fat's flavor transformation — it goes from mild dairy to something that smells like toasted hazelnuts.",
+      "is_required": true,
+      "duration_minutes": 10,
+      "prompt": "Show the finished brown butter in the pan or just after drizzling — it should be amber to medium-brown in color with small browned milk solids visible at the bottom. Not pale yellow (under-cooked) and not dark brown or black (burned).",
+      "reflection_choices": [
+        "Reached amber with visible brown solids, smelled nutty and rich — stopped it at the right moment",
+        "Got there but it was closer to golden than amber — a little underdone but still tasty",
+        "Went too far — darker brown and starting to smell bitter rather than nutty",
+        "Burned it — went from perfect to black quickly, need to watch more carefully next time"
+      ]
+    },
+    {
+      "id": "mission_2",
+      "mission_type": "reflection_journal",
+      "title": "Fat Makes It Last",
+      "description": "Reflect on how the fat in a dish you've cooked recently affected how it tasted — its richness, persistence on the palate, and how the flavors came across.",
+      "why_it_matters": "Connecting fat to flavor persistence helps you understand why dishes with very little fat often taste bright but hollow.",
+      "is_required": false,
+      "duration_minutes": 5,
+      "prompt": "Think of a dish you've made that tasted sharp or flat despite having good seasoning. Was there enough fat in it? How long did the flavors linger after a bite? Compare it to a dish with more fat — did the flavors stay with you longer? Describe the difference.",
+      "min_words": 30
+    }
+  ]
+}
