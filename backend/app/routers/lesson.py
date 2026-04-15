@@ -1,5 +1,6 @@
 import os
 import pathlib
+import re
 from datetime import datetime, timezone
 
 import anthropic
@@ -301,10 +302,13 @@ async def get_incomplete_missions(user_id: str, db: Session = Depends(get_db)) -
     domain = meta.get("domain", "cooking")
 
     results: list[dict] = []
+    seen_lesson_keys: set[str] = set()
+
     for progress in progress_records:
         lesson = db.query(Lesson).filter(Lesson.lesson_key == progress.lesson_key).first()
         if not lesson:
             continue
+        seen_lesson_keys.add(progress.lesson_key)
         missions = lesson.lesson_json.get("missions", [])
         completed_set = set(progress.completed_missions or [])
         for mission in missions:
@@ -323,6 +327,50 @@ async def get_incomplete_missions(user_id: str, db: Session = Depends(get_db)) -
                     "is_required": mission.get("is_required", True),
                     "duration_minutes": mission.get("duration_minutes", 10),
                 })
+
+    # Also include the current active lesson even if the user hasn't submitted anything yet
+    if roadmap_row:
+        roadmap_json = roadmap_row.roadmap_json
+        active_index = roadmap_row.active_index
+        global_idx = 0
+        active_lesson_data = None
+        active_chapter_title = ""
+        for chapter in roadmap_json.get("chapters", []):
+            for lesson in chapter.get("lessons", []):
+                if global_idx == active_index:
+                    active_lesson_data = lesson
+                    active_chapter_title = chapter.get("title", "")
+                    break
+                global_idx += 1
+            if active_lesson_data:
+                break
+
+        if active_lesson_data:
+            title_snake = re.sub(r"[^a-z0-9]+", "_", active_lesson_data["title"].lower())
+            active_lesson_key = f"{active_lesson_data['id']}_{title_snake}"
+            if active_lesson_key not in seen_lesson_keys:
+                lesson_row = db.query(Lesson).filter(Lesson.lesson_key == active_lesson_key).first()
+                if lesson_row:
+                    active_missions = lesson_row.lesson_json.get("missions", [])
+                    active_entries = [
+                        {
+                            "lesson_key": active_lesson_key,
+                            "lesson_title": lesson_row.title,
+                            "chapter_title": lesson_row.chapter_title or active_chapter_title,
+                            "domain": lesson_row.domain or domain,
+                            "goal": goal,
+                            "buddy_name": buddy_name,
+                            "experience": experience,
+                            "mission_id": mission["id"],
+                            "mission_title": mission["title"],
+                            "mission_description": mission.get("description", ""),
+                            "is_required": mission.get("is_required", True),
+                            "duration_minutes": mission.get("duration_minutes", 10),
+                        }
+                        for mission in active_missions
+                    ]
+                    # Prepend so the active lesson appears first
+                    results = active_entries + results
 
     return results
 

@@ -242,7 +242,7 @@ export default function RoadmapScreen() {
   const handleStart = () => {
     if (!selectedLesson) return
     const lessonId = selectedLesson.id
-    const lessonKey = selectedLesson.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')
+    const lessonKey = `${lessonId}_${selectedLesson.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`
     setModalOpen(false)
     navigation.navigate('LessonScreen', {
       lessonKey,

@@ -6,12 +6,12 @@ import {
   FlatList,
   Modal,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { useUser } from '@clerk/clerk-expo'
@@ -25,7 +25,7 @@ const GRID_GAP = 10
 const GRID_PADDING = 16
 const ITEM_SIZE = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS
 
-// ── Color mapping: item_key → hex ─────────────────────────────────────────────
+// ── Color mapping ─────────────────────────────────────────────────────────────
 
 const COLOR_MAP: Record<string, string> = {
   mint_color: colors.mint,
@@ -46,7 +46,6 @@ function getCompanionColor(itemKey: string | null): string {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type TabKey = 'color' | 'accessory' | 'outfit' | 'room_decoration'
-type SortKey = 'all' | 'new' | 'affordable'
 
 interface CosmeticItem {
   id: number
@@ -59,7 +58,6 @@ interface CosmeticItem {
   rarity: 'common' | 'uncommon' | 'rare' | 'legendary'
   unlock_condition: string | null
   created_at: string
-  // enriched on client
   is_owned?: boolean
   is_equipped?: boolean
 }
@@ -73,27 +71,6 @@ interface EquippedState {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const RARITY_COLORS: Record<string, string> = {
-  common: colors.border,
-  uncommon: colors.mint,
-  rare: colors.sky,
-  legendary: colors.golden,
-}
-
-const RARITY_TEXT_COLORS: Record<string, string> = {
-  common: colors.muted,
-  uncommon: '#3D7A5A',
-  rare: '#2A5A8A',
-  legendary: '#7A5A10',
-}
-
-const TAB_LABELS: Record<TabKey, string> = {
-  color: 'Colors',
-  accessory: 'Accessories',
-  outfit: 'Outfits',
-  room_decoration: 'Room Decor',
-}
-
 const ITEM_TYPE_SLOT: Record<TabKey, string> = {
   color: 'color',
   accessory: 'accessory',
@@ -101,79 +78,31 @@ const ITEM_TYPE_SLOT: Record<TabKey, string> = {
   room_decoration: 'room_decoration',
 }
 
-function isNewItem(createdAt: string): boolean {
-  const created = new Date(createdAt)
-  const now = new Date()
-  return (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24) <= 7
+// Tab order and display labels per spec
+const TABS: TabKey[] = ['outfit', 'room_decoration', 'color', 'accessory']
+const TAB_LABELS: Record<TabKey, string> = {
+  outfit: 'Outfit',
+  room_decoration: 'Furniture',
+  color: 'Color',
+  accessory: 'Travel',
 }
 
-// ── CurrencyBar ───────────────────────────────────────────────────────────────
+// ── Item type accent colors (for grid previews) ───────────────────────────────
 
-interface CurrencyBarProps {
-  coins: number
-  gems: number
-  onBuyGems: () => void
+const TYPE_ACCENT: Record<TabKey, string> = {
+  color:           colors.border,
+  outfit:          '#FFD9C4',
+  accessory:       '#C8E8FF',
+  room_decoration: '#C4EDD8',
 }
 
-function CurrencyBar({ coins, gems, onBuyGems }: CurrencyBarProps) {
-  return (
-    <View style={currencyStyles.bar}>
-      <View style={currencyStyles.pill}>
-        <Text style={currencyStyles.icon}>🪙</Text>
-        <Text style={currencyStyles.value}>{coins.toLocaleString()}</Text>
-      </View>
-      <View style={currencyStyles.pill}>
-        <Text style={currencyStyles.icon}>💎</Text>
-        <Text style={currencyStyles.value}>{gems}</Text>
-      </View>
-      <Pressable style={currencyStyles.buyButton} onPress={onBuyGems}>
-        <Text style={currencyStyles.buyText}>+ Gems</Text>
-      </Pressable>
-    </View>
-  )
-}
+// ── Featured bundles data ─────────────────────────────────────────────────────
 
-const currencyStyles = StyleSheet.create({
-  bar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.background,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  icon: { fontSize: 14 },
-  value: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 13,
-    color: colors.foreground,
-  },
-  buyButton: {
-    marginLeft: 'auto',
-    backgroundColor: colors.sky,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  buyText: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 13,
-    color: '#2A5A8A',
-  },
-})
+const FEATURED_BUNDLES = [
+  { id: 'f1', name: 'Summer Outfit',   cost: 1200, color: '#FFD9C4', badge: null },
+  { id: 'f2', name: 'Beach Vibes',     cost: 800,  color: '#C8E8FF', badge: null },
+  { id: 'f3', name: 'World Explorer',  cost: 600,  color: '#C4EDD8', badge: 'Travel' },
+]
 
 // ── CosmeticGridItem ──────────────────────────────────────────────────────────
 
@@ -184,46 +113,32 @@ interface GridItemProps {
 
 const CosmeticGridItem = memo(function CosmeticGridItem({ item, onPress }: GridItemProps) {
   const isColor = item.item_type === 'color'
-  const rarityColor = RARITY_COLORS[item.rarity] ?? colors.border
-  const isNew = isNewItem(item.created_at)
+  const previewBg = isColor ? getCompanionColor(item.item_key) : TYPE_ACCENT[item.item_type]
+  const costLabel = item.cost_coins === 0 ? 'Free' : `${item.cost_coins} coins`
 
   return (
     <Pressable
-      style={[
+      style={({ pressed }) => [
         gridStyles.item,
         item.is_equipped && gridStyles.equippedBorder,
+        pressed && { opacity: 0.8 },
       ]}
       onPress={() => onPress(item)}
     >
       {/* Preview */}
-      <View style={[gridStyles.preview, isColor && { backgroundColor: getCompanionColor(item.item_key) }]}>
+      <View style={[gridStyles.preview, { backgroundColor: previewBg }]}>
         {!isColor && (
-          <Text style={gridStyles.previewEmoji}>
-            {item.item_type === 'accessory' ? '🎀' : item.item_type === 'outfit' ? '👕' : '🪴'}
-          </Text>
+          <Text style={gridStyles.previewInitial}>{item.name.charAt(0).toUpperCase()}</Text>
         )}
       </View>
 
-      {/* Rarity dot */}
-      <View style={[gridStyles.rarityDot, { backgroundColor: rarityColor }]} />
-
-      {/* Name */}
-      <Text style={gridStyles.name} numberOfLines={1}>{item.name}</Text>
-
       {/* Cost */}
-      <Text style={gridStyles.cost}>
-        {item.cost_coins > 0 ? `🪙 ${item.cost_coins}` : `💎 ${item.cost_gems}`}
-      </Text>
+      <Text style={gridStyles.cost}>{costLabel}</Text>
 
-      {/* Badges */}
+      {/* Owned checkmark */}
       {item.is_owned && (
         <View style={gridStyles.ownedBadge}>
-          <Text style={gridStyles.ownedText}>{item.is_equipped ? '✓' : '✓'}</Text>
-        </View>
-      )}
-      {isNew && !item.is_owned && (
-        <View style={gridStyles.newBadge}>
-          <Text style={gridStyles.newText}>NEW</Text>
+          <Text style={gridStyles.ownedText}>✓</Text>
         </View>
       )}
     </Pressable>
@@ -233,56 +148,43 @@ const CosmeticGridItem = memo(function CosmeticGridItem({ item, onPress }: GridI
 const gridStyles = StyleSheet.create({
   item: {
     width: ITEM_SIZE,
-    backgroundColor: colors.card,
+    backgroundColor: '#F0EBE1',
     borderRadius: radius.sm,
     padding: 8,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    borderWidth: 2,
+    borderColor: 'transparent',
     position: 'relative',
   },
   equippedBorder: {
     borderColor: colors.mint,
-    borderWidth: 2,
   },
   preview: {
-    width: ITEM_SIZE - 20,
-    height: ITEM_SIZE - 20,
+    width: ITEM_SIZE - 24,
+    height: ITEM_SIZE - 24,
     borderRadius: 10,
     backgroundColor: colors.border,
     marginBottom: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  previewEmoji: {
+  previewInitial: {
     fontSize: 28,
+    fontFamily: 'FredokaOne_400Regular',
+    color: colors.foreground,
+    opacity: 0.5,
   },
-  rarityDot: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  name: {
+  cost: {
     fontFamily: 'Nunito_600SemiBold',
     fontSize: 11,
     color: colors.foreground,
-    textAlign: 'center',
-    width: '100%',
-  },
-  cost: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 10,
-    color: colors.muted,
     marginTop: 2,
   },
   ownedBadge: {
     position: 'absolute',
     top: 5,
     right: 5,
-    backgroundColor: colors.mint,
+    backgroundColor: '#5CCB8F',
     borderRadius: 8,
     width: 16,
     height: 16,
@@ -292,21 +194,7 @@ const gridStyles = StyleSheet.create({
   ownedText: {
     fontSize: 9,
     fontFamily: 'Nunito_700Bold',
-    color: colors.foreground,
-  },
-  newBadge: {
-    position: 'absolute',
-    top: 5,
-    right: 5,
-    backgroundColor: colors.peach,
-    borderRadius: 6,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  newText: {
-    fontSize: 8,
-    fontFamily: 'Nunito_700Bold',
-    color: colors.foreground,
+    color: '#FFFFFF',
   },
 })
 
@@ -316,9 +204,8 @@ interface DetailModalProps {
   item: CosmeticItem | null
   equippedColor: string | null
   coins: number
-  gems: number
   onClose: () => void
-  onBuy: (item: CosmeticItem, currencyType: 'coins' | 'gems') => Promise<void>
+  onBuy: (item: CosmeticItem) => Promise<void>
   onEquip: (item: CosmeticItem) => Promise<void>
   onUnequip: (item: CosmeticItem) => Promise<void>
 }
@@ -327,7 +214,6 @@ function DetailModal({
   item,
   equippedColor,
   coins,
-  gems,
   onClose,
   onBuy,
   onEquip,
@@ -355,21 +241,15 @@ function DetailModal({
 
   const isColor = item.item_type === 'color'
   const previewColor = isColor ? getCompanionColor(item.item_key) : getCompanionColor(equippedColor)
-  const rarityColor = RARITY_COLORS[item.rarity]
-  const rarityTextColor = RARITY_TEXT_COLORS[item.rarity]
 
-  const canAffordCoins = coins >= item.cost_coins
-  const canAffordGems = gems >= item.cost_gems
-  const preferCoins = item.cost_coins > 0
-  const preferGems = item.cost_gems > 0 && !preferCoins
+  const canAfford = item.is_owned || coins >= item.cost_coins
 
   async function handleAction() {
     setActionError(null)
     setActionLoading(true)
     try {
       if (!item!.is_owned) {
-        const currencyType = preferCoins ? 'coins' : 'gems'
-        await onBuy(item!, currencyType)
+        await onBuy(item!)
       } else if (item!.is_equipped) {
         await onUnequip(item!)
       } else {
@@ -384,19 +264,12 @@ function DetailModal({
 
   function getActionLabel() {
     if (!item!.is_owned) {
-      if (preferCoins) return `Buy  🪙 ${item!.cost_coins}`
-      return `Buy  💎 ${item!.cost_gems}`
+      return item!.cost_coins === 0 ? 'Get for Free' : `Buy  ${item!.cost_coins} coins`
     }
     return item!.is_equipped ? 'Unequip' : 'Equip'
   }
 
-  function canAfford() {
-    if (item!.is_owned) return true
-    if (preferCoins) return canAffordCoins
-    return canAffordGems
-  }
-
-  const actionDisabled = actionLoading || !canAfford()
+  const actionDisabled = actionLoading || !canAfford
 
   return (
     <Modal transparent animationType="fade" onRequestClose={onClose}>
@@ -423,41 +296,28 @@ function DetailModal({
 
             {/* Info */}
             <View style={modalStyles.info}>
-              <View style={modalStyles.nameRow}>
-                <Text style={modalStyles.itemName}>{item.name}</Text>
-                <View style={[modalStyles.rarityBadge, { backgroundColor: rarityColor }]}>
-                  <Text style={[modalStyles.rarityText, { color: rarityTextColor }]}>
-                    {item.rarity.charAt(0).toUpperCase() + item.rarity.slice(1)}
-                  </Text>
-                </View>
-              </View>
+              <Text style={modalStyles.itemName}>{item.name}</Text>
 
               {item.description && (
                 <Text style={modalStyles.description}>{item.description}</Text>
               )}
 
-              {/* Cost row */}
+              {/* Cost */}
               {!item.is_owned && (
                 <View style={modalStyles.costRow}>
-                  {item.cost_coins > 0 && (
-                    <View style={[modalStyles.costPill, !canAffordCoins && modalStyles.costPillInsufficient]}>
-                      <Text style={modalStyles.costPillText}>🪙 {item.cost_coins} coins</Text>
-                      {!canAffordCoins && <Text style={modalStyles.insufficientText}> (need {item.cost_coins - coins} more)</Text>}
-                    </View>
-                  )}
-                  {item.cost_gems > 0 && (
-                    <View style={[modalStyles.costPill, !canAffordGems && modalStyles.costPillInsufficient]}>
-                      <Text style={modalStyles.costPillText}>💎 {item.cost_gems} gems</Text>
-                      {!canAffordGems && <Text style={modalStyles.insufficientText}> (need {item.cost_gems - gems} more)</Text>}
-                    </View>
-                  )}
-                  {item.cost_coins === 0 && item.cost_gems === 0 && (
+                  {item.cost_coins === 0 ? (
                     <Text style={modalStyles.freeText}>Free</Text>
+                  ) : (
+                    <View style={[modalStyles.costPill, !canAfford && modalStyles.costPillInsufficient]}>
+                      <Text style={modalStyles.costPillText}>{item.cost_coins} coins</Text>
+                      {!canAfford && (
+                        <Text style={modalStyles.insufficientText}> · need {item.cost_coins - coins} more</Text>
+                      )}
+                    </View>
                   )}
                 </View>
               )}
 
-              {/* Error */}
               {actionError && (
                 <Text style={modalStyles.errorText}>{actionError}</Text>
               )}
@@ -472,7 +332,7 @@ function DetailModal({
                     ? { backgroundColor: colors.border }
                     : item.is_owned
                     ? [{ backgroundColor: colors.mint }, shadows.mint]
-                    : [{ backgroundColor: canAfford() ? colors.peach : colors.border }, canAfford() && shadows.peach],
+                    : [{ backgroundColor: canAfford ? colors.peach : colors.border }, canAfford && shadows.peach],
                   actionDisabled && { opacity: 0.5 },
                 ]}
                 onPress={handleAction}
@@ -539,25 +399,10 @@ const modalStyles = StyleSheet.create({
     paddingHorizontal: 24,
     gap: 10,
   },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
   itemName: {
     fontFamily: 'FredokaOne_400Regular',
     fontSize: 24,
     color: colors.foreground,
-    flex: 1,
-  },
-  rarityBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  rarityText: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 11,
   },
   description: {
     fontFamily: 'Nunito_400Regular',
@@ -568,15 +413,14 @@ const modalStyles = StyleSheet.create({
   costRow: {
     flexDirection: 'row',
     gap: 8,
-    flexWrap: 'wrap',
   },
   costPill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -586,12 +430,12 @@ const modalStyles = StyleSheet.create({
   },
   costPillText: {
     fontFamily: 'Nunito_700Bold',
-    fontSize: 13,
+    fontSize: 14,
     color: colors.foreground,
   },
   insufficientText: {
     fontFamily: 'Nunito_400Regular',
-    fontSize: 11,
+    fontSize: 12,
     color: '#CC4444',
   },
   freeText: {
@@ -628,8 +472,6 @@ export default function CompanionShopScreen() {
   const { user } = useUser()
   const navigation = useNavigation<StackNavigationProp<any>>()
 
-  // ── State ──────────────────────────────────────────────────────────────────
-
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -638,15 +480,9 @@ export default function CompanionShopScreen() {
     color: null, outfit: null, accessories: [], room_decorations: [],
   })
   const [coins, setCoins] = useState(0)
-  const [gems, setGems] = useState(0)
 
-  const [activeTab, setActiveTab] = useState<TabKey>('color')
-  const [sortBy, setSortBy] = useState<SortKey>('all')
+  const [activeTab, setActiveTab] = useState<TabKey>('outfit')
   const [selectedItem, setSelectedItem] = useState<CosmeticItem | null>(null)
-
-  const tabIndicatorX = useRef(new Animated.Value(0)).current
-  const TABS: TabKey[] = ['color', 'accessory', 'outfit', 'room_decoration']
-  const TAB_WIDTH = (SCREEN_WIDTH - 32) / TABS.length
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
@@ -667,7 +503,7 @@ export default function CompanionShopScreen() {
       }
 
       const [allItems, invItems, equippedData, statsData]: [
-        CosmeticItem[], CosmeticItem[], EquippedState, { coins: number; gems: number }
+        CosmeticItem[], CosmeticItem[], EquippedState, { coins: number }
       ] = await Promise.all([allRes.json(), invRes.json(), equippedRes.json(), statsRes.json()])
 
       const ownedIds = new Set(invItems.map((i) => i.id))
@@ -687,7 +523,6 @@ export default function CompanionShopScreen() {
       setCosmetics(enriched)
       setEquipped(equippedData)
       setCoins(statsData.coins ?? 0)
-      setGems(statsData.gems ?? 0)
     } catch (e: any) {
       setError(e.message ?? 'Failed to load shop')
     } finally {
@@ -697,47 +532,28 @@ export default function CompanionShopScreen() {
 
   useEffect(() => { fetchAll() }, [fetchAll])
 
-  // ── Tab animation ──────────────────────────────────────────────────────────
+  // ── Tab change ─────────────────────────────────────────────────────────────
 
   function handleTabChange(tab: TabKey) {
-    const idx = TABS.indexOf(tab)
-    Animated.timing(tabIndicatorX, {
-      toValue: idx * TAB_WIDTH,
-      duration: 200,
-      useNativeDriver: true,
-    }).start()
     setActiveTab(tab)
   }
 
   // ── Derived list ───────────────────────────────────────────────────────────
 
-  const filtered = cosmetics
-    .filter((c) => c.item_type === activeTab)
-    .filter((c) => {
-      if (sortBy === 'new') return isNewItem(c.created_at)
-      if (sortBy === 'affordable') return c.cost_coins > 0 || (c.cost_coins === 0 && c.cost_gems === 0)
-      return true
-    })
-    .sort((a, b) => {
-      if (sortBy === 'affordable') return a.cost_coins - b.cost_coins
-      return 0
-    })
+  const filtered = cosmetics.filter((c) => c.item_type === activeTab)
 
-  // ── Purchase ───────────────────────────────────────────────────────────────
+  // ── Purchase (coins only) ──────────────────────────────────────────────────
 
-  async function handleBuy(item: CosmeticItem, currencyType: 'coins' | 'gems') {
+  async function handleBuy(item: CosmeticItem) {
     if (!user) return
     const res = await fetch(`${API_BASE}/cosmetics/${user.id}/purchase`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cosmetic_id: item.id, currency_type: currencyType }),
+      body: JSON.stringify({ cosmetic_id: item.id, currency_type: 'coins' }),
     })
     const data = await res.json()
-    if (!res.ok) {
-      throw new Error(data.detail ?? 'Purchase failed')
-    }
+    if (!res.ok) throw new Error(data.detail ?? 'Purchase failed')
     setCoins(data.remaining_coins)
-    setGems(data.remaining_gems)
     setCosmetics((prev) =>
       prev.map((c) => (c.id === item.id ? { ...c, is_owned: true } : c))
     )
@@ -756,9 +572,7 @@ export default function CompanionShopScreen() {
       body: JSON.stringify({ cosmetic_id: item.id, slot: ITEM_TYPE_SLOT[item.item_type] }),
     })
     const data = await res.json()
-    if (!res.ok) {
-      throw new Error(data.detail ?? 'Equip failed')
-    }
+    if (!res.ok) throw new Error(data.detail ?? 'Equip failed')
     setEquipped(data.equipped)
     const newEquippedKeys = new Set([
       data.equipped.color,
@@ -784,9 +598,7 @@ export default function CompanionShopScreen() {
       body: JSON.stringify({ cosmetic_id: item.id, slot: ITEM_TYPE_SLOT[item.item_type] }),
     })
     const data = await res.json()
-    if (!res.ok) {
-      throw new Error(data.detail ?? 'Unequip failed')
-    }
+    if (!res.ok) throw new Error(data.detail ?? 'Unequip failed')
     setEquipped(data.equipped)
     const newEquippedKeys = new Set([
       data.equipped.color,
@@ -844,92 +656,99 @@ export default function CompanionShopScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Text style={styles.backBtnText}>‹</Text>
         </Pressable>
         <Text style={styles.title}>Shop</Text>
-        <View style={styles.companionMini}>
+        <View style={styles.headerRight}>
           <Companion size={36} mood="idle" color={previewColor} />
+          <View style={styles.coinPill}>
+            <View style={styles.coinDot} />
+            <Text style={styles.coinPillText}>{coins.toLocaleString()} coins</Text>
+          </View>
         </View>
       </View>
 
-      {/* Currency bar */}
-      <CurrencyBar
-        coins={coins}
-        gems={gems}
-        onBuyGems={() => {
-          // stub — real money flow
-        }}
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => String(item.id)}
+        numColumns={GRID_COLUMNS}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <>
+            {/* ── Featured bundles ───────────────────────────────────────── */}
+            <ScrollView
+              horizontal
+              pagingEnabled={false}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.featuredScroll}
+              style={styles.featuredContainer}
+            >
+              {FEATURED_BUNDLES.map((bundle) => (
+                <View key={bundle.id} style={styles.featuredCard}>
+                  {/* Price badge */}
+                  <View style={styles.featuredPriceBadge}>
+                    <Text style={styles.featuredPriceText}>{bundle.cost} coins</Text>
+                  </View>
+
+                  {/* Travel badge */}
+                  {bundle.badge && (
+                    <View style={styles.featuredLabelBadge}>
+                      <Text style={styles.featuredLabelText}>{bundle.badge}</Text>
+                    </View>
+                  )}
+
+                  {/* Accent shape */}
+                  <View style={[styles.featuredAccentWrap, { backgroundColor: bundle.color }]}>
+                    <Text style={styles.featuredAccentLetter}>{bundle.name.charAt(0)}</Text>
+                  </View>
+
+                  {/* Name */}
+                  <Text style={styles.featuredName}>{bundle.name}</Text>
+                </View>
+              ))}
+            </ScrollView>
+
+            {/* ── Category tabs ──────────────────────────────────────────── */}
+            <View style={styles.tabsRow}>
+              {TABS.map((tab) => (
+                <Pressable
+                  key={tab}
+                  style={[styles.tabPill, activeTab === tab && styles.tabPillActive]}
+                  onPress={() => handleTabChange(tab)}
+                >
+                  <Text style={[styles.tabPillText, activeTab === tab && styles.tabPillTextActive]}>
+                    {TAB_LABELS[tab]}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* ── Collection heading ─────────────────────────────────────── */}
+            <Text style={styles.collectionHeading}>Everyday Collection</Text>
+          </>
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>
+              {`No ${TAB_LABELS[activeTab].toLowerCase()} available yet`}
+            </Text>
+          </View>
+        }
+        contentContainerStyle={styles.gridContent}
+        columnWrapperStyle={styles.gridRow}
+        renderItem={({ item }) => (
+          <CosmeticGridItem item={item} onPress={setSelectedItem} />
+        )}
       />
 
-      {/* Tab bar */}
-      <View style={styles.tabBar}>
-        {TABS.map((tab) => (
-          <Pressable
-            key={tab}
-            style={styles.tab}
-            onPress={() => handleTabChange(tab)}
-          >
-            <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
-              {TAB_LABELS[tab]}
-            </Text>
-          </Pressable>
-        ))}
-        <Animated.View
-          style={[
-            styles.tabIndicator,
-            { width: TAB_WIDTH, transform: [{ translateX: tabIndicatorX }] },
-          ]}
-        />
-      </View>
-
-      {/* Sort controls */}
-      <View style={styles.sortRow}>
-        {(['all', 'new', 'affordable'] as SortKey[]).map((s) => (
-          <Pressable
-            key={s}
-            style={[styles.sortBtn, sortBy === s && styles.sortBtnActive]}
-            onPress={() => setSortBy(s)}
-          >
-            <Text style={[styles.sortBtnText, sortBy === s && styles.sortBtnTextActive]}>
-              {s === 'all' ? 'All' : s === 'new' ? 'New' : 'Affordable'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {/* Grid */}
-      {filtered.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyEmoji}>🛍</Text>
-          <Text style={styles.emptyText}>
-            {sortBy !== 'all'
-              ? 'No items match this filter'
-              : `No ${TAB_LABELS[activeTab].toLowerCase()} available yet`}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => String(item.id)}
-          numColumns={GRID_COLUMNS}
-          contentContainerStyle={styles.gridContent}
-          columnWrapperStyle={styles.gridRow}
-          renderItem={({ item }) => (
-            <CosmeticGridItem item={item} onPress={setSelectedItem} />
-          )}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
-
-      {/* Detail modal */}
+      {/* ── Detail modal ───────────────────────────────────────────────────── */}
       <DetailModal
         item={selectedItem}
         equippedColor={equipped.color}
         coins={coins}
-        gems={gems}
         onClose={() => setSelectedItem(null)}
         onBuy={handleBuy}
         onEquip={handleEquip}
@@ -940,6 +759,8 @@ export default function CompanionShopScreen() {
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
+
+const LAVENDER = '#C4B5F4'
 
 const styles = StyleSheet.create({
   container: {
@@ -976,7 +797,7 @@ const styles = StyleSheet.create({
     color: colors.foreground,
   },
 
-  // Header
+  // ── Header ──────────────────────────────────────────────────────────────────
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -999,88 +820,153 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     flex: 1,
   },
-  companionMini: {
-    marginLeft: 8,
-  },
-
-  // Tab bar
-  tabBar: {
+  headerRight: {
     flexDirection: 'row',
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 4,
-    position: 'relative',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
     alignItems: 'center',
+    gap: 10,
   },
-  tabLabel: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 12,
-    color: colors.muted,
-  },
-  tabLabelActive: {
-    color: colors.foreground,
-  },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: -1,
-    height: 2,
-    backgroundColor: colors.mint,
-    borderRadius: 1,
-  },
-
-  // Sort
-  sortRow: {
+  coinPill: {
     flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  sortBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  sortBtnActive: {
-    backgroundColor: colors.mint,
-    borderColor: colors.mint,
+  coinDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.golden,
   },
-  sortBtnText: {
+  coinPillText: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 13,
+    color: colors.foreground,
+  },
+
+  // ── Featured bundles ────────────────────────────────────────────────────────
+  featuredContainer: {
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  featuredScroll: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  featuredCard: {
+    width: 220,
+    height: 160,
+    backgroundColor: LAVENDER,
+    borderRadius: radius.md,
+    padding: 14,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  featuredPriceBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  featuredPriceText: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  featuredLabelBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: colors.golden,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  featuredLabelText: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 9,
+    color: colors.foreground,
+  },
+  featuredAccentWrap: {
+    position: 'absolute',
+    top: 20,
+    right: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0.85,
+  },
+  featuredAccentLetter: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 28,
+    color: colors.foreground,
+  },
+  featuredName: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+
+  // ── Category tabs ────────────────────────────────────────────────────────────
+  tabsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  tabPill: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+  },
+  tabPillActive: {
+    backgroundColor: colors.foreground,
+  },
+  tabPillText: {
     fontFamily: 'Nunito_600SemiBold',
     fontSize: 12,
     color: colors.muted,
   },
-  sortBtnTextActive: {
-    color: colors.foreground,
+  tabPillTextActive: {
+    color: '#FFFFFF',
   },
 
-  // Grid
+  // ── Collection heading ───────────────────────────────────────────────────────
+  collectionHeading: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 20,
+    color: colors.foreground,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+
+  // ── Grid ────────────────────────────────────────────────────────────────────
   gridContent: {
     paddingHorizontal: GRID_PADDING,
-    paddingBottom: 32,
+    paddingBottom: 40,
   },
   gridRow: {
     gap: GRID_GAP,
     marginBottom: GRID_GAP,
   },
 
-  // Empty state
+  // ── Empty state ─────────────────────────────────────────────────────────────
   emptyState: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingTop: 48,
     gap: 12,
-  },
-  emptyEmoji: {
-    fontSize: 48,
   },
   emptyText: {
     fontFamily: 'Nunito_400Regular',
