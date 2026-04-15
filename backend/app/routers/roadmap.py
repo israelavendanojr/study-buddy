@@ -1,5 +1,6 @@
 import json
 import os
+import pathlib
 import re
 from datetime import datetime, timezone
 
@@ -13,6 +14,46 @@ from ..database import get_db
 from ..models import UserRoadmap
 
 router = APIRouter()
+
+LESSON_CONTENT_ROOT = pathlib.Path(__file__).parent.parent / "lesson_content"
+
+
+def _build_lesson_catalog() -> str:
+    """Return a compact catalog of all fixed-content lessons for inclusion in the roadmap prompt."""
+    if not LESSON_CONTENT_ROOT.exists():
+        return ""
+
+    entries: list[dict] = []
+    for json_file in LESSON_CONTENT_ROOT.rglob("*.json"):
+        try:
+            data = json.loads(json_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        entries.append({
+            "key": data.get("lesson_key", ""),
+            "title": data.get("title", ""),
+            "type": data.get("lesson_type", "technique"),
+            "prereqs": data.get("prerequisite_keys", []),
+        })
+
+    if not entries:
+        return ""
+
+    lines = ["LESSON LIBRARY — use these exact lessons (id and title) when building the roadmap:"]
+    lines.append("Format: id | title | type | prerequisites")
+    lines.append("")
+    for e in sorted(entries, key=lambda x: (x["prereqs"] == [], x["key"])):
+        prereq_str = ", ".join(e["prereqs"]) if e["prereqs"] else "none"
+        lines.append(f'  {e["key"]} | "{e["title"]}" | {e["type"]} | prereqs: {prereq_str}')
+
+    lines.append("")
+    lines.append("Rules for using the library:")
+    lines.append("- Use the id field exactly as the lesson `id` in the JSON output")
+    lines.append("- Use the title field exactly as the lesson `title`")
+    lines.append("- Respect prerequisites: a lesson must appear after all its prerequisites")
+    lines.append("- Cover as many catalog lessons as fits the goal/duration — the library is your backbone")
+    lines.append("- You may add non-catalog lessons for topics not covered, but prefer catalog lessons")
+    return "\n".join(lines)
 
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 
@@ -116,6 +157,9 @@ How to use this context:
 6. Front-load content matching their baseline — skip what they already know
 """
 
+    catalog_block = _build_lesson_catalog()
+    catalog_section = f"\n{catalog_block}\n" if catalog_block else ""
+
     return f"""You are a learning roadmap designer. Create a personalized learning roadmap as JSON.
 
 User profile:
@@ -125,7 +169,7 @@ User profile:
 - Days per week: {req.days_per_week}
 - Duration: {weeks} weeks
 - Success vision: {req.success_vision}
-{coaching_block}
+{coaching_block}{catalog_section}
 Return ONLY valid JSON matching this exact schema — no markdown, no explanation, nothing else:
 
 {{

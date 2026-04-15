@@ -1,0 +1,77 @@
+{
+  "lesson_key": "why_heat_matters",
+  "lesson_type": "concept",
+  "title": "Why Heat Matters",
+  "chapter_title": "Food Science",
+  "domain": "cooking",
+  "skill_tags": ["food science", "maillard reaction", "dry heat", "moist heat", "cooking methods", "heat transfer"],
+  "prerequisite_keys": [],
+  "estimated_minutes": 10,
+  "content": {
+    "headline": "The method you choose doesn't just change how long something cooks — it determines which flavors can exist at all.",
+    "points": [
+      "Dry heat methods (searing, roasting, grilling, sautéing) can push surface temperatures above 285°F, the minimum the Maillard reaction needs — producing hundreds of new flavor compounds that moist heat physically cannot create",
+      "Moist heat methods (braising, steaming, poaching, simmering) cap surface temperature at 212°F because water boils off before it can get hotter — which is exactly why they excel at breaking down collagen into gelatin and cooking delicate proteins without seizing",
+      "Surface moisture is the enemy of browning: even in a dry pan, a wet piece of chicken is steaming itself until enough water evaporates to let the surface temperature climb — pat things dry before searing, every time",
+      "Many dishes use both in sequence intentionally — you sear a braise short ribs first (dry heat for Maillard flavor), then add liquid and cover (moist heat to dissolve tough connective tissue) because neither method alone does both jobs"
+    ],
+    "tell_me_more": "The reason a braise and a roast from the same cut taste so different comes down to a temperature ceiling. Water — whether it's in a pot or just sitting on the surface of the meat — physically cannot exceed 212°F at sea level. That hard ceiling is why steamed food stays pale and clean-tasting rather than developing the complex, roasty depth you get from a hot dry pan. The Maillard reaction, discovered by a French chemist in 1912, kicks off around 285°F and accelerates toward 350°F — it's the same chemistry happening in a seared steak, the crust of bread, roasted coffee, and browned butter. There are over 1,000 identified flavor compounds produced by Maillard reactions, none of which can form below the boiling point of water. Moist heat isn't lesser — it does things dry heat can't, like slowly unraveling the tight triple-helix of collagen into silky, lip-coating gelatin over hours of gentle simmering. Understanding which method produces which result stops cooking from feeling like guesswork and starts making it feel like engineering."
+  },
+  "missions": [
+    {
+      "id": "mission_1",
+      "mission_type": "pop_quiz",
+      "title": "Quick Check",
+      "description": "Test your understanding of the Maillard reaction and when to use dry vs. moist heat.",
+      "why_it_matters": "These two concepts come up in almost every cooking decision — knowing them cold means you stop second-guessing the method and start choosing it deliberately.",
+      "is_required": true,
+      "duration_minutes": 3,
+      "questions": [
+        {
+          "question_text": "You want to sear chicken thighs and they're coming out pale and steamy instead of browned. What's the most likely cause?",
+          "options": [
+            "The pan isn't hot enough — you need to preheat longer",
+            "Surface moisture on the chicken is capping the surface temperature at 212°F",
+            "Chicken thighs have too much fat to brown properly",
+            "You need to use oil with a higher smoke point"
+          ],
+          "correct_index": 1,
+          "explanation": "Surface moisture is the primary culprit. Even in a screaming hot pan, water on the surface boils off at 212°F — and until all of it evaporates, the surface temperature stays there. The Maillard reaction needs above 285°F, so the meat is essentially steaming itself. Pat dry before you sear. Pan temperature and oil choice can matter too, but they're secondary to this."
+        },
+        {
+          "question_text": "Why does braising tough cuts like short ribs or chuck roast produce tender, silky results that roasting the same cut at high heat doesn't?",
+          "options": [
+            "Moist heat breaks down collagen into gelatin over low, slow heat — dry heat at high temperatures tightens proteins and can't do this",
+            "The liquid adds flavor that dry heat can't replicate",
+            "High roasting temperatures dry out the meat before the inside has time to cook",
+            "Short ribs and chuck are too fatty for dry heat — the fat renders incorrectly at high temperatures"
+          ],
+          "correct_index": 0,
+          "explanation": "Collagen — the connective tissue that makes tough cuts chewy — dissolves into gelatin when held at around 160–180°F for extended time in the presence of moisture. That gelatin is what creates the slippery, rich mouthfeel of a good braise. Dry heat at high temperatures works fast, but it tightens muscle fibers and can't sustain the low, humid environment needed to break down collagen. Flavor from liquid and fat rendering are real factors, but they're not the reason the meat becomes tender."
+        },
+        {
+          "question_text": "A recipe calls for you to sear short ribs, then add wine and broth, cover the pot, and cook at low heat for 3 hours. Why sear first if you're just going to braise them anyway?",
+          "options": [
+            "Searing locks in juices — without it the meat dries out during the long braise",
+            "Searing adds Maillard flavor compounds that moist heat at 212°F cannot create",
+            "Searing kills bacteria on the surface before the meat goes into liquid",
+            "The crust formed by searing holds the meat together during the long braise"
+          ],
+          "correct_index": 1,
+          "explanation": "The sear is purely about flavor — specifically, the hundreds of Maillard compounds that form above 285°F. Those deep, roasty, savory flavors cannot form once liquid is in the pot and the surface temperature drops back to 212°F. The 'sealing in juices' idea has been thoroughly debunked; seared meat loses moisture at the same rate as unseared. The sear is a flavor deposit, and the braise is a tenderizing step — they do completely different things."
+        }
+      ]
+    },
+    {
+      "id": "mission_2",
+      "mission_type": "reflection_journal",
+      "title": "Your Default Method",
+      "description": "Think about a dish you cook regularly and whether the heat method you use is actually the right one for what you're trying to achieve.",
+      "why_it_matters": "Most people default to one or two methods out of habit. Identifying that habit is the first step toward making intentional choices.",
+      "is_required": false,
+      "duration_minutes": 5,
+      "prompt": "Think of something you cook often — a protein, a vegetable, anything. What heat method do you usually use? Based on what you just learned about dry vs. moist heat and the Maillard reaction, is that the right method for the result you want, or have you been using the wrong tool without realizing it? Be specific about what the food tastes or looks like now, and what it might taste like if you changed the method.",
+      "min_words": 30
+    }
+  ]
+}

@@ -29,6 +29,12 @@ class FriendshipStatus(str, enum.Enum):
     declined = "declined"
 
 
+class LessonType(str, enum.Enum):
+    technique = "technique"
+    recipe = "recipe"
+    concept = "concept"
+
+
 class LessonCache(Base):
     __tablename__ = "lesson_cache"
 
@@ -51,6 +57,8 @@ class Lesson(Base):
     chapter_title: Mapped[str] = mapped_column(String, nullable=False)
     domain: Mapped[str] = mapped_column(String, nullable=False)
     lesson_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    lesson_type: Mapped[str | None] = mapped_column(String, nullable=True)  # technique|recipe|concept
+    skill_tags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -73,6 +81,7 @@ class UserLessonProgress(Base):
         nullable=False,
     )
     first_required_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_reflection_feedback: Mapped[str | None] = mapped_column(String, nullable=True)
     last_visited_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

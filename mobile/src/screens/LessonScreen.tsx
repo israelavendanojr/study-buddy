@@ -26,15 +26,28 @@ const TOTAL_CARDS = 5
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+interface QuizQuestion {
+  question_text: string
+  options: string[]
+  correct_index: number
+  explanation: string
+}
+
 interface Mission {
   id: string
+  mission_type: 'photo_submission' | 'reflection_journal' | 'pop_quiz'
   title: string
   description: string
   why_it_matters: string
   is_required: boolean
   duration_minutes: number
-  prompt: string
-  reflection_choices: string[]
+  // photo_submission
+  prompt?: string
+  reflection_choices?: string[]
+  // reflection_journal
+  min_words?: number
+  // pop_quiz
+  questions?: QuizQuestion[]
 }
 
 interface LessonParams {
@@ -50,13 +63,16 @@ interface LessonParams {
   lessonId: string
   onComplete: (lessonId: string) => void
   onFullyComplete?: (lessonKey: string) => void
-  initialMissionId?: string  // when set, open directly at mission submission card
+  initialMissionId?: string
 }
 
 interface LessonContent {
+  lesson_type?: 'technique' | 'recipe' | 'concept'
+  lesson_key?: string
   card1: { companion_message: string }
   card3: { headline: string; points: string[]; tell_me_more: string }
   missions: Mission[]
+  last_reflection_feedback?: string | null
 }
 
 interface MissionProgress {
@@ -72,9 +88,30 @@ interface ValidationResult {
   mission_completed: boolean
   lesson_now_required_complete: boolean
   lesson_now_fully_complete: boolean
+  companion?: Record<string, unknown>
 }
 
-// ── Progress Indicator (dots + animated bar) ───────────────────────────────────
+interface QuizAnswerResult {
+  question_index: number
+  selected: number
+  correct_index: number
+  is_correct: boolean
+  explanation: string
+}
+
+interface QuizResult {
+  results: QuizAnswerResult[]
+  score: number
+  total: number
+  passed: boolean
+  mission_completed: boolean
+  lesson_now_required_complete: boolean
+  lesson_now_fully_complete: boolean
+  xp_earned: number
+  companion?: Record<string, unknown>
+}
+
+// ── Progress Indicator ─────────────────────────────────────────────────────────
 
 function ProgressIndicator({ current, progressAnim }: { current: number; progressAnim: Animated.Value }) {
   const barWidth = progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
@@ -125,12 +162,28 @@ export default function LessonScreen() {
   const [missionProgress, setMissionProgress] = useState<MissionProgress | null>(null)
   const [progressFetched, setProgressFetched] = useState(false)
   const [currentMissionId, setCurrentMissionId] = useState<string | null>(null)
+
+  // Photo submission state
   const [selectedReflection, setSelectedReflection] = useState<string | null>(null)
   const [photoUri, setPhotoUri] = useState<string | null>(null)
   const [photoMimeType, setPhotoMimeType] = useState<string>('image/jpeg')
   const [validating, setValidating] = useState(false)
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+
+  // Reflection journal state
+  const [reflectionText, setReflectionText] = useState('')
+  const [reflectionSubmitting, setReflectionSubmitting] = useState(false)
+
+  // Pop quiz state
+  const [quizQuestionIndex, setQuizQuestionIndex] = useState(0)
+  const [quizSelectedAnswer, setQuizSelectedAnswer] = useState<number | null>(null)
+  const [quizAnswerRevealed, setQuizAnswerRevealed] = useState(false)
+  const [quizAllAnswers, setQuizAllAnswers] = useState<number[]>([])
+  const [quizResult, setQuizResult] = useState<QuizResult | null>(null)
+  const [quizSubmitting, setQuizSubmitting] = useState(false)
+
+  // Shared
   const [tellMeMoreOpen, setTellMeMoreOpen] = useState(false)
   const [shareCaption, setShareCaption] = useState('')
   const [sharePosting, setSharePosting] = useState(false)
@@ -139,8 +192,6 @@ export default function LessonScreen() {
   const hasInitializedCard = useRef(false)
 
   // ── Swipe nav ──────────────────────────────────────────────────────────────
-  // Tracks current swipe permissions — updated every render so PanResponder callbacks
-  // always see fresh values without being recreated.
   const canSwipeRef = useRef({ forward: false, back: false, index: 0 })
   const canSwipeForward = cardIndex < 2 && (cardIndex > 0 || (!loading && !!lessonContent))
   const canSwipeBack = cardIndex >= 1 && cardIndex <= 4
@@ -166,7 +217,6 @@ export default function LessonScreen() {
 
   const swipeResponder = useRef(
     PanResponder.create({
-      // Only claim gesture if clearly horizontal
       onMoveShouldSetPanResponder: (_, { dx, dy }) =>
         Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.5,
       onPanResponderMove: (_, { dx }) => {
@@ -192,7 +242,6 @@ export default function LessonScreen() {
     })
   ).current
 
-  // Stable refs so PanResponder callbacks can call the latest versions of these
   const advanceCardRef = useRef<(n: number) => void>(() => {})
   const resetSubmissionRef = useRef<() => void>(() => {})
 
@@ -255,15 +304,13 @@ export default function LessonScreen() {
     init()
   }, [])
 
-  // ── Skip to missions list on revisit, or deep-link to a specific mission ────
+  // ── Skip to missions list on revisit ────────────────────────────────────────
   useEffect(() => {
     const ready = params.userId ? progressFetched && !!lessonContent : !!lessonContent
     if (!ready || hasInitializedCard.current) return
-
     hasInitializedCard.current = true
 
     if (params.initialMissionId) {
-      // Deep-link: open directly at mission submission for this mission
       setCurrentMissionId(params.initialMissionId)
       setCardIndex(3)
       progressAnim.setValue(3 / TOTAL_CARDS)
@@ -272,6 +319,17 @@ export default function LessonScreen() {
       progressAnim.setValue(2 / TOTAL_CARDS)
     }
   }, [lessonContent, progressFetched, missionProgress])
+
+  // ── Reset quiz/reflection state when mission changes ────────────────────────
+  useEffect(() => {
+    setQuizQuestionIndex(0)
+    setQuizSelectedAnswer(null)
+    setQuizAnswerRevealed(false)
+    setQuizAllAnswers([])
+    setQuizResult(null)
+    setReflectionText('')
+    setReflectionSubmitting(false)
+  }, [currentMissionId])
 
   // ── Card transition ─────────────────────────────────────────────────────────
   const advanceCard = (nextIndex: number) => {
@@ -283,7 +341,6 @@ export default function LessonScreen() {
         duration: 300,
         useNativeDriver: false,
       }).start()
-      // Slide in from the correct direction
       cardTranslateX.setValue(nextIndex > fromIndex ? 20 : -20)
       Animated.parallel([
         Animated.timing(cardOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
@@ -305,7 +362,7 @@ export default function LessonScreen() {
 
   // ── Loading dots ────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (validating) {
+    if (validating || reflectionSubmitting) {
       dotLoops.current.forEach(l => l.stop())
       dotLoops.current = [dot1, dot2, dot3].map((anim, i) => {
         anim.setValue(0.3)
@@ -320,11 +377,9 @@ export default function LessonScreen() {
       })
     } else {
       dotLoops.current.forEach(l => l.stop())
-      dot1.setValue(0.3)
-      dot2.setValue(0.3)
-      dot3.setValue(0.3)
+      dot1.setValue(0.3); dot2.setValue(0.3); dot3.setValue(0.3)
     }
-  }, [validating])
+  }, [validating, reflectionSubmitting])
 
   // ── Card 5 reveal animations ────────────────────────────────────────────────
   useEffect(() => {
@@ -383,8 +438,8 @@ export default function LessonScreen() {
     ])
   }
 
-  // ── Submit mission ──────────────────────────────────────────────────────────
-  const handleSubmit = async () => {
+  // ── Submit photo mission ────────────────────────────────────────────────────
+  const handlePhotoSubmit = async () => {
     if (!photoUri || !selectedReflection || !lessonContent || !currentMissionId) return
     const mission = lessonContent.missions.find(m => m.id === currentMissionId)
     if (!mission) return
@@ -400,7 +455,7 @@ export default function LessonScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: params.userId,
-          lesson_key: params.lessonKey,
+          lesson_key: lessonContent.lesson_key ?? params.lessonKey,
           mission_id: currentMissionId,
           photo_base64: base64,
           photo_media_type: photoMimeType,
@@ -415,7 +470,6 @@ export default function LessonScreen() {
       const data: ValidationResult = await res.json()
       setValidationResult(data)
 
-      // Update local mission progress
       if (data.mission_completed) {
         setMissionProgress(prev => ({
           completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
@@ -424,17 +478,14 @@ export default function LessonScreen() {
         }))
       }
 
-      // Signal roadmap to unlock next lesson
       if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
         hasSignaledComplete.current = true
         params.onComplete(params.lessonId)
       }
 
-      // Signal roadmap that all missions (including optional) are done
       if (data.lesson_now_fully_complete) {
         params.onFullyComplete?.(params.lessonKey)
       }
-
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : 'Something went wrong')
     } finally {
@@ -442,9 +493,134 @@ export default function LessonScreen() {
     }
   }
 
+  // ── Submit reflection journal ───────────────────────────────────────────────
+  const handleReflectionSubmit = async () => {
+    if (!reflectionText.trim() || !lessonContent || !currentMissionId || !params.userId) return
+    const mission = lessonContent.missions.find(m => m.id === currentMissionId)
+    if (!mission) return
+
+    setReflectionSubmitting(true)
+    advanceCard(4)
+
+    try {
+      const res = await fetch(`${API_BASE}/lesson/reflect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: params.userId,
+          lesson_key: lessonContent.lesson_key ?? params.lessonKey,
+          mission_id: currentMissionId,
+          reflection_text: reflectionText.trim(),
+          buddy_name: params.buddyName,
+          lesson_title: params.lessonTitle,
+          goal: params.goal,
+        }),
+      })
+      if (!res.ok) throw new Error(`Server error ${res.status}`)
+      const data: ValidationResult = await res.json()
+      setValidationResult(data)
+
+      if (data.mission_completed) {
+        setMissionProgress(prev => ({
+          completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
+          is_required_complete: data.lesson_now_required_complete || (prev?.is_required_complete ?? false),
+          is_fully_complete: prev?.is_fully_complete ?? false,
+        }))
+      }
+
+      if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
+        hasSignaledComplete.current = true
+        params.onComplete(params.lessonId)
+      }
+
+      if (data.lesson_now_fully_complete) {
+        params.onFullyComplete?.(params.lessonKey)
+      }
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : 'Something went wrong')
+    } finally {
+      setReflectionSubmitting(false)
+    }
+  }
+
+  // ── Quiz answer selection ───────────────────────────────────────────────────
+  const handleQuizAnswer = (answerIndex: number) => {
+    if (quizAnswerRevealed) return
+    setQuizSelectedAnswer(answerIndex)
+    setQuizAnswerRevealed(true)
+  }
+
+  const handleQuizNext = () => {
+    if (quizSelectedAnswer === null) return
+    const newAnswers = [...quizAllAnswers, quizSelectedAnswer]
+    setQuizAllAnswers(newAnswers)
+    setQuizQuestionIndex(i => i + 1)
+    setQuizSelectedAnswer(null)
+    setQuizAnswerRevealed(false)
+  }
+
+  const handleQuizFinish = async () => {
+    if (!lessonContent || !currentMissionId || !params.userId || quizSelectedAnswer === null) return
+    const finalAnswers = [...quizAllAnswers, quizSelectedAnswer]
+
+    // Score locally first for immediate feedback
+    const mission = lessonContent.missions.find(m => m.id === currentMissionId)
+    const questions = mission?.questions ?? []
+    let correct = 0
+    const localResults: QuizAnswerResult[] = questions.map((q, i) => {
+      const selected = finalAnswers[i] ?? -1
+      const is_correct = selected === q.correct_index
+      if (is_correct) correct++
+      return { question_index: i, selected, correct_index: q.correct_index, is_correct, explanation: q.explanation }
+    })
+
+    setQuizResult({
+      results: localResults,
+      score: correct,
+      total: questions.length,
+      passed: correct >= Math.max(1, Math.round(questions.length * 0.67)),
+      mission_completed: true,
+      lesson_now_required_complete: false,
+      lesson_now_fully_complete: false,
+      xp_earned: 20,
+    })
+
+    // Submit to server for XP/progress in background
+    setQuizSubmitting(true)
+    try {
+      const res = await fetch(`${API_BASE}/lesson/quiz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: params.userId,
+          lesson_key: lessonContent.lesson_key ?? params.lessonKey,
+          mission_id: currentMissionId,
+          answers: finalAnswers,
+        }),
+      })
+      if (res.ok) {
+        const data: QuizResult = await res.json()
+        setQuizResult(data)
+        if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
+          hasSignaledComplete.current = true
+          params.onComplete(params.lessonId)
+        }
+        if (data.lesson_now_fully_complete) {
+          params.onFullyComplete?.(params.lessonKey)
+        }
+        setMissionProgress(prev => ({
+          completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
+          is_required_complete: data.lesson_now_required_complete || (prev?.is_required_complete ?? false),
+          is_fully_complete: prev?.is_fully_complete ?? false,
+        }))
+      }
+    } catch { /* local result already shown */ } finally {
+      setQuizSubmitting(false)
+    }
+  }
+
   // ── Exit lesson ─────────────────────────────────────────────────────────────
   const handleExit = () => {
-    // Signal completion if required missions are done but we haven't signaled yet
     if (missionProgress?.is_required_complete && !hasSignaledComplete.current) {
       hasSignaledComplete.current = true
       params.onComplete(params.lessonId)
@@ -478,7 +654,7 @@ export default function LessonScreen() {
     }
   }
 
-  // ── Reset submission state between missions ─────────────────────────────────
+  // ── Reset between missions ──────────────────────────────────────────────────
   const resetSubmission = () => {
     setPhotoUri(null)
     setPhotoMimeType('image/jpeg')
@@ -487,6 +663,13 @@ export default function LessonScreen() {
     setSubmitError(null)
     setShareCaption('')
     setSharePosted(false)
+    setReflectionText('')
+    setReflectionSubmitting(false)
+    setQuizQuestionIndex(0)
+    setQuizSelectedAnswer(null)
+    setQuizAnswerRevealed(false)
+    setQuizAllAnswers([])
+    setQuizResult(null)
   }
   resetSubmissionRef.current = resetSubmission
 
@@ -515,8 +698,18 @@ export default function LessonScreen() {
   // Card 0: Hook
   const renderCard0 = () => {
     const isReady = !loading && !!lessonContent
+    const priorFeedback = lessonContent?.last_reflection_feedback
+
     return (
       <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
+        {/* Prior session feedback banner */}
+        {isReady && !!priorFeedback && (
+          <View style={styles.priorFeedbackCard}>
+            <Text style={styles.priorFeedbackLabel}>From last session</Text>
+            <Text style={styles.priorFeedbackText}>{priorFeedback}</Text>
+          </View>
+        )}
+
         <View style={styles.companionCenter}>
           <Companion size={100} mood={isReady ? 'happy' : 'thinking'} />
         </View>
@@ -575,7 +768,7 @@ export default function LessonScreen() {
     )
   }
 
-  // Card 3: Missions List
+  // Card 2: Missions List
   const renderCard3 = () => {
     if (!lessonContent) return null
     const { missions } = lessonContent
@@ -583,6 +776,12 @@ export default function LessonScreen() {
     const requiredMissions = missions.filter(m => m.is_required)
     const optionalMissions = missions.filter(m => !m.is_required)
     const isRequiredComplete = missionProgress?.is_required_complete ?? false
+
+    const missionTypeIcon = (type: string) => {
+      if (type === 'pop_quiz') return '🎯'
+      if (type === 'reflection_journal') return '📝'
+      return '📷'
+    }
 
     return (
       <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
@@ -611,6 +810,7 @@ export default function LessonScreen() {
                   <View style={styles.requiredBadge}>
                     <Text style={styles.requiredBadgeText}>Required</Text>
                   </View>
+                  <Text style={styles.missionTypeIcon}>{missionTypeIcon(mission.mission_type)}</Text>
                   {isDone && <Text style={styles.missionDoneCheck}>✓</Text>}
                 </View>
                 <Text style={[styles.missionTitle, isDone && styles.missionTitleDone]}>
@@ -635,6 +835,9 @@ export default function LessonScreen() {
                   style={[styles.missionItem, styles.missionItemOptional, isDone && styles.missionItemDone]}
                 >
                   <View style={styles.missionItemBody}>
+                    <View style={styles.missionItemTop}>
+                      <Text style={styles.missionTypeIcon}>{missionTypeIcon(mission.mission_type)}</Text>
+                    </View>
                     <Text style={[styles.missionTitle, isDone && styles.missionTitleDone]}>
                       {mission.title}
                     </Text>
@@ -670,23 +873,20 @@ export default function LessonScreen() {
     )
   }
 
-  // Card 4: Mission Submission
+  // Card 3: Mission Submission (branches on mission_type)
   const renderCard4 = () => {
     if (!lessonContent || !currentMissionId) return null
     const mission = lessonContent.missions.find(m => m.id === currentMissionId)
     if (!mission) return null
-    const canSubmit = !!photoUri && !!selectedReflection
 
     return (
       <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
         <Pressable onPress={() => advanceCard(2)} style={styles.backLink}>
           <Text style={styles.backLinkText}>← Back to missions</Text>
         </Pressable>
-
         <View style={styles.companionRow}>
           <Companion size={60} mood="happy" />
         </View>
-
         <View style={styles.missionBanner}>
           {mission.is_required && (
             <View style={styles.requiredBadge}>
@@ -696,11 +896,23 @@ export default function LessonScreen() {
           <Text style={styles.sectionHeading}>{mission.title}</Text>
           <Text style={styles.missionWhyText}>{mission.why_it_matters}</Text>
         </View>
-
         <View style={styles.descriptionCallout}>
           <Text style={styles.bodyText}>{mission.description}</Text>
         </View>
 
+        {mission.mission_type === 'photo_submission' && renderPhotoSubmission(mission)}
+        {mission.mission_type === 'reflection_journal' && renderReflectionJournal(mission)}
+        {mission.mission_type === 'pop_quiz' && renderPopQuiz(mission)}
+      </ScrollView>
+    )
+  }
+
+  // ── Photo submission UI ─────────────────────────────────────────────────────
+  const renderPhotoSubmission = (mission: Mission) => {
+    const canSubmit = !!photoUri && !!selectedReflection
+
+    return (
+      <>
         <View style={styles.focusCallout}>
           <Text style={styles.focusCalloutText}>{mission.prompt}</Text>
         </View>
@@ -720,7 +932,7 @@ export default function LessonScreen() {
         )}
 
         <View style={styles.reflectionGrid}>
-          {mission.reflection_choices.map((choice, i) => {
+          {(mission.reflection_choices ?? []).map((choice, i) => {
             const isSelected = selectedReflection === choice
             return (
               <Pressable
@@ -737,17 +949,155 @@ export default function LessonScreen() {
         </View>
 
         <Pressable
-          onPress={handleSubmit}
+          onPress={handlePhotoSubmit}
           disabled={!canSubmit}
           style={[styles.primaryBtn, shadows.mint, !canSubmit && styles.btnDisabled]}
         >
           <Text style={styles.primaryBtnText}>Submit →</Text>
         </Pressable>
-      </ScrollView>
+      </>
     )
   }
 
-  // Card 5: Mission Feedback
+  // ── Reflection journal UI ───────────────────────────────────────────────────
+  const renderReflectionJournal = (mission: Mission) => {
+    const wordCount = reflectionText.trim().split(/\s+/).filter(Boolean).length
+    const minWords = mission.min_words ?? 30
+    const canSubmit = reflectionText.trim().length > 0 && !!params.userId
+
+    return (
+      <>
+        <View style={styles.focusCallout}>
+          <Text style={styles.focusCalloutText}>{mission.prompt}</Text>
+        </View>
+
+        <TextInput
+          style={styles.journalInput}
+          multiline
+          numberOfLines={6}
+          placeholder="Write your reflection here…"
+          placeholderTextColor={colors.muted}
+          value={reflectionText}
+          onChangeText={setReflectionText}
+          textAlignVertical="top"
+        />
+
+        <Text style={[styles.wordCount, wordCount >= minWords && styles.wordCountMet]}>
+          {wordCount} / {minWords} words suggested
+        </Text>
+
+        <Pressable
+          onPress={handleReflectionSubmit}
+          disabled={!canSubmit}
+          style={[styles.primaryBtn, shadows.mint, !canSubmit && styles.btnDisabled]}
+        >
+          <Text style={styles.primaryBtnText}>Submit reflection →</Text>
+        </Pressable>
+      </>
+    )
+  }
+
+  // ── Pop quiz UI ─────────────────────────────────────────────────────────────
+  const renderPopQuiz = (mission: Mission) => {
+    const questions = mission.questions ?? []
+
+    // Quiz complete — show results
+    if (quizResult) {
+      const xpAnim = xpScale
+      return (
+        <View>
+          <View style={styles.quizScoreCard}>
+            <Text style={styles.quizScoreText}>
+              {quizResult.score}/{quizResult.total} correct
+            </Text>
+            <Text style={styles.quizPassLabel}>
+              {quizResult.passed ? 'Nice work!' : 'Keep at it'}
+            </Text>
+          </View>
+
+          {quizResult.results.map((r, i) => (
+            <View
+              key={i}
+              style={[styles.quizResultRow, r.is_correct ? styles.quizResultCorrect : styles.quizResultWrong]}
+            >
+              <Text style={styles.quizResultQ}>{questions[i]?.question_text}</Text>
+              <Text style={styles.quizResultExplanation}>{r.explanation}</Text>
+            </View>
+          ))}
+
+          <View style={styles.xpRow}>
+            <Animated.View style={[styles.xpBadge, { transform: [{ scale: xpAnim }] }]}>
+              <Text style={styles.xpBadgeText}>✦ +{quizResult.xp_earned} XP</Text>
+            </Animated.View>
+          </View>
+
+          <Pressable
+            onPress={() => { resetSubmission(); advanceCard(2) }}
+            style={[styles.primaryBtn, shadows.mint, { marginTop: 8 }]}
+          >
+            <Text style={styles.primaryBtnText}>Back to missions →</Text>
+          </Pressable>
+          <Pressable onPress={handleExit} style={styles.exitBtn}>
+            <Text style={styles.exitBtnText}>Exit lesson</Text>
+          </Pressable>
+        </View>
+      )
+    }
+
+    // Active question
+    if (quizQuestionIndex >= questions.length) return null
+    const q = questions[quizQuestionIndex]
+    const isLast = quizQuestionIndex === questions.length - 1
+
+    return (
+      <View>
+        <Text style={styles.quizProgress}>
+          Question {quizQuestionIndex + 1} of {questions.length}
+        </Text>
+        <Text style={styles.quizQuestion}>{q.question_text}</Text>
+
+        <View style={styles.quizOptions}>
+          {q.options.map((option, i) => {
+            const isSelected = quizSelectedAnswer === i
+            const isCorrect = i === q.correct_index
+            let optStyle = styles.quizOption
+            if (quizAnswerRevealed) {
+              if (isCorrect) optStyle = { ...optStyle, ...styles.quizOptionCorrect } as typeof optStyle
+              else if (isSelected) optStyle = { ...optStyle, ...styles.quizOptionWrong } as typeof optStyle
+            } else if (isSelected) {
+              optStyle = { ...optStyle, ...styles.quizOptionSelected } as typeof optStyle
+            }
+
+            return (
+              <Pressable key={i} onPress={() => handleQuizAnswer(i)} style={optStyle} disabled={quizAnswerRevealed}>
+                <Text style={styles.quizOptionText}>{option}</Text>
+              </Pressable>
+            )
+          })}
+        </View>
+
+        {quizAnswerRevealed && (
+          <View style={styles.quizExplanation}>
+            <Text style={styles.quizExplanationText}>{q.explanation}</Text>
+          </View>
+        )}
+
+        {quizAnswerRevealed && (
+          <Pressable
+            onPress={isLast ? handleQuizFinish : handleQuizNext}
+            disabled={quizSubmitting}
+            style={[styles.primaryBtn, shadows.mint, { marginTop: 16 }]}
+          >
+            <Text style={styles.primaryBtnText}>
+              {isLast ? 'See results →' : 'Next question →'}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+    )
+  }
+
+  // Card 4: Feedback (photo + reflection journal results)
   const renderCard5 = () => {
     if (submitError) {
       return (
@@ -765,11 +1115,13 @@ export default function LessonScreen() {
       )
     }
 
-    if (validating || !validationResult) {
+    const isLoading = validating || reflectionSubmitting
+    if (isLoading || !validationResult) {
+      const loadingMsg = reflectionSubmitting ? 'Reading your reflection…' : 'Reviewing your work…'
       return (
         <View style={styles.feedbackLoading}>
           <Companion size={100} mood="thinking" />
-          <Text style={styles.loadingText}>Reviewing your work...</Text>
+          <Text style={styles.loadingText}>{loadingMsg}</Text>
           <View style={styles.dotsRow}>
             <Animated.View style={[styles.loadingDot, { opacity: dot1 }]} />
             <Animated.View style={[styles.loadingDot, { opacity: dot2 }]} />
@@ -804,8 +1156,8 @@ export default function LessonScreen() {
           </Animated.View>
         )}
 
-        {/* ── Share to feed prompt (valid submissions only) ──────────────── */}
-        {validationResult.is_valid && (
+        {/* Share to feed — photo missions only */}
+        {(validationResult as ValidationResult).is_valid === true && photoUri && (
           <Animated.View style={[styles.shareCard, { opacity: feedbackOpacity }]}>
             {sharePosted ? (
               <View style={styles.shareSuccessRow}>
@@ -886,26 +1238,12 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
 
-  // Card content layout
-  cardContent: {
-    flexGrow: 1,
-  },
-  spacer: {
-    flex: 1,
-    minHeight: 24,
-  },
+  cardContent: { flexGrow: 1 },
+  spacer: { flex: 1, minHeight: 24 },
 
-  // Companion positioning
-  companionCenter: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  companionRow: {
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
+  companionCenter: { alignItems: 'center', marginBottom: 24 },
+  companionRow: { alignItems: 'flex-start', marginBottom: 16 },
 
-  // Soft message card
   messageCard: {
     backgroundColor: colors.card,
     borderRadius: radius.md,
@@ -913,7 +1251,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
 
-  // Typography
   bodyText: {
     fontFamily: 'Nunito_400Regular',
     fontSize: 16,
@@ -936,7 +1273,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  // Buttons
   primaryBtn: {
     backgroundColor: colors.mint,
     borderRadius: radius.lg,
@@ -944,31 +1280,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  btnDisabled: {
-    opacity: 0.4,
-  },
+  btnDisabled: { opacity: 0.4 },
   primaryBtnText: {
     fontFamily: 'FredokaOne_400Regular',
     fontSize: 18,
     color: colors.foreground,
   },
-  exitBtnMuted: {
-    backgroundColor: colors.card,
-  },
-  exitBtn: {
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 4,
-  },
+  exitBtnMuted: { backgroundColor: colors.card },
+  exitBtn: { paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   exitBtnText: {
     fontFamily: 'Nunito_400Regular',
     fontSize: 16,
     color: colors.muted,
   },
-  backLink: {
-    paddingVertical: 4,
-    paddingBottom: 12,
-  },
+  backLink: { paddingVertical: 4, paddingBottom: 12 },
   backLinkText: {
     fontFamily: 'Nunito_600SemiBold',
     fontSize: 14,
@@ -995,16 +1320,14 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
 
-  // Card 3 — Missions header
+  // Missions list
   missionsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
     marginBottom: 20,
   },
-  missionsHeaderText: {
-    flex: 1,
-  },
+  missionsHeaderText: { flex: 1 },
   completeBadge: {
     backgroundColor: colors.mint + '33',
     borderRadius: radius.sm,
@@ -1018,8 +1341,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.foreground,
   },
-
-  // Card 3 — Mission items
   missionItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1033,12 +1354,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  missionItemDone: {
-    opacity: 0.6,
-  },
-  missionItemBody: {
-    flex: 1,
-  },
+  missionItemDone: { opacity: 0.6 },
+  missionItemBody: { flex: 1 },
   missionItemTop: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1057,16 +1374,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.foreground,
   },
+  missionTypeIcon: { fontSize: 14 },
   missionTitle: {
     fontFamily: 'Nunito_600SemiBold',
     fontSize: 15,
     color: colors.foreground,
     marginBottom: 2,
   },
-  missionTitleDone: {
-    textDecorationLine: 'line-through',
-    color: colors.muted,
-  },
+  missionTitleDone: { textDecorationLine: 'line-through', color: colors.muted },
   missionMeta: {
     fontFamily: 'Nunito_400Regular',
     fontSize: 12,
@@ -1092,8 +1407,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-
-  // Review earlier cards row
   reviewRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1118,10 +1431,8 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
 
-  // Card 4 — Mission submission
-  missionBanner: {
-    marginBottom: 8,
-  },
+  // Mission submission
+  missionBanner: { marginBottom: 8 },
   focusCallout: {
     backgroundColor: colors.golden + '33',
     borderLeftWidth: 3,
@@ -1136,6 +1447,18 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     lineHeight: 22,
   },
+  missionWhyText: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 13,
+    color: colors.muted,
+    marginTop: 4,
+  },
+  descriptionCallout: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.peach,
+    paddingLeft: 14,
+    marginBottom: 16,
+  },
 
   // Photo picker
   photoPlaceholder: {
@@ -1149,23 +1472,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     gap: 8,
   },
-  photoIcon: {
-    fontSize: 32,
-  },
+  photoIcon: { fontSize: 32 },
   photoPlaceholderText: {
     fontFamily: 'Nunito_600SemiBold',
     fontSize: 14,
     color: colors.muted,
   },
-  photoContainer: {
-    marginBottom: 20,
-    position: 'relative',
-  },
-  photoPreview: {
-    width: '100%',
-    height: 200,
-    borderRadius: radius.md,
-  },
+  photoContainer: { marginBottom: 20, position: 'relative' },
+  photoPreview: { width: '100%', height: 200, borderRadius: radius.md },
   changePhotoBtn: {
     position: 'absolute',
     top: 10,
@@ -1181,7 +1495,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 
-  // Reflection
+  // Reflection pills
   reflectionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1194,19 +1508,123 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  reflectionPillSelected: {
-    backgroundColor: colors.mint,
-  },
+  reflectionPillSelected: { backgroundColor: colors.mint },
   reflectionPillText: {
     fontFamily: 'Nunito_600SemiBold',
     fontSize: 14,
     color: colors.foreground,
   },
-  reflectionPillTextSelected: {
+  reflectionPillTextSelected: { color: colors.foreground },
+
+  // Journal input
+  journalInput: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 16,
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 15,
+    color: colors.foreground,
+    lineHeight: 24,
+    minHeight: 140,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  wordCount: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 12,
+    color: colors.muted,
+    textAlign: 'right',
+    marginBottom: 16,
+  },
+  wordCountMet: { color: colors.mint },
+
+  // Pop quiz
+  quizProgress: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 12,
+    color: colors.muted,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  quizQuestion: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 20,
+    color: colors.foreground,
+    lineHeight: 26,
+    marginBottom: 20,
+  },
+  quizOptions: { gap: 10, marginBottom: 8 },
+  quizOption: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  } as any,
+  quizOptionSelected: { borderColor: colors.mint, backgroundColor: colors.mint + '22' },
+  quizOptionCorrect: { backgroundColor: colors.mint + '44', borderColor: colors.mint },
+  quizOptionWrong: { backgroundColor: colors.peach + '44', borderColor: colors.peach },
+  quizOptionText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 15,
+    color: colors.foreground,
+    lineHeight: 22,
+  },
+  quizExplanation: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 14,
+    marginTop: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.sky,
+  },
+  quizExplanationText: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 14,
+    color: colors.foreground,
+    lineHeight: 22,
+  },
+  quizScoreCard: {
+    backgroundColor: colors.mint + '33',
+    borderRadius: radius.md,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  quizScoreText: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 32,
     color: colors.foreground,
   },
+  quizPassLabel: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 14,
+    color: colors.foreground,
+    marginTop: 4,
+  },
+  quizResultRow: {
+    borderRadius: radius.sm,
+    padding: 12,
+    marginBottom: 8,
+  },
+  quizResultCorrect: { backgroundColor: colors.mint + '22' },
+  quizResultWrong: { backgroundColor: colors.peach + '22' },
+  quizResultQ: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 13,
+    color: colors.foreground,
+    marginBottom: 4,
+  },
+  quizResultExplanation: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 13,
+    color: colors.muted,
+    lineHeight: 20,
+  },
 
-  // Card 5 — Loading
+  // Feedback loading
   feedbackLoading: {
     flex: 1,
     alignItems: 'center',
@@ -1218,10 +1636,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.muted,
   },
-  dotsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
+  dotsRow: { flexDirection: 'row', gap: 8 },
   loadingDot: {
     width: 10,
     height: 10,
@@ -1229,12 +1644,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.mint,
   },
 
-  // Card 5 — XP badge
-  xpRow: {
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 16,
-  },
+  // XP badge
+  xpRow: { alignItems: 'center', marginTop: 8, marginBottom: 16 },
   xpBadge: {
     backgroundColor: colors.golden + '33',
     borderRadius: radius.sm,
@@ -1248,7 +1659,7 @@ const styles = StyleSheet.create({
     color: colors.foreground,
   },
 
-  // Card 5 — Required complete banner
+  // Required complete banner
   requiredCompleteCard: {
     backgroundColor: colors.mint + '33',
     borderRadius: radius.md,
@@ -1261,6 +1672,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.foreground,
     textAlign: 'center',
+    lineHeight: 22,
+  },
+
+  // Prior session feedback
+  priorFeedbackCard: {
+    backgroundColor: colors.sky + '33',
+    borderRadius: radius.md,
+    padding: 14,
+    marginBottom: 20,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.sky,
+  },
+  priorFeedbackLabel: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 11,
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  priorFeedbackText: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 14,
+    color: colors.foreground,
     lineHeight: 22,
   },
 
@@ -1286,7 +1721,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  // ── Card 3: Deep Dive ────────────────────────────────────────────────────────
+  // Deep Dive card
   card3Headline: {
     fontFamily: 'FredokaOne_400Regular',
     fontSize: 22,
@@ -1294,20 +1729,9 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     marginBottom: 12,
   },
-  bulletList: {
-    gap: 10,
-    marginBottom: 8,
-  },
-  bulletRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  bulletDot: {
-    color: colors.mint,
-    fontSize: 18,
-    lineHeight: 24,
-  },
+  bulletList: { gap: 10, marginBottom: 8 },
+  bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  bulletDot: { color: colors.mint, fontSize: 18, lineHeight: 24 },
   bulletText: {
     fontFamily: 'Nunito_600SemiBold',
     fontSize: 15,
@@ -1316,15 +1740,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  // ── Card 4: Mission why_it_matters ───────────────────────────────────────────
-  missionWhyText: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 13,
-    color: colors.muted,
-    marginTop: 4,
-  },
-
-  // ── Card 0: Speech bubble ────────────────────────────────────────────────────
+  // Hook card speech bubble
   speechBubbleTail: {
     alignSelf: 'center',
     width: 0,
@@ -1344,15 +1760,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
 
-  // ── Card 3: Description accent ───────────────────────────────────────────────
-  descriptionCallout: {
-    borderLeftWidth: 3,
-    borderLeftColor: colors.peach,
-    paddingLeft: 14,
-    marginBottom: 16,
-  },
-
-  // ── Card 5: Share to feed ────────────────────────────────────────────────────
+  // Share to feed
   shareCard: {
     backgroundColor: colors.card,
     borderRadius: radius.md,
@@ -1396,10 +1804,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.foreground,
   },
-  shareSuccessRow: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
+  shareSuccessRow: { alignItems: 'center', paddingVertical: 8 },
   shareSuccessText: {
     fontFamily: 'Nunito_600SemiBold',
     fontSize: 14,
