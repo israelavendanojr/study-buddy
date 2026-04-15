@@ -23,6 +23,12 @@ class Rarity(str, enum.Enum):
     legendary = "legendary"
 
 
+class FriendshipStatus(str, enum.Enum):
+    pending = "pending"
+    accepted = "accepted"
+    declined = "declined"
+
+
 class LessonCache(Base):
     __tablename__ = "lesson_cache"
 
@@ -166,3 +172,75 @@ class CompanionEquipped(Base):
     equipped_outfit_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("cosmetic_items.id"), nullable=True)
     equipped_accessories: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     equipped_room_decorations: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+
+
+class Post(Base):
+    __tablename__ = "posts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    clerk_user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    photo_url: Mapped[str] = mapped_column(String, nullable=False)
+    caption: Mapped[str | None] = mapped_column(String, nullable=True)
+    lesson_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    lesson_title: Mapped[str | None] = mapped_column(String, nullable=True)
+    chapter_title: Mapped[str | None] = mapped_column(String, nullable=True)
+    domain: Mapped[str | None] = mapped_column(String, nullable=True)
+    companion_color_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class PostLike(Base):
+    __tablename__ = "post_likes"
+    __table_args__ = (UniqueConstraint("post_id", "clerk_user_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    post_id: Mapped[int] = mapped_column(Integer, ForeignKey("posts.id"), nullable=False, index=True)
+    clerk_user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class PostComment(Base):
+    __tablename__ = "post_comments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    post_id: Mapped[int] = mapped_column(Integer, ForeignKey("posts.id"), nullable=False, index=True)
+    clerk_user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    display_name: Mapped[str] = mapped_column(String, nullable=False)
+    companion_color_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    body: Mapped[str] = mapped_column(String(300), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class Friendship(Base):
+    __tablename__ = "friendships"
+    __table_args__ = (UniqueConstraint("requester_id", "addressee_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    requester_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    addressee_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    status: Mapped[FriendshipStatus] = mapped_column(
+        Enum(FriendshipStatus), nullable=False, default=FriendshipStatus.pending
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )

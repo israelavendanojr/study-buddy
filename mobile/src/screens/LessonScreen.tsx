@@ -10,12 +10,14 @@ import {
   Image,
   Animated,
   PanResponder,
+  TextInput,
 } from 'react-native'
 import { useRoute, useNavigation } from '@react-navigation/native'
 import type { RouteProp } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import * as ImagePicker from 'expo-image-picker'
 import { File } from 'expo-file-system'
+import { useUser } from '@clerk/clerk-expo'
 import Companion from '../components/Companion'
 import { colors, radius, shadows } from '../theme'
 
@@ -113,6 +115,7 @@ export default function LessonScreen() {
   const route = useRoute<RouteProp<{ params: LessonParams }, 'params'>>()
   const navigation = useNavigation<StackNavigationProp<any>>()
   const params = route.params as LessonParams
+  const { user } = useUser()
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [cardIndex, setCardIndex] = useState(0)
@@ -129,6 +132,9 @@ export default function LessonScreen() {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [tellMeMoreOpen, setTellMeMoreOpen] = useState(false)
+  const [shareCaption, setShareCaption] = useState('')
+  const [sharePosting, setSharePosting] = useState(false)
+  const [sharePosted, setSharePosted] = useState(false)
   const hasSignaledComplete = useRef(false)
   const hasInitializedCard = useRef(false)
 
@@ -446,6 +452,32 @@ export default function LessonScreen() {
     navigation.goBack()
   }
 
+  // ── Share to feed ────────────────────────────────────────────────────────────
+  const handleShareToFeed = async () => {
+    if (!photoUri || !params.userId) return
+    setSharePosting(true)
+    try {
+      const base64 = await new File(photoUri).base64()
+      const res = await fetch(`${API_BASE}/social/posts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clerk_user_id: params.userId,
+          photo_base64: base64,
+          display_name: user?.fullName ?? user?.firstName ?? null,
+          caption: shareCaption.trim() || null,
+          lesson_key: params.lessonKey,
+          lesson_title: params.lessonTitle,
+          chapter_title: params.chapterTitle,
+          domain: params.domain,
+        }),
+      })
+      if (res.ok) setSharePosted(true)
+    } catch { /* ignore */ } finally {
+      setSharePosting(false)
+    }
+  }
+
   // ── Reset submission state between missions ─────────────────────────────────
   const resetSubmission = () => {
     setPhotoUri(null)
@@ -453,6 +485,8 @@ export default function LessonScreen() {
     setSelectedReflection(null)
     setValidationResult(null)
     setSubmitError(null)
+    setShareCaption('')
+    setSharePosted(false)
   }
   resetSubmissionRef.current = resetSubmission
 
@@ -769,6 +803,40 @@ export default function LessonScreen() {
             <Text style={styles.requiredCompleteText}>Required missions complete! Next lesson unlocked 🎉</Text>
           </Animated.View>
         )}
+
+        {/* ── Share to feed prompt (valid submissions only) ──────────────── */}
+        {validationResult.is_valid && (
+          <Animated.View style={[styles.shareCard, { opacity: feedbackOpacity }]}>
+            {sharePosted ? (
+              <View style={styles.shareSuccessRow}>
+                <Text style={styles.shareSuccessText}>Posted to feed ✓</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.shareCardTitle}>Share your progress?</Text>
+                <Text style={styles.shareCardSub}>{params.lessonTitle}</Text>
+                <TextInput
+                  style={styles.shareCaptionInput}
+                  placeholder="Add a caption… (optional)"
+                  placeholderTextColor={colors.muted}
+                  value={shareCaption}
+                  onChangeText={setShareCaption}
+                  maxLength={200}
+                />
+                <Pressable
+                  onPress={handleShareToFeed}
+                  disabled={sharePosting}
+                  style={[styles.shareBtn, sharePosting && styles.btnDisabled]}
+                >
+                  <Text style={styles.shareBtnText}>
+                    {sharePosting ? 'Posting…' : 'Post to Feed'}
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </Animated.View>
+        )}
+
         <View style={styles.spacer} />
         <Pressable
           onPress={() => { resetSubmission(); advanceCard(2) }}
@@ -1282,5 +1350,59 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.peach,
     paddingLeft: 14,
     marginBottom: 16,
+  },
+
+  // ── Card 5: Share to feed ────────────────────────────────────────────────────
+  shareCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  shareCardTitle: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 17,
+    color: colors.foreground,
+    marginBottom: 2,
+  },
+  shareCardSub: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 13,
+    color: colors.muted,
+    marginBottom: 12,
+  },
+  shareCaptionInput: {
+    backgroundColor: colors.background,
+    borderRadius: radius.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 14,
+    color: colors.foreground,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 10,
+  },
+  shareBtn: {
+    backgroundColor: colors.peach,
+    borderRadius: radius.sm,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  shareBtnText: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 14,
+    color: colors.foreground,
+  },
+  shareSuccessRow: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  shareSuccessText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 14,
+    color: colors.foreground,
   },
 })

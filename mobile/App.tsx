@@ -24,6 +24,8 @@ import HomeScreen from './src/screens/HomeScreen'
 import CompanionHomeScreen from './src/screens/CompanionHomeScreen'
 import CompanionShopScreen from './src/screens/CompanionShopScreen'
 import BadgesScreen from './src/screens/BadgesScreen'
+import FriendSearchScreen from './src/screens/FriendSearchScreen'
+import PostDetailScreen from './src/screens/PostDetailScreen'
 import SettingsScreen from './src/screens/SettingsScreen'
 import SignInScreen from './src/screens/SignInScreen'
 import SignUpScreen from './src/screens/SignUpScreen'
@@ -73,6 +75,8 @@ return <View style={{ flex: 1, backgroundColor: colors.background }} />
           <Stack.Screen name="Badges" component={BadgesScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="CompanionShop" component={CompanionShopScreen} />
+          <Stack.Screen name="FriendSearch" component={FriendSearchScreen} />
+          <Stack.Screen name="PostDetail" component={PostDetailScreen} />
         </>
       ) : (
         <>

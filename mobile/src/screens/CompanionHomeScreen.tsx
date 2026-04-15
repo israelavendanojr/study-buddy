@@ -671,6 +671,14 @@ export default function CompanionHomeScreen() {
         >
           <Text style={styles.shopButtonText}>Go to Shop</Text>
         </Pressable>
+
+        {/* ── Find Friends ──────────────────────────────────────────────────── */}
+        <Pressable
+          style={[styles.friendsButton]}
+          onPress={() => navigation.navigate('FriendSearch')}
+        >
+          <Text style={styles.friendsButtonText}>Find Friends</Text>
+        </Pressable>
       </ScrollView>
 
       <TabBar activeTab="home" />
@@ -775,6 +783,18 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   shopButtonText: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 16,
+    color: colors.foreground,
+  },
+  friendsButton: {
+    backgroundColor: colors.sky,
+    paddingVertical: 17,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  friendsButtonText: {
     fontFamily: 'Nunito_700Bold',
     fontSize: 16,
     color: colors.foreground,
