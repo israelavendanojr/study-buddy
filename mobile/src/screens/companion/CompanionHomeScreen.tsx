@@ -662,22 +662,6 @@ export default function CompanionHomeScreen() {
             })
           })()}
         </View>
-
-        {/* ── Go to Shop ────────────────────────────────────────────────────── */}
-        <Pressable
-          style={[styles.shopButton, shadows.mint]}
-          onPress={() => navigation.navigate('CompanionShop')}
-        >
-          <Text style={styles.shopButtonText}>Go to Shop</Text>
-        </Pressable>
-
-        {/* ── Find Friends ──────────────────────────────────────────────────── */}
-        <Pressable
-          style={[styles.friendsButton]}
-          onPress={() => navigation.navigate('FriendSearch')}
-        >
-          <Text style={styles.friendsButtonText}>Find Friends</Text>
-        </Pressable>
       </ScrollView>
 
       <TabBar activeTab="home" />
@@ -771,32 +755,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular',
     fontSize: 14,
     color: colors.muted,
-  },
-
-  // ── Shop button ─────────────────────────────────────────────────────────────
-  shopButton: {
-    backgroundColor: colors.mint,
-    paddingVertical: 17,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  shopButtonText: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 16,
-    color: colors.foreground,
-  },
-  friendsButton: {
-    backgroundColor: colors.sky,
-    paddingVertical: 17,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  friendsButtonText: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 16,
-    color: colors.foreground,
   },
 
   // ── Loading / error / not-found ─────────────────────────────────────────────

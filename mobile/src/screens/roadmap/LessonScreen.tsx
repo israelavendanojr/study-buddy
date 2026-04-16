@@ -1265,6 +1265,9 @@ export default function LessonScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Pressable style={styles.exitButton} onPress={handleExit} hitSlop={8}>
+        <Text style={styles.exitButtonText}>×</Text>
+      </Pressable>
       <ProgressIndicator current={cardIndex} progressAnim={progressAnim} />
       <Animated.View
         style={[
@@ -1285,6 +1288,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  exitButton: {
+    position: 'absolute',
+    top: 12,
+    left: 16,
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  exitButtonText: {
+    fontSize: 28,
+    color: colors.muted,
+    fontFamily: 'Nunito_400Regular',
+    lineHeight: 28,
   },
   cardWrapper: {
     flex: 1,

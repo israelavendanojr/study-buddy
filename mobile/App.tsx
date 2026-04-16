@@ -78,7 +78,7 @@ return <View style={{ flex: 1, backgroundColor: colors.background }} />
           <Stack.Screen name="CompanionHome" component={CompanionHomeScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="Badges" component={SocialFeedScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ cardStyleInterpolator: forFade }} />
-          <Stack.Screen name="CompanionShop" component={CompanionShopScreen} />
+          <Stack.Screen name="CompanionShop" component={CompanionShopScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="FriendSearch" component={FriendSearchScreen} />
           <Stack.Screen name="PostDetail" component={PostDetailScreen} />
         </>

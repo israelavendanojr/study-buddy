@@ -12,10 +12,9 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
-import type { StackNavigationProp } from '@react-navigation/stack'
 import { useUser } from '@clerk/clerk-expo'
 import Companion from '../../components/Companion'
+import TabBar from '../../components/TabBar'
 import { colors, radius, shadows } from '../../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
@@ -470,7 +469,6 @@ const modalStyles = StyleSheet.create({
 
 export default function CompanionShopScreen() {
   const { user } = useUser()
-  const navigation = useNavigation<StackNavigationProp<any>>()
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -627,6 +625,7 @@ export default function CompanionShopScreen() {
           <ActivityIndicator color={colors.mint} style={{ marginTop: 20 }} />
           <Text style={styles.loadingText}>Loading shop…</Text>
         </View>
+        <TabBar activeTab="shop" />
       </SafeAreaView>
     )
   }
@@ -646,6 +645,7 @@ export default function CompanionShopScreen() {
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
+        <TabBar activeTab="shop" />
       </SafeAreaView>
     )
   }
@@ -658,9 +658,7 @@ export default function CompanionShopScreen() {
     <SafeAreaView style={styles.container}>
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtnText}>‹</Text>
-        </Pressable>
+        <View style={styles.backBtn} />
         <Text style={styles.title}>Shop</Text>
         <View style={styles.headerRight}>
           <Companion size={36} mood="idle" color={previewColor} />
@@ -754,6 +752,8 @@ export default function CompanionShopScreen() {
         onEquip={handleEquip}
         onUnequip={handleUnequip}
       />
+
+      <TabBar activeTab="shop" />
     </SafeAreaView>
   )
 }
@@ -802,11 +802,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 12,
   },
   backBtn: {
-    padding: 4,
-    marginRight: 8,
+    width: 44,
+    height: 44,
   },
   backBtnText: {
     fontFamily: 'Nunito_700Bold',

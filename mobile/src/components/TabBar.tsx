@@ -8,7 +8,7 @@ import { colors } from '../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
 
-type ActiveTab = 'path' | 'home' | 'badges'
+type ActiveTab = 'path' | 'home' | 'shop' | 'badges'
 
 function MapIcon({ active }: { active?: boolean }) {
   const c = active ? colors.mint : colors.muted
@@ -37,6 +37,18 @@ function BadgeIcon({ active }: { active?: boolean }) {
     <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
       <Circle cx="12" cy="9" r="6" stroke={c} strokeWidth={1.8} />
       <Path d="M8.5 14.5L7 21l5-2 5 2-1.5-6.5" stroke={c} strokeWidth={1.8} strokeLinejoin="round" />
+    </Svg>
+  )
+}
+
+function ShopIcon({ active }: { active?: boolean }) {
+  const c = active ? colors.mint : colors.muted
+  return (
+    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
+      <Path d="M3 4h2l2 14h12l2-14H5" stroke={c} strokeWidth={1.8} strokeLinejoin="round" />
+      <Path d="M9 9v3m6-3v3" stroke={c} strokeWidth={1.8} strokeLinecap="round" />
+      <Circle cx="9" cy="20" r="1" fill={c} />
+      <Circle cx="18" cy="20" r="1" fill={c} />
     </Svg>
   )
 }
@@ -106,6 +118,12 @@ export default function TabBar({ activeTab }: TabBarProps) {
         <HomeIcon active={activeTab === 'home'} />
         <Text style={[styles.tabLabel, activeTab === 'home' && { color: colors.mint }]}>Home</Text>
         {activeTab === 'home' && <View style={styles.tabIndicator} />}
+      </Pressable>
+
+      <Pressable style={styles.tab} onPress={() => activeTab !== 'shop' && navigation.replace('CompanionShop')}>
+        <ShopIcon active={activeTab === 'shop'} />
+        <Text style={[styles.tabLabel, activeTab === 'shop' && { color: colors.mint }]}>Shop</Text>
+        {activeTab === 'shop' && <View style={styles.tabIndicator} />}
       </Pressable>
 
       <Pressable style={styles.tab} onPress={() => activeTab !== 'badges' && navigation.replace('Badges')}>
