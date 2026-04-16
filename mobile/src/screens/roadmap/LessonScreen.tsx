@@ -18,8 +18,8 @@ import type { StackNavigationProp } from '@react-navigation/stack'
 import * as ImagePicker from 'expo-image-picker'
 import { File } from 'expo-file-system'
 import { useUser } from '@clerk/clerk-expo'
-import Companion from '../components/Companion'
-import { colors, radius, shadows } from '../theme'
+import Companion from '../../components/Companion'
+import { colors, radius, shadows } from '../../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
 const TOTAL_CARDS = 5
@@ -267,6 +267,7 @@ export default function LessonScreen() {
       if (!res.ok) throw new Error(`Server error ${res.status}`)
       const data: LessonContent = await res.json()
       setLessonContent(data)
+      return data
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
     } finally {
@@ -275,13 +276,14 @@ export default function LessonScreen() {
   }
 
   // ── Fetch progress ─────────────────────────────────────────────────────────
-  const fetchProgress = async () => {
+  const fetchProgress = async (canonicalKey?: string) => {
     if (!params.userId) {
       setProgressFetched(true)
       return
     }
+    const lessonKey = canonicalKey ?? params.lessonKey
     try {
-      const res = await fetch(`${API_BASE}/lesson/${params.lessonKey}/${params.userId}/progress`)
+      const res = await fetch(`${API_BASE}/lesson/${lessonKey}/${params.userId}/progress`)
       if (res.ok) {
         const data = await res.json()
         setMissionProgress({
@@ -297,8 +299,8 @@ export default function LessonScreen() {
 
   useEffect(() => {
     const init = async () => {
-      await fetchLesson()
-      await fetchProgress()
+      const lessonData = await fetchLesson()
+      await fetchProgress(lessonData?.lesson_key)
     }
     init()
   }, [])

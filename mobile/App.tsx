@@ -13,24 +13,24 @@ import { colors } from './src/theme'
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo'
 import * as SecureStore from 'expo-secure-store'
 
-import LoadingScreen from './src/screens/LoadingScreen'
-import GoalSelectionScreen from './src/screens/GoalSelectionScreen'
-import ExperienceScreen from './src/screens/ExperienceScreen'
-import CommitmentScreen from './src/screens/CommitmentScreen'
-import GradingScreen from './src/screens/GradingScreen'
-import CoachingScreen from './src/screens/CoachingScreen'
-import GoalConfirmationScreen from './src/screens/GoalConfirmationScreen'
-import RoadmapScreen from './src/screens/RoadmapScreen'
-import LessonScreen from './src/screens/LessonScreen'
-import HomeScreen from './src/screens/HomeScreen'
-import CompanionHomeScreen from './src/screens/CompanionHomeScreen'
-import CompanionShopScreen from './src/screens/CompanionShopScreen'
-import BadgesScreen from './src/screens/BadgesScreen'
-import FriendSearchScreen from './src/screens/FriendSearchScreen'
-import PostDetailScreen from './src/screens/PostDetailScreen'
-import SettingsScreen from './src/screens/SettingsScreen'
-import SignInScreen from './src/screens/SignInScreen'
-import SignUpScreen from './src/screens/SignUpScreen'
+import LoadingScreen from './src/screens/auth/LoadingScreen'
+import SignInScreen from './src/screens/auth/SignInScreen'
+import SignUpScreen from './src/screens/auth/SignUpScreen'
+import GoalSelectionScreen from './src/screens/onboarding/GoalSelectionScreen'
+import ExperienceScreen from './src/screens/onboarding/ExperienceScreen'
+import CommitmentScreen from './src/screens/onboarding/CommitmentScreen'
+import GradingScreen from './src/screens/onboarding/GradingScreen'
+import CoachingScreen from './src/screens/onboarding/CoachingScreen'
+import GoalConfirmationScreen from './src/screens/onboarding/GoalConfirmationScreen'
+import HomeScreen from './src/screens/main/HomeScreen'
+import SettingsScreen from './src/screens/main/SettingsScreen'
+import RoadmapScreen from './src/screens/roadmap/RoadmapScreen'
+import LessonScreen from './src/screens/roadmap/LessonScreen'
+import CompanionHomeScreen from './src/screens/companion/CompanionHomeScreen'
+import CompanionShopScreen from './src/screens/companion/CompanionShopScreen'
+import SocialFeedScreen from './src/screens/social/SocialFeedScreen'
+import FriendSearchScreen from './src/screens/social/FriendSearchScreen'
+import PostDetailScreen from './src/screens/social/PostDetailScreen'
 
 const CLERK_PUBLISHABLE_KEY = 'pk_test_ZXhjaXRlZC1wb255LTQxLmNsZXJrLmFjY291bnRzLmRldiQ'
 
@@ -76,7 +76,7 @@ return <View style={{ flex: 1, backgroundColor: colors.background }} />
           <Stack.Screen name="LessonScreen" component={LessonScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Home" component={HomeScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="CompanionHome" component={CompanionHomeScreen} options={{ cardStyleInterpolator: forFade }} />
-          <Stack.Screen name="Badges" component={BadgesScreen} options={{ cardStyleInterpolator: forFade }} />
+          <Stack.Screen name="Badges" component={SocialFeedScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="CompanionShop" component={CompanionShopScreen} />
           <Stack.Screen name="FriendSearch" component={FriendSearchScreen} />

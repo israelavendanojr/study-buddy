@@ -15,7 +15,7 @@ import Svg, { Path, Circle } from 'react-native-svg'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { useUser, useAuth } from '@clerk/clerk-expo'
-import { colors, radius } from '../theme'
+import { colors, radius } from '../../theme'
 
 function BackIcon() {
   return (

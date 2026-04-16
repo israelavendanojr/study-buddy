@@ -9,32 +9,49 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native'
-import { useSignUp } from '@clerk/clerk-expo'
+import { useSignIn } from '@clerk/clerk-expo'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
-import Companion from '../components/Companion'
-import { colors, radius, shadows } from '../theme'
+import Companion from '../../components/Companion'
+import { colors, radius, shadows } from '../../theme'
 
-export default function SignUpScreen() {
-  const { signUp, setActive, isLoaded } = useSignUp()
+export default function SignInScreen() {
+  const { signIn, setActive, isLoaded } = useSignIn()
   const navigation = useNavigation<StackNavigationProp<any>>()
 
   const [email, setEmail] = useState('')
-  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
-  const [pendingVerification, setPendingVerification] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [pendingSecondFactor, setPendingSecondFactor] = useState(false)
 
-  const handleSignUp = async () => {
+  const handleSignIn = async () => {
     if (!isLoaded) return
     setError('')
     setLoading(true)
     try {
-      await signUp.create({ emailAddress: email, password, username })
-      await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
-      setPendingVerification(true)
+      const result = await signIn.create({ identifier: email, password })
+      if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId })
+      } else if (result.status === 'needs_second_factor') {
+        try {
+          console.log('Preparing 2FA email verification...')
+          const emailFactor = result.supportedSecondFactors?.find((f: any) => f.strategy === 'email_code')
+          if (emailFactor) {
+            await signIn.prepareSecondFactor({ strategy: 'email_code', emailAddressId: emailFactor.emailAddressId })
+            console.log('2FA email prep succeeded, showing code input')
+            setPendingSecondFactor(true)
+          } else {
+            setError('Email verification not available')
+          }
+        } catch (prepareErr: any) {
+          console.log('Prepare 2FA error:', JSON.stringify(prepareErr))
+          setError('Failed to send verification email: ' + (prepareErr.errors?.[0]?.message ?? prepareErr.message ?? 'Unknown error'))
+        }
+      } else {
+        setError('Sign in incomplete. Please try again.')
+      }
     } catch (err: any) {
       setError(err.errors?.[0]?.message ?? 'Something went wrong.')
     } finally {
@@ -42,18 +59,21 @@ export default function SignUpScreen() {
     }
   }
 
-  const handleVerify = async () => {
+  const handleSecondFactorVerify = async () => {
     if (!isLoaded) return
     setError('')
     setLoading(true)
     try {
-      const result = await signUp.attemptEmailAddressVerification({ code })
+      console.log('Attempting 2FA with code:', code)
+      const result = await signIn.attemptSecondFactor({ strategy: 'email_code', code })
+      console.log('2FA result:', JSON.stringify({ status: result.status }))
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId })
       } else {
-        setError('Verification incomplete. Please try again.')
+        setError(`Verification failed (${result.status}). Please try again.`)
       }
     } catch (err: any) {
+      console.log('2FA error:', JSON.stringify(err))
       setError(err.errors?.[0]?.message ?? 'Invalid code.')
     } finally {
       setLoading(false)
@@ -66,12 +86,12 @@ export default function SignUpScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.inner}>
-        <Companion size={80} mood="excited" />
+        <Companion size={80} mood="happy" />
 
-        {!pendingVerification ? (
+        {!pendingSecondFactor ? (
           <>
-            <Text style={styles.heading}>Let's get started!</Text>
-            <Text style={styles.subheading}>Create your account.</Text>
+            <Text style={styles.heading}>Welcome back!</Text>
+            <Text style={styles.subheading}>Sign in to continue learning.</Text>
 
             <TextInput
               style={styles.input}
@@ -81,14 +101,6 @@ export default function SignUpScreen() {
               onChangeText={setEmail}
               autoCapitalize="none"
               keyboardType="email-address"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Username"
-              placeholderTextColor={colors.muted + '80'}
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
             />
             <TextInput
               style={styles.input}
@@ -102,19 +114,19 @@ export default function SignUpScreen() {
             {!!error && <Text style={styles.error}>{error}</Text>}
 
             <Pressable
-              style={[styles.button, shadows.peach]}
-              onPress={handleSignUp}
-              disabled={loading || !email || !username || !password}
+              style={[styles.button, shadows.mint]}
+              onPress={handleSignIn}
+              disabled={loading || !email || !password}
             >
               {loading ? (
                 <ActivityIndicator color={colors.foreground} />
               ) : (
-                <Text style={styles.buttonText}>Sign Up →</Text>
+                <Text style={styles.buttonText}>Sign In →</Text>
               )}
             </Pressable>
 
-            <Pressable onPress={() => navigation.navigate('SignIn')}>
-              <Text style={styles.link}>Already have an account? Sign in</Text>
+            <Pressable onPress={() => navigation.navigate('SignUp')}>
+              <Text style={styles.link}>No account? Sign up</Text>
             </Pressable>
           </>
         ) : (
@@ -135,7 +147,7 @@ export default function SignUpScreen() {
 
             <Pressable
               style={[styles.button, shadows.mint]}
-              onPress={handleVerify}
+              onPress={handleSecondFactorVerify}
               disabled={loading || !code}
             >
               {loading ? (
@@ -187,7 +199,7 @@ const styles = StyleSheet.create({
   },
   button: {
     width: '100%',
-    backgroundColor: colors.peach,
+    backgroundColor: colors.mint,
     borderRadius: radius.lg,
     paddingVertical: 18,
     alignItems: 'center',

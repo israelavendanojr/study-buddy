@@ -663,23 +663,44 @@ async def submit_quiz(req: QuizAnswerRequest, db: Session = Depends(get_db)) -> 
 
 @router.get("/user/{user_id}/missions")
 async def get_incomplete_missions(user_id: str, db: Session = Depends(get_db)) -> list[dict]:
-    """Return all unfinished missions across every lesson the user has started."""
-    progress_records = (
-        db.query(UserLessonProgress)
-        .filter(
-            UserLessonProgress.clerk_user_id == user_id,
-            UserLessonProgress.is_fully_complete == False,  # noqa: E712
-        )
-        .order_by(UserLessonProgress.last_visited_at.desc())
-        .all()
-    )
-
+    """Return all unfinished missions from the user's current roadmap only."""
     roadmap_row = db.query(UserRoadmap).filter(UserRoadmap.clerk_user_id == user_id).first()
     meta = (roadmap_row.roadmap_json.get("_meta") or {}) if roadmap_row else {}
     goal = meta.get("goal", "")
     buddy_name = meta.get("buddy_name", "Buddy")
     experience = meta.get("experience", 1)
     domain = meta.get("domain", "cooking")
+
+    # Build the set of lesson keys that belong to the current roadmap.
+    # Roadmap-derived keys cover LLM-generated lessons (stored with that exact key).
+    # Fixed-content lessons are stored in the DB with a canonical key (e.g. "searing_meat"),
+    # not the roadmap-derived key (e.g. "ch1-l1_searing_meat"), so we do a title-based
+    # lookup to also include those canonical keys.
+    current_roadmap_keys: set[str] = set()
+    roadmap_lesson_titles: list[str] = []
+    if roadmap_row:
+        for chapter in roadmap_row.roadmap_json.get("chapters", []):
+            for lesson in chapter.get("lessons", []):
+                title_snake = re.sub(r"[^a-z0-9]+", "_", lesson["title"].lower())
+                current_roadmap_keys.add(f"{lesson['id']}_{title_snake}")
+                roadmap_lesson_titles.append(lesson["title"])
+
+        if roadmap_lesson_titles:
+            for (canonical_key,) in db.query(Lesson.lesson_key).filter(
+                Lesson.title.in_(roadmap_lesson_titles)
+            ).all():
+                current_roadmap_keys.add(canonical_key)
+
+    progress_records = (
+        db.query(UserLessonProgress)
+        .filter(
+            UserLessonProgress.clerk_user_id == user_id,
+            UserLessonProgress.is_fully_complete == False,  # noqa: E712
+            UserLessonProgress.lesson_key.in_(current_roadmap_keys),
+        )
+        .order_by(UserLessonProgress.last_visited_at.desc())
+        .all()
+    ) if current_roadmap_keys else []
 
     results: list[dict] = []
     seen_lesson_keys: set[str] = set()
@@ -731,11 +752,19 @@ async def get_incomplete_missions(user_id: str, db: Session = Depends(get_db)) -
             active_lesson_key = f"{active_lesson_data['id']}_{title_snake}"
             if active_lesson_key not in seen_lesson_keys:
                 lesson_row = db.query(Lesson).filter(Lesson.lesson_key == active_lesson_key).first()
+                if not lesson_row:
+                    # Fixed-content lessons are stored with a canonical key; fall back to title lookup
+                    lesson_row = db.query(Lesson).filter(
+                        Lesson.title == active_lesson_data["title"]
+                    ).first()
+                # Skip if the canonical key was already covered by the progress_records loop
+                if lesson_row and lesson_row.lesson_key in seen_lesson_keys:
+                    lesson_row = None
                 if lesson_row:
                     active_missions = lesson_row.lesson_json.get("missions", [])
                     active_entries = [
                         {
-                            "lesson_key": active_lesson_key,
+                            "lesson_key": lesson_row.lesson_key,
                             "lesson_title": lesson_row.title,
                             "chapter_title": lesson_row.chapter_title or active_chapter_title,
                             "domain": lesson_row.domain or domain,

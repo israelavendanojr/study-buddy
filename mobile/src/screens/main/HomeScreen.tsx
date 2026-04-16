@@ -3,8 +3,8 @@ import { View, Pressable, StyleSheet } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
-import { colors } from '../theme'
-import TabBar from '../components/TabBar'
+import { colors } from '../../theme'
+import TabBar from '../../components/TabBar'
 
 function CogIcon() {
   return (

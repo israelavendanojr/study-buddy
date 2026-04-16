@@ -11,8 +11,8 @@ import { useNavigation, useRoute } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RouteProp } from '@react-navigation/native'
 import Svg, { Path } from 'react-native-svg'
-import Companion from '../components/Companion'
-import { colors, radius, shadows } from '../theme'
+import Companion from '../../components/Companion'
+import { colors, radius, shadows } from '../../theme'
 
 // ── Back icon ─────────────────────────────────────────────────────────────────
 

@@ -20,9 +20,9 @@ import Svg, {
 import { useIsFocused, useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { useUser } from '@clerk/clerk-expo'
-import Companion from '../components/Companion'
-import TabBar from '../components/TabBar'
-import { colors, radius, shadows } from '../theme'
+import Companion from '../../components/Companion'
+import TabBar from '../../components/TabBar'
+import { colors, radius, shadows } from '../../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
 

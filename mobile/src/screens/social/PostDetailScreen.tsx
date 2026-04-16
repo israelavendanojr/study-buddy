@@ -16,8 +16,8 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native'
 import type { RouteProp } from '@react-navigation/native'
 import { useUser } from '@clerk/clerk-expo'
-import Companion from '../components/Companion'
-import { colors, radius, shadows } from '../theme'
+import Companion from '../../components/Companion'
+import { colors, radius, shadows } from '../../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
 const SCREEN_WIDTH = Dimensions.get('window').width

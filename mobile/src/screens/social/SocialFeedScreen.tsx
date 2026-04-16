@@ -14,9 +14,9 @@ import {
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { useUser } from '@clerk/clerk-expo'
-import Companion from '../components/Companion'
-import TabBar from '../components/TabBar'
-import { colors, radius } from '../theme'
+import Companion from '../../components/Companion'
+import TabBar from '../../components/TabBar'
+import { colors, radius } from '../../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
 const SCREEN_WIDTH = Dimensions.get('window').width
@@ -238,7 +238,7 @@ const cardStyles = StyleSheet.create({
 
 // ── FeedScreen ────────────────────────────────────────────────────────────────
 
-export default function BadgesScreen() {
+export default function SocialFeedScreen() {
   const navigation = useNavigation<StackNavigationProp<any>>()
   const { user } = useUser()
   const userId = user?.id ?? ''
