@@ -563,7 +563,7 @@ export default function CompanionHomeScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Buddy</Text>
+        <Text style={styles.headerTitle}>Garlic Monkey</Text>
         <Pressable style={styles.cogButton} onPress={() => navigation.navigate('Settings')}>
           <CogIcon />
         </Pressable>

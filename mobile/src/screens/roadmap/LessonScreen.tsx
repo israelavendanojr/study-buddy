@@ -68,7 +68,7 @@ interface LessonParams {
 interface LessonContent {
   lesson_type?: 'technique' | 'recipe' | 'concept'
   lesson_key?: string
-  card1: { companion_message: string }
+  card1: { motivation: string; learn_points: string[] }
   card3: { headline: string; points: string[]; tell_me_more: string }
   missions: Mission[]
   last_reflection_feedback?: string | null
@@ -80,8 +80,17 @@ interface MissionProgress {
   is_fully_complete: boolean
 }
 
+interface ScoreCriterion {
+  label: string
+  stars: number
+}
+
 interface ValidationResult {
-  feedback: string
+  is_relevant?: boolean
+  criteria?: ScoreCriterion[]
+  note?: string
+  rejection_message?: string
+  feedback?: string
   is_valid: boolean
   xp_earned: number
   mission_completed: boolean
@@ -716,11 +725,26 @@ export default function LessonScreen() {
         </View>
         <View style={styles.speechBubbleTail} />
         <View style={styles.speechBubble}>
-          <Text style={styles.bodyText}>
-            {isReady
-              ? lessonContent!.card1.companion_message
-              : `Garlic is getting ready...`}
-          </Text>
+          {isReady ? (
+            <>
+              <Text style={styles.hookSectionLabel}>Motivation</Text>
+              <Text style={styles.hookMotivation}>{lessonContent!.card1.motivation}</Text>
+              <View style={styles.hookDivider} />
+              <Text style={styles.hookSectionLabel}>In this lesson you'll learn how to…</Text>
+              {lessonContent!.card1.learn_points.map((point, i) => (
+                <View key={i} style={styles.hookBulletRow}>
+                  <Text style={styles.hookBulletDot}>•</Text>
+                  <Text style={styles.hookBulletText}>{point}</Text>
+                </View>
+              ))}
+            </>
+          ) : (
+            <>
+              <Text style={styles.hookSectionLabel}>Motivation</Text>
+              <Text style={styles.hookMotivation}>Garlic is getting ready...</Text>
+              <View style={styles.hookDivider} />
+            </>
+          )}
         </View>
         <View style={styles.spacer} />
         <Pressable
@@ -1134,16 +1158,46 @@ export default function LessonScreen() {
 
     const isRequiredComplete = missionProgress?.is_required_complete ?? false
 
+    const companionMood = validationResult.is_relevant === false
+      ? 'thinking'
+      : validationResult.mission_completed
+        ? 'excited'
+        : 'happy'
+
     return (
       <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
         <View style={styles.companionCenter}>
           <Animated.View style={{ transform: [{ scale: companionScale }] }}>
-            <Companion size={100} mood={validationResult.mission_completed ? 'excited' : 'happy'} />
+            <Companion size={100} mood={companionMood} />
           </Animated.View>
         </View>
-        <Animated.View style={[styles.messageCard, { opacity: feedbackOpacity }]}>
-          <Text style={styles.bodyText}>{validationResult.feedback}</Text>
-        </Animated.View>
+        {validationResult.is_relevant === false ? (
+          // Rejected — wrong subject
+          <Animated.View style={[styles.messageCard, { opacity: feedbackOpacity }]}>
+            <Text style={[styles.bodyText, { textAlign: 'center' }]}>
+              {validationResult.rejection_message}
+            </Text>
+          </Animated.View>
+        ) : validationResult.criteria ? (
+          // Scoreboard (photo submissions, relevant)
+          <Animated.View style={[styles.scoreboardCard, { opacity: feedbackOpacity }]}>
+            {validationResult.criteria.slice(0, 4).map((c, i) => (
+              <View key={i} style={styles.criterionRow}>
+                <Text style={styles.criterionLabel}>{c.label}</Text>
+                <Text style={styles.criterionStars}>
+                  {'★'.repeat(c.stars)}{'☆'.repeat(5 - c.stars)}
+                </Text>
+              </View>
+            ))}
+            <View style={styles.scoreboardDivider} />
+            <Text style={styles.scoreboardNote}>{validationResult.note}</Text>
+          </Animated.View>
+        ) : (
+          // Original paragraph (reflection journals, fallback)
+          <Animated.View style={[styles.messageCard, { opacity: feedbackOpacity }]}>
+            <Text style={styles.bodyText}>{validationResult.feedback}</Text>
+          </Animated.View>
+        )}
         {validationResult.mission_completed && (
           <View style={styles.xpRow}>
             <Animated.View style={[styles.xpBadge, { transform: [{ scale: xpScale }] }]}>
@@ -1810,5 +1864,76 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_600SemiBold',
     fontSize: 14,
     color: colors.foreground,
+  },
+
+  // Hook card styles (new motivation + learn_points)
+  hookSectionLabel: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 12,
+    color: colors.muted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  hookMotivation: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 18,
+    color: colors.foreground,
+    lineHeight: 26,
+    marginBottom: 12,
+  },
+  hookDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 12,
+  },
+  hookBulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
+  hookBulletDot: { color: colors.mint, fontSize: 14, lineHeight: 22 },
+  hookBulletText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 14,
+    color: colors.foreground,
+    flex: 1,
+    lineHeight: 22,
+  },
+
+  // Scoreboard card styles (new feedback format)
+  scoreboardCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 20,
+    marginBottom: 24,
+  },
+  criterionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  criterionLabel: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 15,
+    color: colors.foreground,
+    flex: 1,
+  },
+  criterionStars: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 18,
+    color: colors.golden,
+    letterSpacing: 1,
+  },
+  scoreboardDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 12,
+  },
+  scoreboardNote: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 15,
+    color: colors.foreground,
+    lineHeight: 23,
+    fontStyle: 'italic',
   },
 })

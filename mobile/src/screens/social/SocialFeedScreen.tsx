@@ -366,7 +366,7 @@ export default function SocialFeedScreen() {
     <View style={styles.container}>
       <SafeAreaView style={styles.safeHeader}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Feed 🌍</Text>
+          <Text style={styles.headerTitle}>Badge Board</Text>
           <Pressable
             onPress={() => navigation.navigate('FriendSearch')}
             style={styles.friendsBtn}

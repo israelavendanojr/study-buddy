@@ -70,7 +70,13 @@ class Mission(BaseModel):
 
 
 class Card1Hook(BaseModel):
-    companion_message: str
+    objective: str
+    learn_points: list[str]
+
+
+class ScoreCriterion(BaseModel):
+    label: str
+    stars: int
 
 
 class Card3Why(BaseModel):
@@ -239,38 +245,48 @@ def _retrieve_rag_docs(lesson_title: str, chapter_title: str, domain: str) -> st
 # LLM helpers
 # ---------------------------------------------------------------------------
 
-def _generate_companion_hook(req: LessonRequest, content: dict) -> str:
-    """Generate a personalized 1-2 sentence intro for a fixed-content lesson."""
+def _generate_companion_hook(req: LessonRequest, content: dict) -> dict:
+    """Generate a personalized hook with objective + learn_points for a fixed-content lesson."""
     exp_label = (
         "total beginner" if req.experience <= 1
         else "some experience" if req.experience <= 3
         else "experienced cook"
     )
     headline = content.get("content", {}).get("headline", "")
+    content_points = content.get("content", {}).get("points", [])[:3]
 
     prompt = (
         f"Lesson: {content['title']}\n"
         f"Core insight: {headline}\n"
+        f"Key skill points: {json.dumps(content_points)}\n"
         f"User's cooking goal: {req.goal}\n"
         f"Their level: {exp_label}\n\n"
-        f"Write a 1-2 sentence intro that connects THIS specific lesson to THIS specific goal. "
-        f"Be direct and specific — no generic welcome phrases. Return only the message text."
+        f"Write a hook for this lesson. Return ONLY valid JSON — no markdown.\n"
+        f'{{\n'
+        f'  "motivation": "One compelling sentence — why THIS skill matters for THIS goal right now (verb-first, e.g. \'Master the 3-min sear that turns flat chicken into restaurant-quality browning\')",\n'
+        f'  "learn_points": ["Specific skill point 1 — what they\'ll be able to do (≤12 words)", "Point 2", "Point 3"]\n'
+        f'}}\n'
+        f"Rules: motivation specific to THIS lesson and THIS goal, learn_points 2-3 items ≤12 words each, no generic intros, return ONLY JSON"
     )
 
     try:
         client = anthropic.Anthropic()
         message = client.messages.create(
             model=ANTHROPIC_MODEL,
-            max_tokens=150,
+            max_tokens=256,
             system=PEPPER_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )
-        return message.content[0].text.strip()
+        parsed = _strip_and_parse(message.content[0].text, "Hook")
+        return {
+            "motivation": parsed.get("motivation", "Master this core skill and understand how it elevates your cooking."),
+            "learn_points": parsed.get("learn_points", [])[:3],
+        }
     except Exception:
-        return (
-            f"This is one of the skills that separates meals people merely eat from meals they "
-            f"remember — and it connects directly to what you're working toward."
-        )
+        return {
+            "motivation": "Master this core skill and understand how it elevates your cooking.",
+            "learn_points": ["Understand the core technique", "Know when to apply it", "Spot what success looks like"],
+        }
 
 
 def _generate_reflection_feedback(
@@ -341,7 +357,8 @@ Return JSON matching this exact schema:
 
 {{
   "card1": {{
-    "companion_message": "1-2 sentences max — hook the learner on why this specific skill matters right now"
+    "motivation": "One verb-first sentence — why THIS skill matters for THIS goal (e.g. 'Master the 3-min sear that turns flat chicken into restaurant-quality browning')",
+    "learn_points": ["Specific skill point 1 — what they'll be able to do (≤12 words)", "Point 2", "Point 3"]
   }},
   "card3": {{
     "headline": "The single most important insight in 1 sentence",
@@ -488,7 +505,7 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
         return {
             "lesson_type": fixed.get("lesson_type", "technique"),
             "lesson_key": lesson_row.lesson_key,
-            "card1": {"companion_message": companion_message},
+            "card1": companion_message,
             "card3": {
                 "headline": fixed["content"]["headline"],
                 "points": fixed["content"]["points"],
@@ -501,7 +518,11 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
     # ── Fallback: full LLM generation for lessons without a content file ──────
     cached = db.query(Lesson).filter(Lesson.lesson_key == req.lesson_key).first()
     if cached:
-        if "missions" in cached.lesson_json and "card2" not in cached.lesson_json:
+        if (
+            "missions" in cached.lesson_json
+            and "card2" not in cached.lesson_json
+            and "motivation" in cached.lesson_json.get("card1", {})
+        ):
             return cached.lesson_json
         # Old format — delete and regenerate
         db.delete(cached)
@@ -843,33 +864,39 @@ async def validate_lesson(req: ValidateRequest, db: Session = Depends(get_db)) -
 
     grading_mode = _get_grading_mode(req.user_id, db) if req.user_id else "balanced"
     grading_instruction = (
-        'Grading mode: encouraging. Be generous. If there\'s any genuine attempt visible, is_valid = true. Focus feedback on what worked.'
+        "GRADING MODE: encouraging. Rate generously 4–5 stars on any genuine attempt. Criteria ratings should lean positive."
         if grading_mode == "encouraging"
-        else 'Grading mode: strict. Hold a high bar. The technique should be visible and executed with reasonable care. Call out what specifically missed the mark.'
+        else "GRADING MODE: strict. Hold a high bar on each criterion. Rate honestly — a 3-star rating means decent but improvable. Call out exactly what missed the mark."
         if grading_mode == "strict"
-        else 'Grading mode: balanced. Standard grading. Genuine attempt required. Feedback is honest and specific.'
+        else "GRADING MODE: balanced. Rate each criterion honestly based on what's visible. A genuine attempt deserves is_valid true even if some criteria score 2–3 stars."
     )
 
     prompt = (
-        f"The user is learning '{req.lesson_title}' as part of their goal: {req.goal}. "
-        f"Their mission was: {mission['description']}. "
-        f"They selected this reflection: '{req.reflection_choice}'. "
-        f"{grading_instruction}\n\n"
-        "Here is their photo. Give specific, warm feedback in 2-3 sentences that references something "
-        "visible in the photo OR directly acknowledges their reflection choice. "
-        "Never give generic feedback like 'Great job!'.\n\n"
-        "Set is_valid to true if the photo shows any genuine attempt at the task — food, cooking, "
-        "ingredients, equipment, or a result. Set is_valid to false ONLY if the photo is completely "
-        "blank, a UI screenshot, or has absolutely nothing to do with cooking or food.\n\n"
-        "Return ONLY valid JSON:\n"
-        '{"feedback": "string", "is_valid": true}'
+        f"You are a head chef and tutor. You gave your student this mission:\n"
+        f"Title: {mission['title']}\n"
+        f"Description: {mission['description']}\n"
+        f"Task: {mission.get('prompt', 'n/a')}\n"
+        f"Their reflection choice: '{req.reflection_choice}'\n\n"
+        f"STEP 1 — RELEVANCE CHECK:\n"
+        f"Does this photo actually show an attempt at the mission above? "
+        f"Reject if the photo is of something completely unrelated to the task "
+        f"(e.g. a pet, a car, an empty plate when the task required food, the wrong dish entirely). "
+        f"Be specific to THIS mission — not just 'is it food?' but 'is it THIS food/technique?'\n\n"
+        f"If NOT relevant, return:\n"
+        '{"is_relevant": false, "rejection_message": "Encouraging but firm 1-sentence callout, chef tone, ≤15 words.", "is_valid": false}\n\n'
+        f"If relevant, proceed to STEP 2 — GRADING:\n"
+        f"{grading_instruction}\n"
+        f"Derive 2–4 grading criteria SPECIFIC to this mission (not generic). Rate each 1–5 stars based strictly on what is visible. "
+        f"Then write one punchy coaching sentence (≤20 words).\n\n"
+        'Return ONLY valid JSON:\n'
+        '{"is_relevant": true, "criteria": [{"label": "Crust Color", "stars": 4}, {"label": "Even Coverage", "stars": 3}], "note": "That mahogany edge shows you nailed the heat.", "is_valid": true}'
     )
 
     try:
         client = anthropic.Anthropic()
         message = client.messages.create(
             model=VISION_MODEL,
-            max_tokens=512,
+            max_tokens=768,
             system=PEPPER_SYSTEM,
             messages=[
                 {
