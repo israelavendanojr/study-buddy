@@ -19,4 +19,4 @@ Thumbs.db
 .idea/
 
 demo/
-backend/uploads/
+backend/uploads/*

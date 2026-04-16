@@ -646,7 +646,6 @@ export default function CompanionHomeScreen() {
                           lessonTitle: mission.lesson_title,
                           chapterTitle: mission.chapter_title,
                           goal: mission.goal,
-                          buddyName: mission.buddy_name,
                           experience: mission.experience,
                           completedLessonTitles: [],
                           domain: mission.domain,

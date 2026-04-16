@@ -55,7 +55,6 @@ interface LessonParams {
   lessonTitle: string
   chapterTitle: string
   goal: string
-  buddyName: string
   experience: number
   completedLessonTitles: string[]
   domain: string
@@ -259,7 +258,7 @@ export default function LessonScreen() {
           lesson_title: params.lessonTitle,
           chapter_title: params.chapterTitle,
           goal: params.goal,
-          buddy_name: params.buddyName,
+          buddy_name: 'Garlic',
           experience: params.experience,
           completed_lesson_titles: params.completedLessonTitles,
           domain: params.domain,
@@ -460,7 +459,7 @@ export default function LessonScreen() {
           photo_base64: base64,
           photo_media_type: photoMimeType,
           reflection_choice: selectedReflection,
-          buddy_name: params.buddyName,
+          buddy_name: 'Garlic',
           goal: params.goal,
           lesson_title: params.lessonTitle,
           domain: params.domain,
@@ -511,7 +510,7 @@ export default function LessonScreen() {
           lesson_key: lessonContent.lesson_key ?? params.lessonKey,
           mission_id: currentMissionId,
           reflection_text: reflectionText.trim(),
-          buddy_name: params.buddyName,
+          buddy_name: 'Garlic',
           lesson_title: params.lessonTitle,
           goal: params.goal,
         }),
@@ -718,7 +717,7 @@ export default function LessonScreen() {
           <Text style={styles.bodyText}>
             {isReady
               ? lessonContent!.card1.companion_message
-              : `${params.buddyName} is getting ready...`}
+              : `Garlic is getting ready...`}
           </Text>
         </View>
         <View style={styles.spacer} />

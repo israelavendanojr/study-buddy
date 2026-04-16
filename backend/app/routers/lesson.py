@@ -128,6 +128,17 @@ class QuizAnswerRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Grading mode helper
+# ---------------------------------------------------------------------------
+
+def _get_grading_mode(user_id: str, db: Session) -> str:
+    roadmap = db.query(UserRoadmap).filter(UserRoadmap.clerk_user_id == user_id).first()
+    if not roadmap:
+        return "balanced"
+    return roadmap.roadmap_json.get("_meta", {}).get("grading_mode", "balanced")
+
+
+# ---------------------------------------------------------------------------
 # Fixed content file helpers
 # ---------------------------------------------------------------------------
 
@@ -801,10 +812,20 @@ async def validate_lesson(req: ValidateRequest, db: Session = Depends(get_db)) -
     if not mission:
         raise HTTPException(status_code=404, detail="Mission not found")
 
+    grading_mode = _get_grading_mode(req.user_id, db) if req.user_id else "balanced"
+    grading_instruction = (
+        'Grading mode: encouraging. Be generous. If there\'s any genuine attempt visible, is_valid = true. Focus feedback on what worked.'
+        if grading_mode == "encouraging"
+        else 'Grading mode: strict. Hold a high bar. The technique should be visible and executed with reasonable care. Call out what specifically missed the mark.'
+        if grading_mode == "strict"
+        else 'Grading mode: balanced. Standard grading. Genuine attempt required. Feedback is honest and specific.'
+    )
+
     prompt = (
         f"The user is learning '{req.lesson_title}' as part of their goal: {req.goal}. "
         f"Their mission was: {mission['description']}. "
         f"They selected this reflection: '{req.reflection_choice}'. "
+        f"{grading_instruction}\n\n"
         "Here is their photo. Give specific, warm feedback in 2-3 sentences that references something "
         "visible in the photo OR directly acknowledges their reflection choice. "
         "Never give generic feedback like 'Great job!'.\n\n"

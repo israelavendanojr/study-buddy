@@ -73,6 +73,8 @@ class RoadmapRequest(BaseModel):
     weeks: int = Field(ge=1, le=52)
     success_vision: str
     coaching_result: dict | None = None
+    goal_type: str | None = None
+    grading_mode: str | None = None
 
 
 class ProgressUpdate(BaseModel):
@@ -160,9 +162,15 @@ How to use this context:
     catalog_block = _build_lesson_catalog()
     catalog_section = f"\n{catalog_block}\n" if catalog_block else ""
 
+    goal_type_block = ""
+    if req.goal_type:
+        goal_type_block = f"Cooking goal type: {req.goal_type} (use this to shape which skills are prioritized)\n"
+    if req.grading_mode:
+        goal_type_block += f"Grading mode: {req.grading_mode} (for context on the user's learning style)\n"
+
     return f"""You are a learning roadmap designer. Create a personalized learning roadmap as JSON.
 
-User profile:
+{goal_type_block}User profile:
 - Goal: {req.goal}
 - Experience level: {req.experience}/5 ({exp_label})
 - Daily session time: {total_minutes} minutes
@@ -357,6 +365,8 @@ async def generate_roadmap(req: RoadmapRequest, db: Session = Depends(get_db)) -
             "buddy_name": req.buddy_name,
             "experience": req.experience,
             "domain": "cooking",
+            "goal_type": req.goal_type,
+            "grading_mode": req.grading_mode,
         },
     }
 

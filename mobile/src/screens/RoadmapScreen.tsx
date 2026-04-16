@@ -31,7 +31,7 @@ interface Lesson {
 interface Chapter { id: string; title: string; lessons: Lesson[] }
 interface Roadmap { title: string; chapters: Chapter[] }
 interface RoadmapParams {
-  goal: string; buddyName: string; roadmap: Roadmap
+  goal: string; roadmap: Roadmap
   roadmapId?: number | null
   initialActiveIndex?: number
   experience: number
@@ -249,7 +249,6 @@ export default function RoadmapScreen() {
       lessonTitle: selectedLesson.title,
       chapterTitle: getChapterForLesson(lessonId),
       goal: route.params.goal,
-      buddyName: (route.params as RoadmapParams).buddyName ?? 'Buddy',
       experience: (route.params as RoadmapParams).experience,
       completedLessonTitles: allLessons.slice(0, activeIndex).map(l => l.title),
       domain: 'cooking',

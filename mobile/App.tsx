@@ -14,10 +14,12 @@ import { ClerkProvider, useAuth } from '@clerk/clerk-expo'
 import * as SecureStore from 'expo-secure-store'
 
 import LoadingScreen from './src/screens/LoadingScreen'
-import OnboardingScreen from './src/screens/OnboardingScreen'
-import BuddyNamingScreen from './src/screens/BuddyNamingScreen'
-import GoalTuningScreen from './src/screens/GoalTuningScreen'
-import ConfirmationScreen from './src/screens/ConfirmationScreen'
+import GoalSelectionScreen from './src/screens/GoalSelectionScreen'
+import ExperienceScreen from './src/screens/ExperienceScreen'
+import CommitmentScreen from './src/screens/CommitmentScreen'
+import GradingScreen from './src/screens/GradingScreen'
+import CoachingScreen from './src/screens/CoachingScreen'
+import GoalConfirmationScreen from './src/screens/GoalConfirmationScreen'
 import RoadmapScreen from './src/screens/RoadmapScreen'
 import LessonScreen from './src/screens/LessonScreen'
 import HomeScreen from './src/screens/HomeScreen'
@@ -64,10 +66,12 @@ return <View style={{ flex: 1, backgroundColor: colors.background }} />
       {isSignedIn ? (
         <>
           <Stack.Screen name="Loading" component={LoadingScreen} />
-          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-          <Stack.Screen name="BuddyNaming" component={BuddyNamingScreen} />
-          <Stack.Screen name="GoalTuning" component={GoalTuningScreen} />
-          <Stack.Screen name="Confirmation" component={ConfirmationScreen} />
+          <Stack.Screen name="GoalSelection" component={GoalSelectionScreen} />
+          <Stack.Screen name="Experience" component={ExperienceScreen} />
+          <Stack.Screen name="Commitment" component={CommitmentScreen} />
+          <Stack.Screen name="Grading" component={GradingScreen} />
+          <Stack.Screen name="Coaching" component={CoachingScreen} />
+          <Stack.Screen name="GoalConfirmation" component={GoalConfirmationScreen} />
           <Stack.Screen name="Roadmap" component={RoadmapScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="LessonScreen" component={LessonScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Home" component={HomeScreen} options={{ cardStyleInterpolator: forFade }} />

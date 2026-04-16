@@ -33,7 +33,7 @@ export default function LoadingScreen() {
         })
       } else if (res.status === 404) {
         // No roadmap yet — first time user
-        navigation.replace('Onboarding')
+        navigation.replace('GoalSelection')
       } else {
         setError('Something went wrong. Tap to retry.')
       }
@@ -45,7 +45,7 @@ export default function LoadingScreen() {
   useEffect(() => {
     if (!isLoaded) return
     if (!user) {
-      navigation.replace('Onboarding')
+      navigation.replace('GoalSelection')
       return
     }
     checkRoadmap()
