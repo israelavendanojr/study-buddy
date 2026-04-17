@@ -11,7 +11,6 @@ import {
   Text,
   View,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useUser } from '@clerk/clerk-expo'
 import Companion from '../../components/Companion'
 import TabBar from '../../components/TabBar'
@@ -616,7 +615,7 @@ export default function CompanionShopScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Shop</Text>
         </View>
@@ -626,7 +625,7 @@ export default function CompanionShopScreen() {
           <Text style={styles.loadingText}>Loading shop…</Text>
         </View>
         <TabBar activeTab="shop" />
-      </SafeAreaView>
+      </View>
     )
   }
 
@@ -634,7 +633,7 @@ export default function CompanionShopScreen() {
 
   if (error) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Shop</Text>
         </View>
@@ -646,7 +645,7 @@ export default function CompanionShopScreen() {
           </Pressable>
         </View>
         <TabBar activeTab="shop" />
-      </SafeAreaView>
+      </View>
     )
   }
 
@@ -655,7 +654,7 @@ export default function CompanionShopScreen() {
   const previewColor = getCompanionColor(equipped.color)
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <View style={styles.backBtn} />
@@ -754,7 +753,7 @@ export default function CompanionShopScreen() {
       />
 
       <TabBar activeTab="shop" />
-    </SafeAreaView>
+    </View>
   )
 }
 
@@ -802,7 +801,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 56,
     paddingBottom: 12,
   },
   backBtn: {
@@ -956,7 +955,7 @@ const styles = StyleSheet.create({
   // ── Grid ────────────────────────────────────────────────────────────────────
   gridContent: {
     paddingHorizontal: GRID_PADDING,
-    paddingBottom: 40,
+    paddingBottom: 24,
   },
   gridRow: {
     gap: GRID_GAP,

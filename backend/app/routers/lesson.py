@@ -27,7 +27,6 @@ VISION_MODEL = "claude-sonnet-4-6"
 XP_PER_MISSION = 20
 
 RAG_ROOT = pathlib.Path(__file__).parent.parent / "rag_resources"
-LESSON_CONTENT_ROOT = pathlib.Path(__file__).parent.parent / "lesson_content"
 
 PEPPER_SYSTEM = (
     "You are Pepper, a self-taught home cook who spent years making expensive mistakes "
@@ -145,100 +144,32 @@ def _get_grading_mode(user_id: str, db: Session) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Fixed content file helpers
-# ---------------------------------------------------------------------------
-
-def _find_lesson_content(lesson_key: str, lesson_title: str) -> dict | None:
-    """Scan lesson_content/** for a JSON file matching lesson_key or normalized title."""
-    if not LESSON_CONTENT_ROOT.exists():
-        return None
-
-    title_snake = re.sub(r"[^a-z0-9]+", "_", lesson_title.lower()).strip("_")
-
-    for json_file in LESSON_CONTENT_ROOT.rglob("*.json"):
-        try:
-            data = json.loads(json_file.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-
-        file_key = data.get("lesson_key", "")
-        file_title_snake = re.sub(r"[^a-z0-9]+", "_", data.get("title", "").lower()).strip("_")
-
-        # Exact key match, suffix/prefix match, or title match
-        # Handles: "searing_meat" == "searing_meat"
-        #          "ch1-l1_searing_meat" ends with "_searing_meat"
-        #          "searing_meat_searing_meat" starts with "searing_meat_" (id==key from catalog roadmap)
-        if (file_key == lesson_key
-                or lesson_key.endswith(f"_{file_key}")
-                or lesson_key.startswith(f"{file_key}_")
-                or file_title_snake == title_snake):
-            return data
-
-    return None
-
-
-def _ensure_lesson_row(content: dict, db: Session) -> Lesson:
-    """Upsert a Lesson DB row for a fixed-content lesson."""
-    lesson_key = content["lesson_key"]
-    row = db.query(Lesson).filter(Lesson.lesson_key == lesson_key).first()
-    if row:
-        return row
-    row = Lesson(
-        lesson_key=lesson_key,
-        title=content["title"],
-        chapter_title=content["chapter_title"],
-        domain=content["domain"],
-        lesson_json=content,
-        lesson_type=content.get("lesson_type"),
-        skill_tags=content.get("skill_tags"),
-        created_at=datetime.now(timezone.utc),
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return row
-
-
-# ---------------------------------------------------------------------------
 # RAG helpers
 # ---------------------------------------------------------------------------
 
-def _retrieve_rag_docs(lesson_title: str, chapter_title: str, domain: str) -> str:
-    """Scan .md files under rag_resources/{domain}/, falling back to root if missing."""
-    domain_dir = RAG_ROOT / domain
-    scan_root = domain_dir if domain_dir.is_dir() else RAG_ROOT
+def _retrieve_rag_chunks(lesson_title: str, chapter_title: str, domain: str, db: Session) -> list[dict]:
+    """Retrieve top-k RAG chunks from kb_chunks via pgvector cosine similarity."""
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        query = f"{chapter_title}: {lesson_title}"
+        resp = client.embeddings.create(model="text-embedding-3-small", input=[query])
+        embedding = resp.data[0].embedding
+    except Exception as e:
+        print(f"[rag] embedding failed: {e}")
+        return []
 
-    title_lower = lesson_title.lower()
-    chapter_lower = chapter_title.lower()
-
-    matches: list[tuple[int, pathlib.Path]] = []
-    for md_file in scan_root.rglob("*.md"):
-        try:
-            content = md_file.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        content_lower = content.lower()
-        score = 0
-        if title_lower in content_lower:
-            score += 2
-        if chapter_lower in content_lower:
-            score += 1
-        for word in title_lower.split():
-            if len(word) > 3 and word in content_lower:
-                score += 1
-        if score > 0:
-            matches.append((score, md_file))
-
-    matches.sort(key=lambda x: x[0], reverse=True)
-    top = matches[:3]
-
-    if not top:
-        return ""
-
-    parts: list[str] = []
-    for _, md_file in top:
-        parts.append(f"### {md_file.stem}\n{md_file.read_text(encoding='utf-8')}")
-    return "\n\n".join(parts)
+    try:
+        from sqlalchemy import text as sql_text
+        result = db.execute(sql_text(
+            "SELECT text, source_id FROM kb_chunks "
+            "ORDER BY embedding <=> CAST(:emb AS vector) "
+            "LIMIT 5"
+        ), {"emb": str(embedding)})
+        return [{"text": r.text, "source_id": r.source_id} for r in result]
+    except Exception as e:
+        print(f"[rag] vector search failed: {e}")
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -327,7 +258,7 @@ def _generate_reflection_feedback(
 # Prompt builder (legacy full-generation fallback)
 # ---------------------------------------------------------------------------
 
-def _build_lesson_prompt(req: LessonRequest, rag_content: str) -> str:
+def _build_lesson_prompt(req: LessonRequest, chunks: list[dict]) -> str:
     exp_label = (
         "total beginner" if req.experience <= 1
         else "some experience" if req.experience <= 3
@@ -338,11 +269,10 @@ def _build_lesson_prompt(req: LessonRequest, rag_content: str) -> str:
         if req.completed_lesson_titles
         else "This is one of their first lessons."
     )
-    rag_block = (
-        f"Here is reference material for this lesson:\n\n{rag_content}\n\n"
-        if rag_content
-        else ""
-    )
+    rag_block = ""
+    if chunks:
+        parts = [f"[{c['source_id']}]\n{c['text']}" for c in chunks]
+        rag_block = "Reference material from culinary textbooks:\n\n" + "\n\n---\n\n".join(parts) + "\n\n"
 
     return f"""{rag_block}Generate a structured lesson for a learning app. Return ONLY valid JSON — no markdown, no explanation.
 
@@ -484,53 +414,30 @@ def _apply_xp_and_streak(
 
 @router.post("/generate")
 async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> dict:
-    # ── Try fixed content file first ─────────────────────────────────────────
-    fixed = _find_lesson_content(req.lesson_key, req.lesson_title)
-    if fixed:
-        lesson_row = _ensure_lesson_row(fixed, db)
-
-        # Generate fresh personalized companion hook per user/session
-        companion_message = _generate_companion_hook(req, fixed)
-
-        # Surface prior reflection feedback if the user has visited before
-        last_reflection_feedback = None
-        if req.user_id:
-            progress = db.query(UserLessonProgress).filter(
-                UserLessonProgress.clerk_user_id == req.user_id,
-                UserLessonProgress.lesson_key == lesson_row.lesson_key,
-            ).first()
-            if progress:
-                last_reflection_feedback = getattr(progress, "last_reflection_feedback", None)
-
-        return {
-            "lesson_type": fixed.get("lesson_type", "technique"),
-            "lesson_key": lesson_row.lesson_key,
-            "card1": companion_message,
-            "card3": {
-                "headline": fixed["content"]["headline"],
-                "points": fixed["content"]["points"],
-                "tell_me_more": fixed["content"]["tell_me_more"],
-            },
-            "missions": fixed["missions"],
-            "last_reflection_feedback": last_reflection_feedback,
-        }
-
-    # ── Fallback: full LLM generation for lessons without a content file ──────
+    # ── 1. DB cache check ────────────────────────────────────────────────────
     cached = db.query(Lesson).filter(Lesson.lesson_key == req.lesson_key).first()
     if cached:
-        if (
-            "missions" in cached.lesson_json
-            and "card2" not in cached.lesson_json
-            and "motivation" in cached.lesson_json.get("card1", {})
-        ):
-            return cached.lesson_json
-        # Old format — delete and regenerate
+        lj = cached.lesson_json
+        if "missions" in lj and "card2" not in lj and "motivation" in lj.get("card1", {}):
+            # Valid cache hit — return with prior feedback if available
+            last_rf = None
+            if req.user_id:
+                progress = db.query(UserLessonProgress).filter(
+                    UserLessonProgress.clerk_user_id == req.user_id,
+                    UserLessonProgress.lesson_key == cached.lesson_key,
+                ).first()
+                if progress:
+                    last_rf = getattr(progress, "last_reflection_feedback", None)
+            return {**lj, "lesson_key": cached.lesson_key, "last_reflection_feedback": last_rf}
+        # Old format — delete and fall through to regeneration
         db.delete(cached)
         db.commit()
 
-    rag_content = _retrieve_rag_docs(req.lesson_title, req.chapter_title, req.domain)
-    prompt = _build_lesson_prompt(req, rag_content)
+    # ── 2. RAG retrieval ─────────────────────────────────────────────────────
+    chunks = _retrieve_rag_chunks(req.lesson_title, req.chapter_title, req.domain, db)
+    prompt = _build_lesson_prompt(req, chunks)
 
+    # ── 3. LLM generation ────────────────────────────────────────────────────
     try:
         client = anthropic.Anthropic()
         message = client.messages.create(
@@ -540,7 +447,6 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
             messages=[{"role": "user", "content": prompt}],
         )
         full_text = message.content[0].text
-
     except anthropic.APIConnectionError:
         raise HTTPException(
             status_code=503,
@@ -554,12 +460,15 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
 
     lesson_data = _strip_and_parse(full_text, "Lesson")
 
+    # ── 4. Store in DB ───────────────────────────────────────────────────────
     row = Lesson(
         lesson_key=req.lesson_key,
         title=req.lesson_title,
         chapter_title=req.chapter_title,
         domain=req.domain,
         lesson_json=lesson_data,
+        sources_cited=[c["source_id"] for c in chunks] if chunks else None,
+        generated_at=datetime.now(timezone.utc),
         created_at=datetime.now(timezone.utc),
     )
     db.add(row)
