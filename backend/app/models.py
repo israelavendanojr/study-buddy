@@ -79,6 +79,8 @@ class KbChunk(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     embedding: Mapped[list | None] = mapped_column(Vector(1536), nullable=True)
+    key_quote: Mapped[str | None] = mapped_column(Text, nullable=True)
+    quote_page: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

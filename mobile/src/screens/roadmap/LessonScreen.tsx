@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker'
 import { File } from 'expo-file-system'
 import { useUser } from '@clerk/clerk-expo'
 import Companion from '../../components/Companion'
+import AnnotatedText from '../../components/AnnotatedText'
 import { colors, radius, shadows } from '../../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
@@ -65,12 +66,46 @@ interface LessonParams {
   initialMissionId?: string
 }
 
+interface AnnotatedPoint {
+  text: string
+  source_ids: string[]
+  quote?: string
+  quote_author?: string
+  quote_book?: string
+  quote_page?: number
+}
+
+interface SourceCited {
+  source_id: string
+  title?: string
+  author?: string
+  page_start?: number
+}
+
+interface ImageItem {
+  url: string
+  caption?: string
+}
+
+interface QuizCheckpointData {
+  question: string
+  options: string[]
+  correct_index: number
+  explanation: string
+}
+
+interface ReflectionCheckpointData {
+  prompt: string
+  min_words?: number
+}
+
 interface LessonContent {
   lesson_type?: 'technique' | 'recipe' | 'concept'
   lesson_key?: string
-  card1: { motivation: string; learn_points: string[] }
-  card3: { headline: string; points: string[]; tell_me_more: string }
+  card1: { motivation: string; learn_points: (string | AnnotatedPoint)[]; images?: ImageItem[] | null }
+  card3: { headline: string; points: (string | AnnotatedPoint)[]; tell_me_more: string; images?: ImageItem[] | null; quiz_checkpoint?: QuizCheckpointData | null; reflection_prompt?: ReflectionCheckpointData | null }
   missions: Mission[]
+  sources_cited?: SourceCited[]
   last_reflection_feedback?: string | null
 }
 
@@ -119,6 +154,12 @@ interface QuizResult {
   companion?: Record<string, unknown>
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function toAnnotatedPoint(p: string | AnnotatedPoint): AnnotatedPoint {
+  return typeof p === 'string' ? { text: p, source_ids: [] } : p
+}
+
 // ── Progress Indicator ─────────────────────────────────────────────────────────
 
 function ProgressIndicator({ current, progressAnim }: { current: number; progressAnim: Animated.Value }) {
@@ -165,6 +206,7 @@ export default function LessonScreen() {
   // ── State ──────────────────────────────────────────────────────────────────
   const [cardIndex, setCardIndex] = useState(0)
   const [lessonContent, setLessonContent] = useState<LessonContent | null>(null)
+  const [sourceMap, setSourceMap] = useState<Record<string, SourceCited>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [missionProgress, setMissionProgress] = useState<MissionProgress | null>(null)
@@ -190,6 +232,15 @@ export default function LessonScreen() {
   const [quizAllAnswers, setQuizAllAnswers] = useState<number[]>([])
   const [quizResult, setQuizResult] = useState<QuizResult | null>(null)
   const [quizSubmitting, setQuizSubmitting] = useState(false)
+
+  // Card3 inline quiz checkpoint state (local only — no DB/XP)
+  const [card3CheckAnswer, setCard3CheckAnswer] = useState<number | null>(null)
+  const [card3CheckRevealed, setCard3CheckRevealed] = useState(false)
+
+  // Card3 inline reflection checkpoint state
+  const [card3ReflectText, setCard3ReflectText] = useState('')
+  const [card3ReflectSubmitting, setCard3ReflectSubmitting] = useState(false)
+  const [card3ReflectFeedback, setCard3ReflectFeedback] = useState<string | null>(null)
 
   // Shared
   const [tellMeMoreOpen, setTellMeMoreOpen] = useState(false)
@@ -276,6 +327,14 @@ export default function LessonScreen() {
       if (!res.ok) throw new Error(`Server error ${res.status}`)
       const data: LessonContent = await res.json()
       setLessonContent(data)
+      // Build sourceMap from sources_cited for O(1) lookup in AnnotatedText
+      if (data.sources_cited?.length) {
+        const map: Record<string, SourceCited> = {}
+        for (const s of data.sources_cited) {
+          map[s.source_id] = s
+        }
+        setSourceMap(map)
+      }
       return data
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
@@ -340,6 +399,15 @@ export default function LessonScreen() {
     setReflectionText('')
     setReflectionSubmitting(false)
   }, [currentMissionId])
+
+  // ── Reset card3 inline checkpoints when lesson loads ────────────────────────
+  useEffect(() => {
+    setCard3CheckAnswer(null)
+    setCard3CheckRevealed(false)
+    setCard3ReflectText('')
+    setCard3ReflectSubmitting(false)
+    setCard3ReflectFeedback(null)
+  }, [lessonContent])
 
   // ── Card transition ─────────────────────────────────────────────────────────
   const advanceCard = (nextIndex: number) => {
@@ -553,6 +621,30 @@ export default function LessonScreen() {
     }
   }
 
+  // ── Card3 inline reflection checkpoint ──────────────────────────────────────
+  const handleCard3ReflectSubmit = async () => {
+    const checkpoint = lessonContent?.card3.reflection_prompt
+    if (!card3ReflectText.trim() || !checkpoint) return
+    setCard3ReflectSubmitting(true)
+    try {
+      const res = await fetch(`${API_BASE}/lesson/reflect-inline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lesson_title: params.lessonTitle,
+          prompt: checkpoint.prompt,
+          reflection_text: card3ReflectText.trim(),
+          goal: params.goal,
+        }),
+      })
+      if (!res.ok) throw new Error(`Server error ${res.status}`)
+      const data = await res.json()
+      setCard3ReflectFeedback(data.feedback)
+    } catch { /* silently fail — don't block lesson */ } finally {
+      setCard3ReflectSubmitting(false)
+    }
+  }
+
   // ── Quiz answer selection ───────────────────────────────────────────────────
   const handleQuizAnswer = (answerIndex: number) => {
     if (quizAnswerRevealed) return
@@ -680,6 +772,12 @@ export default function LessonScreen() {
     setQuizAnswerRevealed(false)
     setQuizAllAnswers([])
     setQuizResult(null)
+    // Reset card3 inline checkpoints
+    setCard3CheckAnswer(null)
+    setCard3CheckRevealed(false)
+    setCard3ReflectText('')
+    setCard3ReflectSubmitting(false)
+    setCard3ReflectFeedback(null)
   }
   resetSubmissionRef.current = resetSubmission
 
@@ -704,6 +802,29 @@ export default function LessonScreen() {
   }
 
   // ── Card renderers ──────────────────────────────────────────────────────────
+
+  // Image gallery helper (stateless)
+  const renderImageGallery = (images: ImageItem[]) => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={{ marginBottom: 16 }}
+      contentContainerStyle={{ gap: 12, paddingRight: 8 }}
+    >
+      {images.map((img, i) => (
+        <View key={i} style={styles.galleryItem}>
+          <Image
+            source={{ uri: img.url }}
+            style={styles.galleryImage}
+            resizeMode="cover"
+          />
+          {!!img.caption && (
+            <Text style={styles.galleryCaption}>{img.caption}</Text>
+          )}
+        </View>
+      ))}
+    </ScrollView>
+  )
 
   // Card 0: Hook
   const renderCard0 = () => {
@@ -731,12 +852,23 @@ export default function LessonScreen() {
               <Text style={styles.hookMotivation}>{lessonContent!.card1.motivation}</Text>
               <View style={styles.hookDivider} />
               <Text style={styles.hookSectionLabel}>In this lesson you'll learn how to…</Text>
-              {lessonContent!.card1.learn_points.map((point, i) => (
-                <View key={i} style={styles.hookBulletRow}>
-                  <Text style={styles.hookBulletDot}>•</Text>
-                  <Text style={styles.hookBulletText}>{point}</Text>
-                </View>
-              ))}
+              {lessonContent!.card1.learn_points.map((point, i) => {
+                const p = toAnnotatedPoint(point)
+                return (
+                  <AnnotatedText
+                    key={i}
+                    text={p.text}
+                    source_ids={p.source_ids}
+                    sourceMap={sourceMap}
+                    textStyle={styles.hookBulletText}
+                    bulletDotStyle={styles.hookBulletDot}
+                    quote={p.quote}
+                    quote_author={p.quote_author}
+                    quote_book={p.quote_book}
+                    quote_page={p.quote_page}
+                  />
+                )
+              })}
             </>
           ) : (
             <>
@@ -746,6 +878,7 @@ export default function LessonScreen() {
             </>
           )}
         </View>
+        {isReady && lessonContent?.card1.images?.length ? renderImageGallery(lessonContent.card1.images) : null}
         <View style={styles.spacer} />
         <Pressable
           onPress={() => isReady && advanceCard(1)}
@@ -754,6 +887,94 @@ export default function LessonScreen() {
           <Text style={styles.primaryBtnText}>Let's go →</Text>
         </Pressable>
       </ScrollView>
+    )
+  }
+
+  // Quiz checkpoint renderer (for card3)
+  const renderQuizCheckpoint = (checkpoint: QuizCheckpointData) => (
+    <View style={styles.checkpointCard}>
+      <Text style={styles.checkpointLabel}>Quick Check</Text>
+      <Text style={styles.checkpointQuestion}>{checkpoint.question}</Text>
+      <View style={styles.quizOptions}>
+        {checkpoint.options.map((opt, i) => {
+          const isSelected = card3CheckAnswer === i
+          const isCorrect = i === checkpoint.correct_index
+          let optStyle = styles.quizOption as any
+          if (card3CheckRevealed) {
+            if (isCorrect) optStyle = { ...optStyle, ...styles.quizOptionCorrect }
+            else if (isSelected) optStyle = { ...optStyle, ...styles.quizOptionWrong }
+          } else if (isSelected) {
+            optStyle = { ...optStyle, ...styles.quizOptionSelected }
+          }
+          return (
+            <Pressable
+              key={i}
+              onPress={() => {
+                if (card3CheckRevealed) return
+                setCard3CheckAnswer(i)
+                setCard3CheckRevealed(true)
+              }}
+              style={optStyle}
+              disabled={card3CheckRevealed}
+            >
+              <Text style={styles.quizOptionText}>{opt}</Text>
+            </Pressable>
+          )
+        })}
+      </View>
+      {card3CheckRevealed && (
+        <View style={styles.quizExplanation}>
+          <Text style={styles.quizExplanationText}>{checkpoint.explanation}</Text>
+        </View>
+      )}
+    </View>
+  )
+
+  // Reflection checkpoint renderer (for card3)
+  const renderReflectionCheckpoint = (checkpoint: ReflectionCheckpointData) => {
+    const wordCount = card3ReflectText.trim().split(/\s+/).filter(Boolean).length
+    const minWords = checkpoint.min_words ?? 30
+
+    if (card3ReflectFeedback) {
+      return (
+        <View style={styles.reflectCheckpointCard}>
+          <Text style={styles.checkpointLabel}>Pepper's Thoughts</Text>
+          <Text style={styles.bodyTextMuted}>{card3ReflectFeedback}</Text>
+        </View>
+      )
+    }
+
+    return (
+      <View style={styles.reflectCheckpointCard}>
+        <Text style={styles.checkpointLabel}>Reflect (optional)</Text>
+        <Text style={styles.checkpointQuestion}>{checkpoint.prompt}</Text>
+        <TextInput
+          style={styles.journalInput}
+          multiline
+          numberOfLines={4}
+          placeholder="Your thoughts…"
+          placeholderTextColor={colors.muted}
+          value={card3ReflectText}
+          onChangeText={setCard3ReflectText}
+          textAlignVertical="top"
+        />
+        <Text style={[styles.wordCount, wordCount >= minWords && styles.wordCountMet]}>
+          {wordCount} / {minWords} words
+        </Text>
+        <Pressable
+          onPress={handleCard3ReflectSubmit}
+          disabled={card3ReflectSubmitting || !card3ReflectText.trim()}
+          style={[
+            styles.primaryBtn,
+            shadows.mint,
+            (card3ReflectSubmitting || !card3ReflectText.trim()) && styles.btnDisabled,
+          ]}
+        >
+          <Text style={styles.primaryBtnText}>
+            {card3ReflectSubmitting ? 'Reading…' : 'Share with Pepper →'}
+          </Text>
+        </Pressable>
+      </View>
     )
   }
 
@@ -768,13 +989,25 @@ export default function LessonScreen() {
           <Companion size={60} mood="idle" />
         </View>
         <Text style={styles.card3Headline}>{card3.headline}</Text>
+        {card3.images?.length ? renderImageGallery(card3.images) : null}
         <View style={styles.bulletList}>
-          {card3.points.map((point, i) => (
-            <View key={i} style={styles.bulletRow}>
-              <Text style={styles.bulletDot}>•</Text>
-              <Text style={styles.bulletText}>{point}</Text>
-            </View>
-          ))}
+          {card3.points.map((point, i) => {
+            const p = toAnnotatedPoint(point)
+            return (
+              <AnnotatedText
+                key={i}
+                text={p.text}
+                source_ids={p.source_ids}
+                sourceMap={sourceMap}
+                textStyle={styles.bulletText}
+                bulletDotStyle={styles.bulletDot}
+                quote={p.quote}
+                quote_author={p.quote_author}
+                quote_book={p.quote_book}
+                quote_page={p.quote_page}
+              />
+            )
+          })}
         </View>
         <Pressable onPress={toggleTellMeMore} style={styles.tellMeMoreToggle}>
           <Animated.Text style={[styles.chevron, { transform: [{ rotate: chevronDeg }] }]}>
@@ -785,6 +1018,8 @@ export default function LessonScreen() {
         <Animated.View style={{ maxHeight: expandMaxHeight, overflow: 'hidden' }}>
           <Text style={styles.bodyTextMuted}>{card3.tell_me_more}</Text>
         </Animated.View>
+        {card3.quiz_checkpoint ? renderQuizCheckpoint(card3.quiz_checkpoint) : null}
+        {card3.reflection_prompt ? renderReflectionCheckpoint(card3.reflection_prompt) : null}
         <View style={styles.spacer} />
         <Pressable onPress={() => advanceCard(2)} style={[styles.primaryBtn, shadows.mint]}>
           <Text style={styles.primaryBtnText}>See missions →</Text>
@@ -1883,6 +2118,60 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_600SemiBold',
     fontSize: 14,
     color: colors.foreground,
+  },
+
+  // Gallery styles
+  galleryItem: {
+    width: 280,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.card,
+  },
+  galleryImage: {
+    width: 280,
+    height: 180,
+  },
+  galleryCaption: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 12,
+    color: colors.muted,
+    padding: 8,
+    lineHeight: 18,
+  },
+
+  // Checkpoint styles
+  checkpointCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.sky,
+  },
+  checkpointLabel: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 11,
+    color: colors.sky,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  checkpointQuestion: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 17,
+    color: colors.foreground,
+    lineHeight: 24,
+    marginBottom: 12,
+  },
+  reflectCheckpointCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.peach,
   },
 
   // Hook card styles (new motivation + learn_points)

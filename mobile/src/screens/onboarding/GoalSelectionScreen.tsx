@@ -221,7 +221,7 @@ export default function GoalSelectionScreen() {
         <View style={styles.companionWrap}>
           <Companion size={80} mood="happy" />
         </View>
-        <Text style={styles.headline}>What do you want to cook toward?</Text>
+        <Text style={styles.headline}>What would you like to accomplish?</Text>
         <Text style={styles.subheading}>Pick the one that fits best right now.</Text>
 
         <View style={styles.grid}>

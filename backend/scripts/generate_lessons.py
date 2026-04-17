@@ -67,12 +67,12 @@ def retrieve_rag_chunks(lesson_title: str, chapter_title: str, domain: str, db, 
     try:
         # pgvector cosine distance search
         result = db.execute(sql_text(
-            "SELECT text, source_id, page_start "
+            "SELECT text, source_id, page_start, key_quote, quote_page "
             "FROM kb_chunks "
             "ORDER BY embedding <=> CAST(:emb AS vector) "
             "LIMIT :k"
         ), {"emb": str(embedding), "k": RAG_TOP_K})
-        return [{"text": r.text, "source_id": r.source_id, "page_start": r.page_start} for r in result]
+        return [{"text": r.text, "source_id": r.source_id, "page_start": r.page_start, "key_quote": r.key_quote, "quote_page": r.quote_page} for r in result]
     except Exception as e:
         print(f"    [rag] vector search failed: {e}")
         return []
@@ -88,7 +88,13 @@ def build_lesson_prompt(lesson_entry: dict, chunks: list) -> str:
     if chunks:
         parts = []
         for c in chunks:
-            parts.append(f"[Source: {c['source_id']}]\n{c['text'][:1000]}")
+            header = f"[Source: {c['source_id']}]"
+            if c.get("quote_page") is not None:
+                header += f" | Page: {c['quote_page']}"
+            body = c['text'][:1000]
+            if c.get("key_quote"):
+                body = f"KEY QUOTE: \"{c['key_quote']}\"\n\n{body}"
+            parts.append(f"{header}\n{body}")
         rag_block = "Reference material from culinary textbooks:\n\n" + "\n\n---\n\n".join(parts) + "\n\n"
 
     return f"""{rag_block}Generate a structured lesson for a learning app. Return ONLY valid JSON — no markdown, no explanation.

@@ -68,9 +68,43 @@ class Mission(BaseModel):
     questions: list[QuizQuestion] = []
 
 
+class AnnotatedPoint(BaseModel):
+    text: str
+    source_ids: list[str] = []
+    quote: str | None = None
+    quote_author: str | None = None
+    quote_book: str | None = None
+    quote_page: int | None = None
+
+
+class SourceCited(BaseModel):
+    source_id: str
+    title: str | None = None
+    author: str | None = None
+    page_start: int | None = None
+
+
+class ImageItem(BaseModel):
+    url: str
+    caption: str | None = None
+
+
+class QuizCheckpoint(BaseModel):
+    question: str
+    options: list[str]
+    correct_index: int
+    explanation: str
+
+
+class ReflectionCheckpoint(BaseModel):
+    prompt: str
+    min_words: int = 30
+
+
 class Card1Hook(BaseModel):
-    objective: str
-    learn_points: list[str]
+    motivation: str
+    learn_points: list[AnnotatedPoint | str]  # union for backward-compat
+    images: list[ImageItem] | None = None
 
 
 class ScoreCriterion(BaseModel):
@@ -80,14 +114,18 @@ class ScoreCriterion(BaseModel):
 
 class Card3Why(BaseModel):
     headline: str
-    points: list[str]
+    points: list[AnnotatedPoint | str]  # union for backward-compat
     tell_me_more: str
+    images: list[ImageItem] | None = None
+    quiz_checkpoint: QuizCheckpoint | None = None
+    reflection_prompt: ReflectionCheckpoint | None = None
 
 
 class LessonContent(BaseModel):
     card1: Card1Hook
     card3: Card3Why
     missions: list[Mission]
+    sources_cited: list[SourceCited] = []
 
 
 class LessonRequest(BaseModel):
@@ -122,6 +160,13 @@ class ReflectRequest(BaseModel):
     reflection_text: str
     buddy_name: str
     lesson_title: str
+    goal: str
+
+
+class ReflectInlineRequest(BaseModel):
+    lesson_title: str
+    prompt: str
+    reflection_text: str
     goal: str
 
 
@@ -162,11 +207,24 @@ def _retrieve_rag_chunks(lesson_title: str, chapter_title: str, domain: str, db:
     try:
         from sqlalchemy import text as sql_text
         result = db.execute(sql_text(
-            "SELECT text, source_id FROM kb_chunks "
-            "ORDER BY embedding <=> CAST(:emb AS vector) "
+            "SELECT kc.text, kc.source_id, kc.page_start, kc.key_quote, kc.quote_page, s.title AS source_title, s.author "
+            "FROM kb_chunks kc "
+            "LEFT JOIN sources s ON s.source_id = kc.source_id "
+            "ORDER BY kc.embedding <=> CAST(:emb AS vector) "
             "LIMIT 5"
         ), {"emb": str(embedding)})
-        return [{"text": r.text, "source_id": r.source_id} for r in result]
+        return [
+            {
+                "text": r.text,
+                "source_id": r.source_id,
+                "page_start": r.page_start,
+                "key_quote": r.key_quote,
+                "quote_page": r.quote_page or r.page_start,
+                "source_title": r.source_title,
+                "author": r.author,
+            }
+            for r in result
+        ]
     except Exception as e:
         print(f"[rag] vector search failed: {e}")
         return []
@@ -271,8 +329,20 @@ def _build_lesson_prompt(req: LessonRequest, chunks: list[dict]) -> str:
     )
     rag_block = ""
     if chunks:
-        parts = [f"[{c['source_id']}]\n{c['text']}" for c in chunks]
-        rag_block = "Reference material from culinary textbooks:\n\n" + "\n\n---\n\n".join(parts) + "\n\n"
+        parts = []
+        for c in chunks:
+            header = f"[SOURCE: {c['source_id']}]"
+            if c.get("source_title"):
+                header += f" | Title: {c['source_title']}"
+            if c.get("author"):
+                header += f" | Author: {c['author']}"
+            if c.get("quote_page") is not None:
+                header += f" | Page: {c['quote_page']}"
+            body = c['text']
+            if c.get("key_quote"):
+                body = f"KEY QUOTE: \"{c['key_quote']}\"\n\n{c['text']}"
+            parts.append(f"{header}\n{body}")
+        rag_block = "Reference material from culinary textbooks — cite SOURCE IDs inline:\n\n" + "\n\n---\n\n".join(parts) + "\n\n"
 
     return f"""{rag_block}Generate a structured lesson for a learning app. Return ONLY valid JSON — no markdown, no explanation.
 
@@ -288,12 +358,46 @@ Return JSON matching this exact schema:
 {{
   "card1": {{
     "motivation": "One verb-first sentence — why THIS skill matters for THIS goal (e.g. 'Master the 3-min sear that turns flat chicken into restaurant-quality browning')",
-    "learn_points": ["Specific skill point 1 — what they'll be able to do (≤12 words)", "Point 2", "Point 3"]
+    "learn_points": [
+      {{
+        "text": "Specific skill point 1 — what they'll be able to do (≤12 words)",
+        "source_ids": ["source_id_if_grounded"],
+        "quote": "Exact quote text supporting this point, if available",
+        "quote_author": "Author First Last",
+        "quote_book": "Book Title",
+        "quote_page": 42
+      }},
+      {{"text": "Point 2 — no citation needed", "source_ids": []}},
+      {{"text": "Point 3", "source_ids": []}}
+    ],
+    "images": null
   }},
   "card3": {{
     "headline": "The single most important insight in 1 sentence",
-    "points": ["Key point 1 — short and direct", "Key point 2", "Key point 3"],
-    "tell_me_more": "2-3 sentences deepening the concept, revealed on tap"
+    "points": [
+      {{
+        "text": "Key point 1 — short and direct",
+        "source_ids": ["source_id_if_grounded"],
+        "quote": "Exact quote text supporting this point, if available",
+        "quote_author": "Author First Last",
+        "quote_book": "Book Title",
+        "quote_page": 154
+      }},
+      {{"text": "Key point 2", "source_ids": []}},
+      {{"text": "Key point 3", "source_ids": []}}
+    ],
+    "tell_me_more": "2-3 sentences deepening the concept, revealed on tap",
+    "images": null,
+    "quiz_checkpoint": {{
+      "question": "One concrete question testing the card3 headline insight",
+      "options": ["Option A (≤8 words)", "Option B (≤8 words)", "Option C (≤8 words)"],
+      "correct_index": 0,
+      "explanation": "1-2 sentences explaining why correct"
+    }},
+    "reflection_prompt": {{
+      "prompt": "Open-ended personal question connecting the concept to their own cooking",
+      "min_words": 30
+    }}
   }},
   "missions": [
     {{
@@ -318,13 +422,27 @@ Return JSON matching this exact schema:
       "prompt": "Specific question about mission 2",
       "reflection_choices": ["Option 1", "Option 2", "Option 3", "Option 4"]
     }}
+  ],
+  "sources_cited": [
+    {{"source_id": "culinary_foundations_cheramie", "title": "Culinary Foundations", "author": "Cheramie", "page_start": 42}}
   ]
 }}
 
 Rules:
+- learn_points and points are arrays of objects with text and source_ids fields
+- Only add source_ids when the point is directly supported by the reference material. Leave source_ids: [] if not grounded
+- sources_cited must ONLY include sources you actually referenced in learn_points or points
+- motivation and headline must remain plain strings — do NOT cite them
 - Generate 2-4 missions total. Must include at least 1-2 required missions
 - Each mission must include mission_type field set to "photo_submission"
 - reflection_choices must be exactly 3-4 options
+- images: Always emit null — do not generate image URLs
+- quiz_checkpoint: Always include for technique and concept lessons; question must test the card3 headline specifically
+- reflection_prompt: Always include; must be open-ended and personal, not factual recall
+- options in quiz_checkpoint must be exactly 3 items, ≤8 words each
+- quote: Only include when a KEY QUOTE appears in the reference material above that directly supports this point. Quote must be word-for-word exact. If no key quote supports this point, omit the field entirely (do not set to null — just omit).
+- quote_author, quote_book, quote_page: Must match the SOURCE metadata exactly. Never invent author/book/page.
+- source_ids: Still required when grounded — used for backward compat
 - Return ONLY the JSON object"""
 
 
@@ -408,6 +526,27 @@ def _apply_xp_and_streak(
     return companion_result
 
 
+def _is_lesson_json_stale(lj: dict) -> bool:
+    """Return True if cached lesson JSON should be regenerated."""
+    if "missions" not in lj:
+        return True
+    if "card2" in lj:
+        return True
+    card1 = lj.get("card1", {})
+    if "motivation" not in card1:
+        return True
+    # New check: learn_points must be list of dicts, not strings (old format)
+    learn_points = card1.get("learn_points", [])
+    if learn_points and isinstance(learn_points[0], str):
+        return True
+    # New check: card3.points must be list of dicts
+    card3 = lj.get("card3", {})
+    points = card3.get("points", [])
+    if points and isinstance(points[0], str):
+        return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -418,7 +557,7 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
     cached = db.query(Lesson).filter(Lesson.lesson_key == req.lesson_key).first()
     if cached:
         lj = cached.lesson_json
-        if "missions" in lj and "card2" not in lj and "motivation" in lj.get("card1", {}):
+        if not _is_lesson_json_stale(lj):
             # Valid cache hit — return with prior feedback if available
             last_rf = None
             if req.user_id:
@@ -442,7 +581,7 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
         client = anthropic.Anthropic()
         message = client.messages.create(
             model=ANTHROPIC_MODEL,
-            max_tokens=2048,
+            max_tokens=2560,
             system=PEPPER_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -524,6 +663,19 @@ async def submit_reflection(req: ReflectRequest, db: Session = Depends(get_db)) 
         "xp_earned": XP_PER_MISSION,
         "companion": companion_result,
     }
+
+
+@router.post("/reflect-inline")
+async def reflect_inline(req: ReflectInlineRequest) -> dict:
+    """Lightweight inline reflection feedback — no DB writes, no XP, no mission completion.
+    Used for the optional card3 reflection checkpoint."""
+    feedback = _generate_reflection_feedback(
+        req.reflection_text,
+        req.lesson_title,
+        req.prompt,
+        req.goal,
+    )
+    return {"feedback": feedback}
 
 
 @router.post("/quiz")

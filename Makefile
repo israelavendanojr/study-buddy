@@ -32,7 +32,10 @@ db-stop: ## Stop PostgreSQL
 
 delete-roadmap:
 	psql -h localhost -U studbud studbud -c "DELETE FROM user_roadmaps;"
-	
+
+delete-lessons:
+	psql -h localhost -p 5432 -U studbud -d studbud -c "DELETE FROM lessons;"
+
 backend: ## Start FastAPI (requires DB running)
 	cd backend && venv/bin/uvicorn app.main:app --reload --host 0.0.0.0
 
