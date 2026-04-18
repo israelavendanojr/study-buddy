@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
@@ -34,8 +34,8 @@ interface QuizQuestion {
 }
 
 interface MatchingPair {
-  left: string
-  right: string
+  term: string
+  definition: string
 }
 
 interface Mission {
@@ -64,6 +64,21 @@ interface Mission {
   // minigame_fill_blank
   fill_blank_sentence?: string
   fill_blank_answer?: string
+}
+
+interface Activity {
+  id: string
+  type: 'multiple_choice' | 'image_id' | 'matching' | 'fill_blank' | 'sequence'
+  question?: string
+  prompt?: string
+  options?: string[]
+  correct_index?: number | null
+  explanation?: string
+  pairs?: MatchingPair[]
+  sentence?: string
+  correct_answer?: string
+  steps?: string[]
+  correct_order?: number[]
 }
 
 interface LessonParams {
@@ -119,7 +134,8 @@ interface LessonContent {
   lesson_key?: string
   card1: { motivation: string; learn_points: (string | AnnotatedPoint)[]; images?: ImageItem[] | null }
   card3: { headline: string; points: (string | AnnotatedPoint)[]; tell_me_more: string; images?: ImageItem[] | null; quiz_checkpoint?: QuizCheckpointData | null; reflection_prompt?: ReflectionCheckpointData | null }
-  missions: Mission[]
+  missions?: Mission[] // deprecated, for backward compat
+  activities?: Activity[] // new: sequential activities
   sources_cited?: SourceCited[]
   last_reflection_feedback?: string | null
 }
@@ -228,61 +244,55 @@ export default function LessonScreen() {
   const [progressFetched, setProgressFetched] = useState(false)
   const [currentMissionId, setCurrentMissionId] = useState<string | null>(null)
 
-  // Photo submission state
-  const [selectedReflection, setSelectedReflection] = useState<string | null>(null)
+  // ─ Activity state (new) ────────────────────────────────────────────────────
+  const [completedActivities, setCompletedActivities] = useState<Set<string>>(new Set())
+  const [activityResults, setActivityResults] = useState<Record<string, { passed: boolean; explanation: string }>>({})
+  const [lessonComplete, setLessonComplete] = useState(false)
+  const [photoModalVisible, setPhotoModalVisible] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  // Per-activity selection state
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, number | null>>({})
+  const [matchState, setMatchState] = useState<Record<string, { leftSelected: string | null; rightSelected: string | null; matched: Record<string, string> }>>({})
+  const [userOrders, setUserOrders] = useState<Record<string, number[]>>({})
+
+  // Shuffled options for fill_blank (keyed by activity ID)
+  const shuffledOptionsMap = useMemo(() => {
+    const map: Record<string, string[]> = {}
+    if (lessonContent?.activities) {
+      for (const act of lessonContent.activities) {
+        if (act.type === 'fill_blank' && act.options) {
+          map[act.id] = [...act.options].sort(() => Math.random() - 0.5)
+        }
+      }
+    }
+    return map
+  }, [lessonContent?.lesson_key])
+
+  // Photo submission state (used for post-lesson modal)
   const [photoUri, setPhotoUri] = useState<string | null>(null)
   const [photoMimeType, setPhotoMimeType] = useState<string>('image/jpeg')
-  const [validating, setValidating] = useState(false)
-  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
-  const [submitError, setSubmitError] = useState<string | null>(null)
-
-  // Reflection journal state
-  const [reflectionText, setReflectionText] = useState('')
-  const [reflectionSubmitting, setReflectionSubmitting] = useState(false)
-
-  // Pop quiz state
-  const [quizQuestionIndex, setQuizQuestionIndex] = useState(0)
-  const [quizSelectedAnswer, setQuizSelectedAnswer] = useState<number | null>(null)
-  const [quizAnswerRevealed, setQuizAnswerRevealed] = useState(false)
-  const [quizAllAnswers, setQuizAllAnswers] = useState<number[]>([])
-  const [quizResult, setQuizResult] = useState<QuizResult | null>(null)
-  const [quizSubmitting, setQuizSubmitting] = useState(false)
-
-  // Card3 inline quiz checkpoint state (local only — no DB/XP)
-  const [card3CheckAnswer, setCard3CheckAnswer] = useState<number | null>(null)
-  const [card3CheckRevealed, setCard3CheckRevealed] = useState(false)
-
-  // Card3 inline reflection checkpoint state
-  const [card3ReflectText, setCard3ReflectText] = useState('')
-  const [card3ReflectSubmitting, setCard3ReflectSubmitting] = useState(false)
-  const [card3ReflectFeedback, setCard3ReflectFeedback] = useState<string | null>(null)
-
-  // Minigame state
-  const [matchingPairs, setMatchingPairs] = useState<{ left: string; right: string }[]>([]) // tracked pairs
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
-  const [stepOrder, setStepOrder] = useState<string[]>([]) // current order
-  const [fillBlankAnswer, setFillBlankAnswer] = useState('')
-  const [minigameResult, setMinigameResult] = useState<{ passed: boolean; feedback: string } | null>(null)
-  const [minigameSubmitting, setMinigameSubmitting] = useState(false)
-
-  // Shared
-  const [tellMeMoreOpen, setTellMeMoreOpen] = useState(false)
   const [shareCaption, setShareCaption] = useState('')
   const [sharePosting, setSharePosting] = useState(false)
   const [sharePosted, setSharePosted] = useState(false)
-  const [reflectionNote, setReflectionNote] = useState('')
+
+  // Shared
+  const [tellMeMoreOpen, setTellMeMoreOpen] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const hasSignaledComplete = useRef(false)
   const hasInitializedCard = useRef(false)
 
   // ── Dynamic card indices ────────────────────────────────────────────────────
-  const hasInteractiveCard = !!(lessonContent?.card3.quiz_checkpoint || lessonContent?.card3.reflection_prompt)
-  const TOTAL_CARDS = hasInteractiveCard ? 6 : 5
+  const activities = lessonContent?.activities ?? []
+  const activityCount = activities.length
+  const TOTAL_CARDS = 2 + activityCount + 1  // hook + deep_dive + N activities + completion
   const CARD_HOOK = 0
   const CARD_DEEP_DIVE = 1
-  const CARD_INTERACTIVE = hasInteractiveCard ? 2 : null
-  const CARD_MISSIONS = hasInteractiveCard ? 3 : 2
-  const CARD_SUBMISSION = hasInteractiveCard ? 4 : 3
-  const CARD_FEEDBACK = hasInteractiveCard ? 5 : 4
+  const CARD_FIRST_ACTIVITY = 2
+  const CARD_COMPLETION = 2 + activityCount
+
+  // Backward compat: if lessons still have missions instead of activities
+  const hasMissionsOnly = !activityCount && !!(lessonContent?.missions?.length)
 
   // ── Swipe nav ──────────────────────────────────────────────────────────────
   const canSwipeRef = useRef({ forward: false, back: false, index: 0 })
@@ -299,10 +309,6 @@ export default function LessonScreen() {
   const xpScale = useRef(new Animated.Value(0)).current
   const feedbackOpacity = useRef(new Animated.Value(0)).current
   const companionScale = useRef(new Animated.Value(1)).current
-  const dot1 = useRef(new Animated.Value(0.3)).current
-  const dot2 = useRef(new Animated.Value(0.3)).current
-  const dot3 = useRef(new Animated.Value(0.3)).current
-  const dotLoops = useRef<Animated.CompositeAnimation[]>([])
 
   // ── Swipe responder ────────────────────────────────────────────────────────
   const snapBack = () =>
@@ -407,41 +413,15 @@ export default function LessonScreen() {
     init()
   }, [])
 
-  // ── Skip to missions list on revisit ────────────────────────────────────────
+  // ── Initialize card index on first load ────────────────────────────────────────
   useEffect(() => {
     const ready = params.userId ? progressFetched && !!lessonContent : !!lessonContent
     if (!ready || hasInitializedCard.current) return
     hasInitializedCard.current = true
-
-    if (params.initialMissionId) {
-      setCurrentMissionId(params.initialMissionId)
-      setCardIndex(3)
-      progressAnim.setValue(3 / TOTAL_CARDS)
-    } else if (missionProgress && missionProgress.completed_missions.length > 0) {
-      setCardIndex(2)
-      progressAnim.setValue(2 / TOTAL_CARDS)
-    }
-  }, [lessonContent, progressFetched, missionProgress])
-
-  // ── Reset quiz/reflection state when mission changes ────────────────────────
-  useEffect(() => {
-    setQuizQuestionIndex(0)
-    setQuizSelectedAnswer(null)
-    setQuizAnswerRevealed(false)
-    setQuizAllAnswers([])
-    setQuizResult(null)
-    setReflectionText('')
-    setReflectionSubmitting(false)
-  }, [currentMissionId])
-
-  // ── Reset card3 inline checkpoints when lesson loads ────────────────────────
-  useEffect(() => {
-    setCard3CheckAnswer(null)
-    setCard3CheckRevealed(false)
-    setCard3ReflectText('')
-    setCard3ReflectSubmitting(false)
-    setCard3ReflectFeedback(null)
-  }, [lessonContent])
+    // For activities, start at hook card (index 0)
+    setCardIndex(0)
+    progressAnim.setValue(0)
+  }, [lessonContent, progressFetched])
 
   // ── Card transition ─────────────────────────────────────────────────────────
   const advanceCard = (nextIndex: number) => {
@@ -472,30 +452,9 @@ export default function LessonScreen() {
     ]).start()
   }
 
-  // ── Loading dots ────────────────────────────────────────────────────────────
+  // ── Completion animations ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (validating || reflectionSubmitting) {
-      dotLoops.current.forEach(l => l.stop())
-      dotLoops.current = [dot1, dot2, dot3].map((anim, i) => {
-        anim.setValue(0.3)
-        const loop = Animated.loop(
-          Animated.sequence([
-            Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true }),
-            Animated.timing(anim, { toValue: 0.3, duration: 400, useNativeDriver: true }),
-          ])
-        )
-        setTimeout(() => loop.start(), i * 200)
-        return loop
-      })
-    } else {
-      dotLoops.current.forEach(l => l.stop())
-      dot1.setValue(0.3); dot2.setValue(0.3); dot3.setValue(0.3)
-    }
-  }, [validating, reflectionSubmitting])
-
-  // ── Card 5 reveal animations ────────────────────────────────────────────────
-  useEffect(() => {
-    if (!validationResult) return
+    if (!lessonComplete) return
     Animated.sequence([
       Animated.timing(companionScale, { toValue: 0.8, duration: 100, useNativeDriver: true }),
       Animated.spring(companionScale, { toValue: 1, friction: 4, tension: 120, useNativeDriver: true }),
@@ -507,7 +466,7 @@ export default function LessonScreen() {
     ]).start()
     xpScale.setValue(0)
     Animated.spring(xpScale, { toValue: 1, friction: 4, tension: 100, useNativeDriver: true }).start()
-  }, [validationResult])
+  }, [lessonComplete])
 
   // ── Photo picker ────────────────────────────────────────────────────────────
   const pickPhoto = async (source: 'camera' | 'gallery') => {
@@ -550,210 +509,42 @@ export default function LessonScreen() {
     ])
   }
 
-  // ── Submit photo mission ────────────────────────────────────────────────────
-  const handlePhotoSubmit = async () => {
-    if (!photoUri || !lessonContent || !currentMissionId) return
-    const mission = lessonContent.missions.find(m => m.id === currentMissionId)
-    if (!mission) return
+  // ── Mark activity complete ────────────────────────────────────────────────
+  const markActivityComplete = async (activity: Activity, passed: boolean) => {
+    if (!lessonContent || !params.userId) return
 
-    setValidating(true)
-
+    setSubmitting(true)
     try {
-      const base64 = await new File(photoUri).base64()
-
-      const res = await fetch(`${API_BASE}/lesson/validate`, {
+      const res = await fetch(`${API_BASE}/lesson/activity-complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: params.userId,
           lesson_key: lessonContent.lesson_key ?? params.lessonKey,
-          mission_id: currentMissionId,
-          photo_base64: base64,
-          photo_media_type: photoMimeType,
-          reflection_choice: reflectionNote || '',
-          buddy_name: 'Garlic',
-          goal: params.goal,
-          lesson_title: params.lessonTitle,
-          domain: params.domain,
+          activity_id: activity.id,
+          passed,
         }),
       })
       if (!res.ok) throw new Error(`Server error ${res.status}`)
-      const data: ValidationResult = await res.json()
-      setValidationResult(data)
-      advanceCard(CARD_FEEDBACK)
 
-      if (data.mission_completed) {
-        setMissionProgress(prev => ({
-          completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
-          is_required_complete: data.lesson_now_required_complete || (prev?.is_required_complete ?? false),
-          is_fully_complete: prev?.is_fully_complete ?? false,
-        }))
-      }
+      // Mark as completed
+      setCompletedActivities(prev => new Set([...prev, activity.id]))
 
-      if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
-        hasSignaledComplete.current = true
-        params.onComplete(params.lessonId)
-      }
-
-      if (data.lesson_now_fully_complete) {
-        params.onFullyComplete?.(params.lessonKey)
-      }
-    } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : 'Something went wrong')
-    } finally {
-      setValidating(false)
-    }
-  }
-
-  // ── Submit reflection journal ───────────────────────────────────────────────
-  const handleReflectionSubmit = async () => {
-    if (!reflectionText.trim() || !lessonContent || !currentMissionId || !params.userId) return
-    const mission = lessonContent.missions.find(m => m.id === currentMissionId)
-    if (!mission) return
-
-    setReflectionSubmitting(true)
-    advanceCard(4)
-
-    try {
-      const res = await fetch(`${API_BASE}/lesson/reflect`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: params.userId,
-          lesson_key: lessonContent.lesson_key ?? params.lessonKey,
-          mission_id: currentMissionId,
-          reflection_text: reflectionText.trim(),
-          buddy_name: 'Garlic',
-          lesson_title: params.lessonTitle,
-          goal: params.goal,
-        }),
-      })
-      if (!res.ok) throw new Error(`Server error ${res.status}`)
-      const data: ValidationResult = await res.json()
-      setValidationResult(data)
-
-      if (data.mission_completed) {
-        setMissionProgress(prev => ({
-          completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
-          is_required_complete: data.lesson_now_required_complete || (prev?.is_required_complete ?? false),
-          is_fully_complete: prev?.is_fully_complete ?? false,
-        }))
-      }
-
-      if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
-        hasSignaledComplete.current = true
-        params.onComplete(params.lessonId)
-      }
-
-      if (data.lesson_now_fully_complete) {
-        params.onFullyComplete?.(params.lessonKey)
-      }
-    } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : 'Something went wrong')
-    } finally {
-      setReflectionSubmitting(false)
-    }
-  }
-
-  // ── Card3 inline reflection checkpoint ──────────────────────────────────────
-  const handleCard3ReflectSubmit = async () => {
-    const checkpoint = lessonContent?.card3.reflection_prompt
-    if (!card3ReflectText.trim() || !checkpoint) return
-    setCard3ReflectSubmitting(true)
-    try {
-      const res = await fetch(`${API_BASE}/lesson/reflect-inline`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lesson_title: params.lessonTitle,
-          prompt: checkpoint.prompt,
-          reflection_text: card3ReflectText.trim(),
-          goal: params.goal,
-        }),
-      })
-      if (!res.ok) throw new Error(`Server error ${res.status}`)
-      const data = await res.json()
-      setCard3ReflectFeedback(data.feedback)
-    } catch { /* silently fail — don't block lesson */ } finally {
-      setCard3ReflectSubmitting(false)
-    }
-  }
-
-  // ── Quiz answer selection ───────────────────────────────────────────────────
-  const handleQuizAnswer = (answerIndex: number) => {
-    if (quizAnswerRevealed) return
-    setQuizSelectedAnswer(answerIndex)
-    setQuizAnswerRevealed(true)
-  }
-
-  const handleQuizNext = () => {
-    if (quizSelectedAnswer === null) return
-    const newAnswers = [...quizAllAnswers, quizSelectedAnswer]
-    setQuizAllAnswers(newAnswers)
-    setQuizQuestionIndex(i => i + 1)
-    setQuizSelectedAnswer(null)
-    setQuizAnswerRevealed(false)
-  }
-
-  const handleQuizFinish = async () => {
-    if (!lessonContent || !currentMissionId || !params.userId || quizSelectedAnswer === null) return
-    const finalAnswers = [...quizAllAnswers, quizSelectedAnswer]
-
-    // Score locally first for immediate feedback
-    const mission = lessonContent.missions.find(m => m.id === currentMissionId)
-    const questions = mission?.questions ?? []
-    let correct = 0
-    const localResults: QuizAnswerResult[] = questions.map((q, i) => {
-      const selected = finalAnswers[i] ?? -1
-      const is_correct = selected === q.correct_index
-      if (is_correct) correct++
-      return { question_index: i, selected, correct_index: q.correct_index, is_correct, explanation: q.explanation }
-    })
-
-    setQuizResult({
-      results: localResults,
-      score: correct,
-      total: questions.length,
-      passed: correct >= Math.max(1, Math.round(questions.length * 0.67)),
-      mission_completed: true,
-      lesson_now_required_complete: false,
-      lesson_now_fully_complete: false,
-      xp_earned: 20,
-    })
-
-    // Submit to server for XP/progress in background
-    setQuizSubmitting(true)
-    try {
-      const res = await fetch(`${API_BASE}/lesson/quiz`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: params.userId,
-          lesson_key: lessonContent.lesson_key ?? params.lessonKey,
-          mission_id: currentMissionId,
-          answers: finalAnswers,
-        }),
-      })
-      if (res.ok) {
-        const data: QuizResult = await res.json()
-        setQuizResult(data)
-        if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
+      // Check if all activities are done
+      if (completedActivities.size + 1 === activities.length) {
+        setLessonComplete(true)
+        if (!hasSignaledComplete.current) {
           hasSignaledComplete.current = true
           params.onComplete(params.lessonId)
         }
-        if (data.lesson_now_fully_complete) {
-          params.onFullyComplete?.(params.lessonKey)
-        }
-        setMissionProgress(prev => ({
-          completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
-          is_required_complete: data.lesson_now_required_complete || (prev?.is_required_complete ?? false),
-          is_fully_complete: prev?.is_fully_complete ?? false,
-        }))
       }
-    } catch { /* local result already shown */ } finally {
-      setQuizSubmitting(false)
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : 'Something went wrong')
+    } finally {
+      setSubmitting(false)
     }
   }
+
 
   // ── Exit lesson ─────────────────────────────────────────────────────────────
   const handleExit = () => {
@@ -791,28 +582,12 @@ export default function LessonScreen() {
   }
 
   // ── Reset between missions ──────────────────────────────────────────────────
+  // Reset function for activities (minimal - mostly for photo modal state)
   const resetSubmission = () => {
     setPhotoUri(null)
     setPhotoMimeType('image/jpeg')
-    setSelectedReflection(null)
-    setReflectionNote('')
-    setValidationResult(null)
-    setSubmitError(null)
     setShareCaption('')
     setSharePosted(false)
-    setReflectionText('')
-    setReflectionSubmitting(false)
-    setQuizQuestionIndex(0)
-    setQuizSelectedAnswer(null)
-    setQuizAnswerRevealed(false)
-    setQuizAllAnswers([])
-    setQuizResult(null)
-    // Reset card3 inline checkpoints
-    setCard3CheckAnswer(null)
-    setCard3CheckRevealed(false)
-    setCard3ReflectText('')
-    setCard3ReflectSubmitting(false)
-    setCard3ReflectFeedback(null)
   }
   resetSubmissionRef.current = resetSubmission
 
@@ -925,93 +700,6 @@ export default function LessonScreen() {
     )
   }
 
-  // Quiz checkpoint renderer (for card3)
-  const renderQuizCheckpoint = (checkpoint: QuizCheckpointData) => (
-    <View style={styles.checkpointCard}>
-      <Text style={styles.checkpointLabel}>Quick Check</Text>
-      <Text style={styles.checkpointQuestion}>{checkpoint.question}</Text>
-      <View style={styles.quizOptions}>
-        {checkpoint.options.map((opt, i) => {
-          const isSelected = card3CheckAnswer === i
-          const isCorrect = i === checkpoint.correct_index
-          let optStyle = styles.quizOption as any
-          if (card3CheckRevealed) {
-            if (isCorrect) optStyle = { ...optStyle, ...styles.quizOptionCorrect }
-            else if (isSelected) optStyle = { ...optStyle, ...styles.quizOptionWrong }
-          } else if (isSelected) {
-            optStyle = { ...optStyle, ...styles.quizOptionSelected }
-          }
-          return (
-            <Pressable
-              key={i}
-              onPress={() => {
-                if (card3CheckRevealed) return
-                setCard3CheckAnswer(i)
-                setCard3CheckRevealed(true)
-              }}
-              style={optStyle}
-              disabled={card3CheckRevealed}
-            >
-              <Text style={styles.quizOptionText}>{opt}</Text>
-            </Pressable>
-          )
-        })}
-      </View>
-      {card3CheckRevealed && (
-        <View style={styles.quizExplanation}>
-          <Text style={styles.quizExplanationText}>{checkpoint.explanation}</Text>
-        </View>
-      )}
-    </View>
-  )
-
-  // Reflection checkpoint renderer (for card3)
-  const renderReflectionCheckpoint = (checkpoint: ReflectionCheckpointData) => {
-    const wordCount = card3ReflectText.trim().split(/\s+/).filter(Boolean).length
-    const minWords = checkpoint.min_words ?? 30
-
-    if (card3ReflectFeedback) {
-      return (
-        <View style={styles.reflectCheckpointCard}>
-          <Text style={styles.checkpointLabel}>Pepper's Thoughts</Text>
-          <Text style={styles.bodyTextMuted}>{card3ReflectFeedback}</Text>
-        </View>
-      )
-    }
-
-    return (
-      <View style={styles.reflectCheckpointCard}>
-        <Text style={styles.checkpointLabel}>Reflect (optional)</Text>
-        <Text style={styles.checkpointQuestion}>{checkpoint.prompt}</Text>
-        <TextInput
-          style={styles.journalInput}
-          multiline
-          numberOfLines={4}
-          placeholder="Your thoughts…"
-          placeholderTextColor={colors.muted}
-          value={card3ReflectText}
-          onChangeText={setCard3ReflectText}
-          textAlignVertical="top"
-        />
-        <Text style={[styles.wordCount, wordCount >= minWords && styles.wordCountMet]}>
-          {wordCount} / {minWords} words
-        </Text>
-        <Pressable
-          onPress={handleCard3ReflectSubmit}
-          disabled={card3ReflectSubmitting || !card3ReflectText.trim()}
-          style={[
-            styles.primaryBtn,
-            shadows.mint,
-            (card3ReflectSubmitting || !card3ReflectText.trim()) && styles.btnDisabled,
-          ]}
-        >
-          <Text style={styles.primaryBtnText}>
-            {card3ReflectSubmitting ? 'Reading…' : 'Share with Pepper →'}
-          </Text>
-        </Pressable>
-      </View>
-    )
-  }
 
   // Card 1: Deep Dive
   const renderCard2 = () => {
@@ -1054,775 +742,508 @@ export default function LessonScreen() {
           <Text style={styles.bodyTextMuted}>{card3.tell_me_more}</Text>
         </Animated.View>
         <View style={styles.spacer} />
-        <Pressable onPress={() => advanceCard(hasInteractiveCard ? (CARD_INTERACTIVE as number) : CARD_MISSIONS)} style={[styles.primaryBtn, shadows.mint]}>
-          <Text style={styles.primaryBtnText}>{hasInteractiveCard ? 'Check your understanding →' : 'See missions →'}</Text>
+        <Pressable onPress={() => advanceCard(CARD_FIRST_ACTIVITY)} style={[styles.primaryBtn, shadows.mint]}>
+          <Text style={styles.primaryBtnText}>Ready to practice? →</Text>
         </Pressable>
       </ScrollView>
     )
   }
 
-  // Card 1.5: Interactive Checkpoint (quiz or reflection — only if present)
-  const renderCardInteractive = () => {
-    if (!lessonContent?.card3) return null
-    const { quiz_checkpoint, reflection_prompt } = lessonContent.card3
+  // ── Activity renderers ────────────────────────────────────────────────────────
 
-    return (
-      <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.companionRow}>
-          <Companion size={60} mood="thinking" />
-        </View>
-        {quiz_checkpoint ? renderQuizCheckpoint(quiz_checkpoint) : null}
-        {reflection_prompt ? renderReflectionCheckpoint(reflection_prompt) : null}
-        <View style={styles.spacer} />
-        <Pressable onPress={() => advanceCard(CARD_MISSIONS)} style={[styles.primaryBtn, shadows.mint]}>
-          <Text style={styles.primaryBtnText}>See missions →</Text>
-        </Pressable>
-      </ScrollView>
-    )
-  }
+  const renderActivityCard = (activityIndex: number) => {
+    const activity = activities[activityIndex]
+    if (!activity) return null
 
-  // Card 2: Missions List
-  const renderCard3 = () => {
-    if (!lessonContent) return null
-    const { missions } = lessonContent
-    const completedIds = new Set(missionProgress?.completed_missions ?? [])
-    const requiredMissions = missions.filter(m => m.is_required)
-    const optionalMissions = missions.filter(m => !m.is_required)
-    const isRequiredComplete = missionProgress?.is_required_complete ?? false
+    const isAnswered = !!activityResults[activity.id]
+    const result = activityResults[activity.id]
 
-    const missionTypeIcon = (type: string) => {
-      if (type === 'pop_quiz') return '🎯'
-      if (type === 'reflection_journal') return '📝'
-      if (type.startsWith('minigame_')) return '🎮'
-      return '📷'
-    }
-
-    return (
-      <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.missionsHeader}>
-          <Companion size={60} mood={isRequiredComplete ? 'excited' : 'happy'} />
-          <View style={styles.missionsHeaderText}>
-            <Text style={styles.sectionHeading}>Missions</Text>
-            {isRequiredComplete && (
-              <View style={styles.completeBadge}>
-                <Text style={styles.completeBadgeText}>Required done ✓</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {requiredMissions.map(mission => {
-          const isDone = completedIds.has(mission.id)
-          return (
-            <Pressable
-              key={mission.id}
-              onPress={() => { setCurrentMissionId(mission.id); advanceCard(CARD_SUBMISSION) }}
-              style={[styles.missionItem, isDone && styles.missionItemDone]}
-            >
-              <View style={styles.missionItemBody}>
-                <View style={styles.missionItemTop}>
-                  <View style={styles.requiredBadge}>
-                    <Text style={styles.requiredBadgeText}>Required</Text>
-                  </View>
-                  <Text style={styles.missionTypeIcon}>{missionTypeIcon(mission.mission_type)}</Text>
-                  {isDone && <Text style={styles.missionDoneCheck}>✓</Text>}
-                </View>
-                <Text style={[styles.missionTitle, isDone && styles.missionTitleDone]}>
-                  {mission.title}
-                </Text>
-                <Text style={styles.missionMeta}>~{mission.duration_minutes} min</Text>
-              </View>
-              {!isDone && <Text style={styles.missionArrow}>→</Text>}
-            </Pressable>
-          )
-        })}
-
-        {optionalMissions.length > 0 && (
-          <>
-            <Text style={styles.optionalHeading}>Extra Credit</Text>
-            {optionalMissions.map(mission => {
-              const isDone = completedIds.has(mission.id)
-              return (
-                <Pressable
-                  key={mission.id}
-                  onPress={() => { setCurrentMissionId(mission.id); advanceCard(CARD_SUBMISSION) }}
-                  style={[styles.missionItem, styles.missionItemOptional, isDone && styles.missionItemDone]}
-                >
-                  <View style={styles.missionItemBody}>
-                    <View style={styles.missionItemTop}>
-                      <Text style={styles.missionTypeIcon}>{missionTypeIcon(mission.mission_type)}</Text>
-                    </View>
-                    <Text style={[styles.missionTitle, isDone && styles.missionTitleDone]}>
-                      {mission.title}
-                    </Text>
-                    <Text style={styles.missionMeta}>~{mission.duration_minutes} min · optional</Text>
-                  </View>
-                  {isDone
-                    ? <Text style={styles.missionDoneCheck}>✓</Text>
-                    : <Text style={styles.missionArrow}>→</Text>
-                  }
-                </Pressable>
-              )
-            })}
-          </>
-        )}
-
-        <View style={styles.reviewRow}>
-          <Text style={styles.reviewLabel}>Review:</Text>
-          <Pressable onPress={() => advanceCard(CARD_HOOK)} style={styles.reviewBtn}>
-            <Text style={styles.reviewBtnText}>Intro</Text>
-          </Pressable>
-          <Pressable onPress={() => advanceCard(CARD_DEEP_DIVE)} style={styles.reviewBtn}>
-            <Text style={styles.reviewBtnText}>Deep Dive</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.spacer} />
-        <Pressable onPress={handleExit} style={[styles.primaryBtn, isRequiredComplete ? shadows.mint : styles.exitBtnMuted]}>
-          <Text style={styles.primaryBtnText}>
-            {isRequiredComplete ? 'Back to your path →' : 'Exit lesson'}
-          </Text>
-        </Pressable>
-      </ScrollView>
-    )
-  }
-
-  // Card 3: Mission Submission (branches on mission_type)
-  const renderCard4 = () => {
-    if (!lessonContent || !currentMissionId) return null
-    const mission = lessonContent.missions.find(m => m.id === currentMissionId)
-    if (!mission) return null
-
-    return (
-      <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
-        <Pressable onPress={() => advanceCard(CARD_MISSIONS)} style={styles.backLink}>
-          <Text style={styles.backLinkText}>← Back to missions</Text>
-        </Pressable>
-        <View style={styles.companionRow}>
-          <Companion size={60} mood="happy" />
-        </View>
-        <View style={styles.missionBanner}>
-          {mission.is_required && (
-            <View style={styles.requiredBadge}>
-              <Text style={styles.requiredBadgeText}>Required</Text>
-            </View>
-          )}
-          <Text style={styles.sectionHeading}>{mission.title}</Text>
-          <Text style={styles.missionWhyText}>{mission.why_it_matters}</Text>
-        </View>
-        <View style={styles.descriptionCallout}>
-          <Text style={styles.bodyText}>{mission.description}</Text>
-        </View>
-
-        {mission.mission_type === 'photo_submission' && renderPhotoSubmission(mission)}
-        {mission.mission_type === 'reflection_journal' && renderReflectionJournal(mission)}
-        {mission.mission_type === 'pop_quiz' && renderPopQuiz(mission)}
-        {mission.mission_type === 'minigame_matching' && renderMinigameMatching(mission)}
-        {mission.mission_type === 'minigame_image_id' && renderMinigameImageId(mission)}
-        {mission.mission_type === 'minigame_sequencing' && renderMinigameSequencing(mission)}
-        {mission.mission_type === 'minigame_fill_blank' && renderMinigameFillBlank(mission)}
-      </ScrollView>
-    )
-  }
-
-  // ── Photo submission UI ─────────────────────────────────────────────────────
-  const renderPhotoSubmission = (mission: Mission) => {
-    const canSubmit = !!photoUri
-
-    return (
-      <>
-        <View style={styles.focusCallout}>
-          <Text style={styles.focusCalloutText}>{mission.prompt}</Text>
-        </View>
-
-        {!photoUri ? (
-          <Pressable onPress={handleAddPhoto} style={styles.photoPlaceholder}>
-            <Text style={styles.photoIcon}>📷</Text>
-            <Text style={styles.photoPlaceholderText}>Add a photo</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.photoContainer}>
-            <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
-            <Pressable onPress={handleAddPhoto} style={styles.changePhotoBtn}>
-              <Text style={styles.changePhotoText}>× Change</Text>
-            </Pressable>
-          </View>
-        )}
-
-        <View style={styles.reflectionContainer}>
-          <Text style={styles.reflectionLabel}>Things you noticed</Text>
-          <TextInput
-            style={styles.reflectionInput}
-            value={reflectionNote}
-            onChangeText={setReflectionNote}
-            placeholder="Optional — jot down what you observed..."
-            placeholderTextColor={colors.muted + '99'}
-            multiline
-            numberOfLines={3}
-            textAlignVertical="top"
-          />
-        </View>
-
-        <Pressable
-          onPress={handlePhotoSubmit}
-          disabled={!canSubmit}
-          hitSlop={8}
-          style={[styles.primaryBtn, shadows.mint, !canSubmit && styles.btnDisabled]}
-        >
-          <Text style={styles.primaryBtnText}>Submit →</Text>
-        </Pressable>
-      </>
-    )
-  }
-
-  // ── Reflection journal UI ───────────────────────────────────────────────────
-  const renderReflectionJournal = (mission: Mission) => {
-    const wordCount = reflectionText.trim().split(/\s+/).filter(Boolean).length
-    const minWords = mission.min_words ?? 30
-    const canSubmit = reflectionText.trim().length > 0 && !!params.userId
-
-    return (
-      <>
-        <View style={styles.focusCallout}>
-          <Text style={styles.focusCalloutText}>{mission.prompt}</Text>
-        </View>
-
-        <TextInput
-          style={styles.journalInput}
-          multiline
-          numberOfLines={6}
-          placeholder="Write your reflection here…"
-          placeholderTextColor={colors.muted}
-          value={reflectionText}
-          onChangeText={setReflectionText}
-          textAlignVertical="top"
-        />
-
-        <Text style={[styles.wordCount, wordCount >= minWords && styles.wordCountMet]}>
-          {wordCount} / {minWords} words suggested
-        </Text>
-
-        <Pressable
-          onPress={handleReflectionSubmit}
-          disabled={!canSubmit}
-          style={[styles.primaryBtn, shadows.mint, !canSubmit && styles.btnDisabled]}
-        >
-          <Text style={styles.primaryBtnText}>Submit reflection →</Text>
-        </Pressable>
-      </>
-    )
-  }
-
-  // ── Pop quiz UI ─────────────────────────────────────────────────────────────
-  const renderPopQuiz = (mission: Mission) => {
-    const questions = mission.questions ?? []
-
-    // Quiz complete — show results
-    if (quizResult) {
-      const xpAnim = xpScale
-      return (
-        <View>
-          <View style={styles.quizScoreCard}>
-            <Text style={styles.quizScoreText}>
-              {quizResult.score}/{quizResult.total} correct
-            </Text>
-            <Text style={styles.quizPassLabel}>
-              {quizResult.passed ? 'Nice work!' : 'Keep at it'}
-            </Text>
-          </View>
-
-          {quizResult.results.map((r, i) => (
-            <View
-              key={i}
-              style={[styles.quizResultRow, r.is_correct ? styles.quizResultCorrect : styles.quizResultWrong]}
-            >
-              <Text style={styles.quizResultQ}>{questions[i]?.question_text}</Text>
-              <Text style={styles.quizResultExplanation}>{r.explanation}</Text>
-            </View>
-          ))}
-
-          <View style={styles.xpRow}>
-            <Animated.View style={[styles.xpBadge, { transform: [{ scale: xpAnim }] }]}>
-              <Text style={styles.xpBadgeText}>✦ +{quizResult.xp_earned} XP</Text>
-            </Animated.View>
-          </View>
-
-          <Pressable
-            onPress={() => { resetSubmission(); advanceCard(2) }}
-            style={[styles.primaryBtn, shadows.mint, { marginTop: 8 }]}
-          >
-            <Text style={styles.primaryBtnText}>Back to missions →</Text>
-          </Pressable>
-          <Pressable onPress={handleExit} style={styles.exitBtn}>
-            <Text style={styles.exitBtnText}>Exit lesson</Text>
-          </Pressable>
-        </View>
-      )
-    }
-
-    // Active question
-    if (quizQuestionIndex >= questions.length) return null
-    const q = questions[quizQuestionIndex]
-    const isLast = quizQuestionIndex === questions.length - 1
-
-    return (
-      <View>
-        <Text style={styles.quizProgress}>
-          Question {quizQuestionIndex + 1} of {questions.length}
-        </Text>
-        <Text style={styles.quizQuestion}>{q.question_text}</Text>
-
-        <View style={styles.quizOptions}>
-          {q.options.map((option, i) => {
-            const isSelected = quizSelectedAnswer === i
-            const isCorrect = i === q.correct_index
-            let optStyle = styles.quizOption
-            if (quizAnswerRevealed) {
-              if (isCorrect) optStyle = { ...optStyle, ...styles.quizOptionCorrect } as typeof optStyle
-              else if (isSelected) optStyle = { ...optStyle, ...styles.quizOptionWrong } as typeof optStyle
-            } else if (isSelected) {
-              optStyle = { ...optStyle, ...styles.quizOptionSelected } as typeof optStyle
-            }
-
-            return (
-              <Pressable key={i} onPress={() => handleQuizAnswer(i)} style={optStyle} disabled={quizAnswerRevealed}>
-                <Text style={styles.quizOptionText}>{option}</Text>
-              </Pressable>
-            )
-          })}
-        </View>
-
-        {quizAnswerRevealed && (
-          <View style={styles.quizExplanation}>
-            <Text style={styles.quizExplanationText}>{q.explanation}</Text>
-          </View>
-        )}
-
-        {quizAnswerRevealed && (
-          <Pressable
-            onPress={isLast ? handleQuizFinish : handleQuizNext}
-            disabled={quizSubmitting}
-            style={[styles.primaryBtn, shadows.mint, { marginTop: 16 }]}
-          >
-            <Text style={styles.primaryBtnText}>
-              {isLast ? 'See results →' : 'Next question →'}
-            </Text>
-          </Pressable>
-        )}
-      </View>
-    )
-  }
-
-  // ── Minigame: Matching ───────────────────────────────────────────────────────
-  const renderMinigameMatching = (mission: Mission) => {
-    const pairs = mission.pairs ?? []
-    if (pairs.length === 0) return <Text style={styles.bodyText}>No pairs to match</Text>
-
-    const handleMinigameComplete = async () => {
-      if (!lessonContent || !currentMissionId || !params.userId) return
-      setMinigameSubmitting(true)
-      try {
-        const res = await fetch(`${API_BASE}/lesson/minigame-complete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: params.userId,
-            lesson_key: lessonContent.lesson_key ?? params.lessonKey,
-            mission_id: currentMissionId,
-            passed: true,
-          }),
-        })
-        if (!res.ok) throw new Error(`Server error ${res.status}`)
-        const data = await res.json()
-        if (data.mission_completed) {
-          setMissionProgress(prev => ({
-            completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
-            is_required_complete: data.lesson_now_required_complete || (prev?.is_required_complete ?? false),
-            is_fully_complete: prev?.is_fully_complete ?? false,
-          }))
-          if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
-            hasSignaledComplete.current = true
-            params.onComplete(params.lessonId)
+    const handleSubmit = async (passed: boolean) => {
+      await markActivityComplete(activity, passed)
+      if (passed) {
+        Animated.timing(cardOpacity, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+        }).start(() => {
+          if (activityIndex + 1 < activities.length) {
+            advanceCard(CARD_FIRST_ACTIVITY + activityIndex + 1)
+          } else {
+            advanceCard(CARD_COMPLETION)
           }
-        }
-        setMinigameResult({ passed: true, feedback: 'Great matching!' })
-        advanceCard(CARD_FEEDBACK)
-      } catch (e) {
-        Alert.alert('Error', e instanceof Error ? e.message : 'Failed to submit')
-      } finally {
-        setMinigameSubmitting(false)
+        })
       }
     }
 
     return (
-      <>
-        <Text style={styles.sectionHeading}>Match the pairs</Text>
-        <View style={styles.matchingGrid}>
-          {pairs.slice(0, 4).map((pair, i) => (
-            <View key={i} style={styles.matchingPair}>
-              <Pressable style={[styles.matchingPill, { backgroundColor: colors.sky + '33' }]}>
-                <Text style={styles.matchingPillText}>{pair.left}</Text>
-              </Pressable>
-              <Text style={styles.matchingConnector}>↔</Text>
-              <Pressable style={[styles.matchingPill, { backgroundColor: colors.peach + '33' }]}>
-                <Text style={styles.matchingPillText}>{pair.right}</Text>
-              </Pressable>
-            </View>
-          ))}
-        </View>
+      <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.activityNumber}>
+          Activity {activityIndex + 1} of {activities.length}
+        </Text>
+
+        {activity.type === 'multiple_choice' && renderActivityMultipleChoice(activity, isAnswered, result, handleSubmit)}
+        {activity.type === 'image_id' && renderActivityImageId(activity, isAnswered, result, handleSubmit)}
+        {activity.type === 'fill_blank' && renderActivityFillBlank(activity, isAnswered, result, handleSubmit)}
+        {activity.type === 'matching' && renderActivityMatching(activity, isAnswered, result, handleSubmit)}
+        {activity.type === 'sequence' && renderActivitySequence(activity, isAnswered, result, handleSubmit)}
+
         <View style={styles.spacer} />
-        <Pressable
-          onPress={handleMinigameComplete}
-          disabled={minigameSubmitting}
-          style={[styles.primaryBtn, shadows.mint, minigameSubmitting && styles.btnDisabled]}
-        >
-          <Text style={styles.primaryBtnText}>Submit matches →</Text>
-        </Pressable>
-      </>
+      </ScrollView>
     )
   }
 
-  // ── Minigame: Image ID ───────────────────────────────────────────────────────
-  const renderMinigameImageId = (mission: Mission) => {
-    const images = mission.images ?? []
-    if (images.length === 0) return <Text style={styles.bodyText}>No images to identify</Text>
-
-    const handleImageSelect = async (index: number) => {
-      setSelectedImageIndex(index)
-      if (!lessonContent || !currentMissionId || !params.userId) return
-      setMinigameSubmitting(true)
-      try {
-        const res = await fetch(`${API_BASE}/lesson/minigame-complete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: params.userId,
-            lesson_key: lessonContent.lesson_key ?? params.lessonKey,
-            mission_id: currentMissionId,
-            passed: index === mission.correct_image_index,
-          }),
-        })
-        if (!res.ok) throw new Error(`Server error ${res.status}`)
-        const data = await res.json()
-        if (data.mission_completed) {
-          setMissionProgress(prev => ({
-            completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
-            is_required_complete: data.lesson_now_required_complete || (prev?.is_required_complete ?? false),
-            is_fully_complete: prev?.is_fully_complete ?? false,
-          }))
-          if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
-            hasSignaledComplete.current = true
-            params.onComplete(params.lessonId)
-          }
-        }
-        const passed = index === mission.correct_image_index
-        setMinigameResult({ passed, feedback: passed ? '✓ Correct!' : '✗ Not quite—try the others' })
-        advanceCard(CARD_FEEDBACK)
-      } catch (e) {
-        Alert.alert('Error', e instanceof Error ? e.message : 'Failed to submit')
-      } finally {
-        setMinigameSubmitting(false)
-      }
-    }
+  const renderActivityMultipleChoice = (activity: Activity, isAnswered: boolean, result: any, onSubmit: (passed: boolean) => void) => {
+    const selected = selectedOptions[activity.id]
+    const isCorrect = selected === activity.correct_index
 
     return (
       <>
-        <Text style={styles.sectionHeading}>Which one is it?</Text>
-        <View style={styles.imageGrid}>
-          {images.map((img, i) => (
+        <Text style={styles.activityQuestion}>{activity.question || activity.prompt}</Text>
+        <View style={styles.optionsList}>
+          {(activity.options || []).map((option, i) => (
             <Pressable
               key={i}
-              onPress={() => handleImageSelect(i)}
-              disabled={minigameSubmitting}
+              onPress={() => !isAnswered && setSelectedOptions(prev => ({ ...prev, [activity.id]: i }))}
+              disabled={isAnswered}
               style={[
-                styles.imageOption,
-                selectedImageIndex === i && styles.imageOptionSelected,
-                minigameSubmitting && styles.btnDisabled,
+                styles.optionButton,
+                selected === i && styles.optionSelected,
+                isAnswered && selected === i && (isCorrect ? styles.optionCorrect : styles.optionWrong),
               ]}
             >
-              <Text style={styles.imageOptionText}>{img}</Text>
+              <Text style={[styles.optionText, selected === i && styles.optionTextSelected]}>
+                {option}
+              </Text>
             </Pressable>
           ))}
         </View>
-      </>
-    )
-  }
 
-  // ── Minigame: Sequencing ─────────────────────────────────────────────────────
-  const renderMinigameSequencing = (mission: Mission) => {
-    const steps = mission.steps ?? []
-    if (steps.length === 0) return <Text style={styles.bodyText}>No steps to sequence</Text>
+        {isAnswered && (
+          <View style={[styles.feedbackPanel, isCorrect ? styles.feedbackCorrect : styles.feedbackWrong]}>
+            <Text style={styles.feedbackText}>
+              {isCorrect ? '✓ Correct!' : '✗ Not quite'}
+            </Text>
+            {activity.explanation && (
+              <Text style={styles.explanationText}>{activity.explanation}</Text>
+            )}
+            {!isCorrect && (
+              <Pressable
+                onPress={() => {
+                  setSelectedOptions(prev => ({ ...prev, [activity.id]: null }))
+                  setActivityResults(prev => {
+                    const next = { ...prev }
+                    delete next[activity.id]
+                    return next
+                  })
+                }}
+                style={styles.tryAgainBtn}
+              >
+                <Text style={styles.tryAgainText}>Try again</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
 
-    const handleSequenceComplete = async () => {
-      if (!lessonContent || !currentMissionId || !params.userId) return
-      setMinigameSubmitting(true)
-      try {
-        const res = await fetch(`${API_BASE}/lesson/minigame-complete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: params.userId,
-            lesson_key: lessonContent.lesson_key ?? params.lessonKey,
-            mission_id: currentMissionId,
-            passed: true,
-          }),
-        })
-        if (!res.ok) throw new Error(`Server error ${res.status}`)
-        const data = await res.json()
-        if (data.mission_completed) {
-          setMissionProgress(prev => ({
-            completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
-            is_required_complete: data.lesson_now_required_complete || (prev?.is_required_complete ?? false),
-            is_fully_complete: prev?.is_fully_complete ?? false,
-          }))
-          if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
-            hasSignaledComplete.current = true
-            params.onComplete(params.lessonId)
-          }
-        }
-        setMinigameResult({ passed: true, feedback: 'Perfect order!' })
-        advanceCard(CARD_FEEDBACK)
-      } catch (e) {
-        Alert.alert('Error', e instanceof Error ? e.message : 'Failed to submit')
-      } finally {
-        setMinigameSubmitting(false)
-      }
-    }
-
-    return (
-      <>
-        <Text style={styles.sectionHeading}>Put these in order</Text>
-        <View style={styles.sequenceList}>
-          {stepOrder.length === 0 ? (
-            steps.map((step, i) => (
-              <View key={i} style={styles.sequenceItem}>
-                <Text style={styles.sequenceNumber}>{i + 1}.</Text>
-                <Text style={styles.sequenceText}>{step}</Text>
-              </View>
-            ))
-          ) : (
-            stepOrder.map((step, i) => (
-              <View key={i} style={styles.sequenceItem}>
-                <Text style={styles.sequenceNumber}>{i + 1}.</Text>
-                <Text style={styles.sequenceText}>{step}</Text>
-              </View>
-            ))
-          )}
-        </View>
-        <View style={styles.spacer} />
-        <Pressable
-          onPress={handleSequenceComplete}
-          disabled={minigameSubmitting}
-          style={[styles.primaryBtn, shadows.mint, minigameSubmitting && styles.btnDisabled]}
-        >
-          <Text style={styles.primaryBtnText}>Check order →</Text>
-        </Pressable>
-      </>
-    )
-  }
-
-  // ── Minigame: Fill Blank ─────────────────────────────────────────────────────
-  const renderMinigameFillBlank = (mission: Mission) => {
-    const sentence = mission.fill_blank_sentence ?? ''
-    if (!sentence) return <Text style={styles.bodyText}>No question available</Text>
-
-    const handleFillBlankSubmit = async () => {
-      if (!fillBlankAnswer.trim() || !lessonContent || !currentMissionId || !params.userId) return
-      setMinigameSubmitting(true)
-      try {
-        const res = await fetch(`${API_BASE}/lesson/grade-fill-blank`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: params.userId,
-            lesson_key: lessonContent.lesson_key ?? params.lessonKey,
-            mission_id: currentMissionId,
-            user_answer: fillBlankAnswer.trim(),
-            correct_answer: mission.fill_blank_answer ?? '',
-            lesson_title: params.lessonTitle,
-            goal: params.goal,
-          }),
-        })
-        if (!res.ok) throw new Error(`Server error ${res.status}`)
-        const data = await res.json()
-        if (data.mission_completed) {
-          setMissionProgress(prev => ({
-            completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
-            is_required_complete: data.lesson_now_required_complete || (prev?.is_required_complete ?? false),
-            is_fully_complete: prev?.is_fully_complete ?? false,
-          }))
-          if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
-            hasSignaledComplete.current = true
-            params.onComplete(params.lessonId)
-          }
-        }
-        setMinigameResult({ passed: data.correct, feedback: data.feedback })
-        advanceCard(CARD_FEEDBACK)
-      } catch (e) {
-        Alert.alert('Error', e instanceof Error ? e.message : 'Failed to submit')
-      } finally {
-        setMinigameSubmitting(false)
-      }
-    }
-
-    return (
-      <>
-        <Text style={styles.sectionHeading}>Fill in the blank</Text>
-        <View style={styles.fillBlankContainer}>
-          <Text style={styles.fillBlankSentence}>{sentence}</Text>
-        </View>
-        <TextInput
-          style={styles.fillBlankInput}
-          placeholder="Your answer…"
-          placeholderTextColor={colors.muted}
-          value={fillBlankAnswer}
-          onChangeText={setFillBlankAnswer}
-        />
-        <View style={styles.spacer} />
-        <Pressable
-          onPress={handleFillBlankSubmit}
-          disabled={!fillBlankAnswer.trim() || minigameSubmitting}
-          style={[styles.primaryBtn, shadows.mint, (!fillBlankAnswer.trim() || minigameSubmitting) && styles.btnDisabled]}
-        >
-          <Text style={styles.primaryBtnText}>Submit answer →</Text>
-        </Pressable>
-      </>
-    )
-  }
-
-  // Card 4: Feedback (photo + reflection journal results)
-  const renderCard5 = () => {
-    if (submitError) {
-      return (
-        <View style={styles.feedbackLoading}>
-          <Companion size={100} mood="sad" />
-          <Text style={styles.loadingText}>Submission failed</Text>
-          <Text style={[styles.bodyTextMuted, { textAlign: 'center', marginTop: 8 }]}>{submitError}</Text>
+        {!isAnswered && selected !== null && (
           <Pressable
-            onPress={() => { setSubmitError(null); advanceCard(CARD_SUBMISSION) }}
+            onPress={() => onSubmit(isCorrect)}
             style={[styles.primaryBtn, shadows.mint, { marginTop: 24 }]}
           >
-            <Text style={styles.primaryBtnText}>Try again</Text>
+            <Text style={styles.primaryBtnText}>Check answer →</Text>
           </Pressable>
+        )}
+      </>
+    )
+  }
+
+  const renderActivityImageId = (activity: Activity, isAnswered: boolean, result: any, onSubmit: (passed: boolean) => void) => {
+    const selected = selectedOptions[activity.id]
+    const isCorrect = selected === activity.correct_index
+
+    return (
+      <>
+        <Text style={styles.activityQuestion}>{activity.prompt}</Text>
+        <View style={styles.imageGrid2x2}>
+          {(activity.options || []).map((desc, i) => (
+            <Pressable
+              key={i}
+              onPress={() => !isAnswered && setSelectedOptions(prev => ({ ...prev, [activity.id]: i }))}
+              disabled={isAnswered}
+              style={[
+                styles.imageOptionCard,
+                selected === i && styles.imageOptionSelected,
+                isAnswered && selected === i && (isCorrect ? styles.imageOptionCorrect : styles.imageOptionWrong),
+              ]}
+            >
+              <Text style={styles.imageOptionText}>{desc}</Text>
+            </Pressable>
+          ))}
         </View>
-      )
+
+        {isAnswered && (
+          <View style={[styles.feedbackPanel, isCorrect ? styles.feedbackCorrect : styles.feedbackWrong]}>
+            <Text style={styles.feedbackText}>
+              {isCorrect ? '✓ Correct!' : '✗ Not quite'}
+            </Text>
+            {activity.explanation && (
+              <Text style={styles.explanationText}>{activity.explanation}</Text>
+            )}
+            {!isCorrect && (
+              <Pressable
+                onPress={() => {
+                  setSelectedOptions(prev => ({ ...prev, [activity.id]: null }))
+                  setActivityResults(prev => {
+                    const next = { ...prev }
+                    delete next[activity.id]
+                    return next
+                  })
+                }}
+                style={styles.tryAgainBtn}
+              >
+                <Text style={styles.tryAgainText}>Try again</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        {!isAnswered && selected !== null && (
+          <Pressable
+            onPress={() => onSubmit(isCorrect)}
+            style={[styles.primaryBtn, shadows.mint, { marginTop: 24 }]}
+          >
+            <Text style={styles.primaryBtnText}>Check answer →</Text>
+          </Pressable>
+        )}
+      </>
+    )
+  }
+
+  const renderActivityFillBlank = (activity: Activity, isAnswered: boolean, result: any, onSubmit: (passed: boolean) => void) => {
+    const selected = selectedOptions[activity.id] ?? null
+    const shuffledOptions = shuffledOptionsMap[activity.id] ?? []
+
+    const handleSubmit = () => {
+      if (selected === null) return
+      const selectedOption = shuffledOptions[selected]
+      const isCorrect = selectedOption.trim().toLowerCase() === (activity.correct_answer?.trim().toLowerCase() ?? '')
+      setActivityResults(prev => ({
+        ...prev,
+        [activity.id]: { passed: isCorrect, explanation: activity.explanation || '' },
+      }))
+      onSubmit(isCorrect)
     }
 
-    const isLoading = validating || reflectionSubmitting
-    if (isLoading || !validationResult) {
-      const loadingMsg = reflectionSubmitting ? 'Reading your reflection…' : 'Reviewing your work…'
-      return (
-        <View style={styles.feedbackLoading}>
-          <Companion size={100} mood="thinking" />
-          <Text style={styles.loadingText}>{loadingMsg}</Text>
-          <View style={styles.dotsRow}>
-            <Animated.View style={[styles.loadingDot, { opacity: dot1 }]} />
-            <Animated.View style={[styles.loadingDot, { opacity: dot2 }]} />
-            <Animated.View style={[styles.loadingDot, { opacity: dot3 }]} />
+    return (
+      <>
+        <Text style={styles.activityQuestion}>{activity.prompt || 'Fill in the blank:'}</Text>
+        <View style={styles.fillBlankBox}>
+          <Text style={styles.fillBlankSentence}>{activity.sentence}</Text>
+        </View>
+
+        <View style={styles.optionsList}>
+          {shuffledOptions.map((option: string, i: number) => (
+            <Pressable
+              key={i}
+              onPress={() => !isAnswered && setSelectedOptions(prev => ({ ...prev, [activity.id]: i }))}
+              disabled={isAnswered}
+              style={[
+                styles.optionButton,
+                selected === i && styles.optionSelected,
+                isAnswered && selected === i && (result?.passed ? styles.optionCorrect : styles.optionWrong),
+              ]}
+            >
+              <Text style={styles.optionText}>{option}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {isAnswered && (
+          <View style={[styles.feedbackPanel, result?.passed ? styles.feedbackCorrect : styles.feedbackWrong]}>
+            <Text style={styles.feedbackText}>
+              {result?.passed ? '✓ Correct!' : '✗ Not quite'}
+            </Text>
+            {result?.explanation && (
+              <Text style={styles.explanationText}>{result.explanation}</Text>
+            )}
+            {!result?.passed && (
+              <Pressable
+                onPress={() => {
+                  setSelectedOptions(prev => ({ ...prev, [activity.id]: null }))
+                  setActivityResults(prev => {
+                    const next = { ...prev }
+                    delete next[activity.id]
+                    return next
+                  })
+                }}
+                style={styles.tryAgainBtn}
+              >
+                <Text style={styles.tryAgainText}>Try again</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        {!isAnswered && selected !== null && (
+          <Pressable
+            onPress={handleSubmit}
+            style={[styles.primaryBtn, shadows.mint, { marginTop: 24 }]}
+          >
+            <Text style={styles.primaryBtnText}>Check answer →</Text>
+          </Pressable>
+        )}
+      </>
+    )
+  }
+
+  const renderActivityMatching = (activity: Activity, isAnswered: boolean, result: any, onSubmit: (passed: boolean) => void) => {
+    const state = matchState[activity.id] ?? { leftSelected: null, rightSelected: null, matched: {} }
+    const pairs = activity.pairs ?? []
+
+    const handleSubmitMatching = () => {
+      // Verify all pairs are matched
+      if (Object.keys(state.matched).length !== pairs.length) return
+
+      // Check if all matches are correct
+      let allCorrect = true
+      for (const pair of pairs) {
+        if (state.matched[pair.term] !== pair.definition) {
+          allCorrect = false
+          break
+        }
+      }
+
+      setActivityResults(prev => ({
+        ...prev,
+        [activity.id]: { passed: allCorrect, explanation: allCorrect ? '✓ Perfect match!' : '✗ Some pairs don\'t match. Try again!' },
+      }))
+      onSubmit(allCorrect)
+    }
+
+    return (
+      <>
+        <Text style={styles.activityQuestion}>{activity.prompt || 'Match the pairs'}</Text>
+        <Text style={[styles.bodyTextMuted, { marginBottom: 16 }]}>
+          {Object.keys(state.matched).length} of {pairs.length} matched
+        </Text>
+        <View style={styles.matchingContainer}>
+          <View style={styles.matchingColumn}>
+            {pairs.map((pair, i) => (
+              <Pressable
+                key={`left-${i}`}
+                style={[
+                  styles.matchingTerm,
+                  state.leftSelected === pair.term && styles.matchingTermSelected,
+                  !!state.matched[pair.term] && styles.matchingTermMatched,
+                ]}
+                onPress={() => {
+                  if (!isAnswered) {
+                    setMatchState(prev => ({
+                      ...prev,
+                      [activity.id]: { ...state, leftSelected: state.leftSelected === pair.term ? null : pair.term },
+                    }))
+                  }
+                }}
+              >
+                <Text style={styles.matchingTermText}>{pair.term}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.matchingColumn}>
+            {pairs.map((pair, i) => (
+              <Pressable
+                key={`right-${i}`}
+                style={[
+                  styles.matchingDef,
+                  state.rightSelected === pair.definition && styles.matchingDefSelected,
+                  Object.values(state.matched).includes(pair.definition) && styles.matchingDefMatched,
+                ]}
+                onPress={() => {
+                  if (!isAnswered && state.leftSelected) {
+                    const newMatched = { ...state.matched, [state.leftSelected]: pair.definition }
+                    setMatchState(prev => ({
+                      ...prev,
+                      [activity.id]: { ...state, leftSelected: null, rightSelected: null, matched: newMatched },
+                    }))
+                  }
+                }}
+              >
+                <Text style={styles.matchingDefText}>{pair.definition}</Text>
+              </Pressable>
+            ))}
           </View>
         </View>
-      )
+
+        {isAnswered && (
+          <View style={[styles.feedbackPanel, result?.passed ? styles.feedbackCorrect : styles.feedbackWrong, { marginTop: 16 }]}>
+            <Text style={styles.feedbackText}>
+              {result?.passed ? '✓ Correct!' : '✗ Not quite'}
+            </Text>
+            {result?.explanation && (
+              <Text style={styles.explanationText}>{result.explanation}</Text>
+            )}
+            {!result?.passed && (
+              <Pressable
+                onPress={() => {
+                  setMatchState(prev => ({ ...prev, [activity.id]: { leftSelected: null, rightSelected: null, matched: {} } }))
+                  setActivityResults(prev => {
+                    const next = { ...prev }
+                    delete next[activity.id]
+                    return next
+                  })
+                }}
+                style={styles.tryAgainBtn}
+              >
+                <Text style={styles.tryAgainText}>Try again</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        {Object.keys(state.matched).length === pairs.length && !isAnswered && (
+          <Pressable onPress={handleSubmitMatching} style={[styles.primaryBtn, shadows.mint, { marginTop: 24 }]}>
+            <Text style={styles.primaryBtnText}>Check matches →</Text>
+          </Pressable>
+        )}
+      </>
+    )
+  }
+
+  const renderActivitySequence = (activity: Activity, isAnswered: boolean, result: any, onSubmit: (passed: boolean) => void) => {
+    const steps = activity.steps ?? []
+    const userOrder = userOrders[activity.id] ?? []
+    const placedIndices = new Set(userOrder)
+
+    const handleSequenceSubmit = () => {
+      const isCorrect = JSON.stringify(userOrder) === JSON.stringify(activity.correct_order ?? [])
+      setActivityResults(prev => ({
+        ...prev,
+        [activity.id]: { passed: isCorrect, explanation: isCorrect ? '✓ Perfect!' : '✗ Some steps are out of order' },
+      }))
+      onSubmit(isCorrect)
     }
 
-    const isRequiredComplete = missionProgress?.is_required_complete ?? false
+    const handleAddStep = (stepIdx: number) => {
+      if (!isAnswered && !placedIndices.has(stepIdx)) {
+        setUserOrders(prev => ({
+          ...prev,
+          [activity.id]: [...(prev[activity.id] ?? []), stepIdx],
+        }))
+      }
+    }
 
-    const companionMood = validationResult.is_relevant === false
-      ? 'thinking'
-      : validationResult.mission_completed
-        ? 'excited'
-        : 'happy'
+    const handleRemoveStep = (position: number) => {
+      if (!isAnswered) {
+        setUserOrders(prev => ({
+          ...prev,
+          [activity.id]: userOrder.filter((_, i) => i !== position),
+        }))
+      }
+    }
 
+    return (
+      <>
+        <Text style={styles.activityQuestion}>{activity.prompt || 'Put these in order'}</Text>
+
+        {/* Display ordered steps at top */}
+        {userOrder.length > 0 && (
+          <View style={[styles.orderedSteps, { marginBottom: 20 }]}>
+            {userOrder.map((stepIdx, pos) => (
+              <Pressable
+                key={pos}
+                style={styles.orderedStepItem}
+                onPress={() => handleRemoveStep(pos)}
+              >
+                <Text style={styles.orderedStepNumber}>{pos + 1}</Text>
+                <Text style={styles.orderedStepText}>{steps[stepIdx]}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {/* Display available steps to choose from */}
+        <Text style={[styles.bodyTextMuted, { marginBottom: 12 }]}>
+          {userOrder.length === 0 ? 'Tap steps to order them' : `${steps.length - userOrder.length} remaining`}
+        </Text>
+        <View style={styles.stepsList}>
+          {steps.map((step, i) => (
+            <Pressable
+              key={i}
+              disabled={placedIndices.has(i) || isAnswered}
+              style={[
+                styles.stepItem,
+                placedIndices.has(i) && { opacity: 0.5 },
+              ]}
+              onPress={() => handleAddStep(i)}
+            >
+              <Text style={styles.stepNumber}>{i + 1}</Text>
+              <Text style={styles.stepText}>{step}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {isAnswered && (
+          <View style={[styles.feedbackPanel, result?.passed ? styles.feedbackCorrect : styles.feedbackWrong]}>
+            <Text style={styles.feedbackText}>
+              {result?.passed ? '✓ Correct!' : '✗ Not quite'}
+            </Text>
+            {result?.explanation && (
+              <Text style={styles.explanationText}>{result.explanation}</Text>
+            )}
+            {!result?.passed && (
+              <Pressable
+                onPress={() => {
+                  setUserOrders(prev => ({ ...prev, [activity.id]: [] }))
+                  setActivityResults(prev => {
+                    const next = { ...prev }
+                    delete next[activity.id]
+                    return next
+                  })
+                }}
+                style={styles.tryAgainBtn}
+              >
+                <Text style={styles.tryAgainText}>Try again</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        {userOrder.length === steps.length && !isAnswered && (
+          <Pressable onPress={handleSequenceSubmit} style={[styles.primaryBtn, shadows.mint, { marginTop: 24 }]}>
+            <Text style={styles.primaryBtnText}>Check order →</Text>
+          </Pressable>
+        )}
+      </>
+    )
+  }
+
+  // ── Completion card ────────────────────────────────────────────────────────────
+  const renderCompletionCard = () => {
     return (
       <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
         <View style={styles.companionCenter}>
           <Animated.View style={{ transform: [{ scale: companionScale }] }}>
-            <Companion size={100} mood={companionMood} />
+            <Companion size={100} mood="excited" />
           </Animated.View>
         </View>
-        {validationResult.is_relevant === false ? (
-          // Rejected — wrong subject
-          <Animated.View style={[styles.messageCard, { opacity: feedbackOpacity }]}>
-            <Text style={[styles.bodyText, { textAlign: 'center' }]}>
-              {validationResult.rejection_message}
-            </Text>
-          </Animated.View>
-        ) : validationResult.criteria ? (
-          // Scoreboard (photo submissions, relevant)
-          <Animated.View style={[styles.scoreboardCard, { opacity: feedbackOpacity }]}>
-            {validationResult.criteria.slice(0, 4).map((c, i) => (
-              <View key={i} style={styles.criterionRow}>
-                <Text style={styles.criterionLabel}>{c.label}</Text>
-                <Text style={styles.criterionStars}>
-                  {'★'.repeat(c.stars)}{'☆'.repeat(5 - c.stars)}
-                </Text>
-              </View>
-            ))}
-            <View style={styles.scoreboardDivider} />
-            <Text style={styles.scoreboardNote}>{validationResult.note}</Text>
-          </Animated.View>
-        ) : (
-          // Original paragraph (reflection journals, fallback)
-          <Animated.View style={[styles.messageCard, { opacity: feedbackOpacity }]}>
-            <Text style={styles.bodyText}>{validationResult.feedback}</Text>
-          </Animated.View>
-        )}
-        {validationResult.mission_completed && (
-          <View style={styles.xpRow}>
-            <Animated.View style={[styles.xpBadge, { transform: [{ scale: xpScale }] }]}>
-              <Text style={styles.xpBadgeText}>✦ +{validationResult.xp_earned} XP</Text>
-            </Animated.View>
-          </View>
-        )}
-        {validationResult.lesson_now_required_complete && (
-          <Animated.View style={[styles.requiredCompleteCard, { opacity: feedbackOpacity }]}>
-            <Text style={styles.requiredCompleteText}>Required missions complete! Next lesson unlocked 🎉</Text>
-          </Animated.View>
-        )}
-
-        {/* Share to feed — photo missions only */}
-        {(validationResult as ValidationResult).is_valid === true && photoUri && (
-          <Animated.View style={[styles.shareCard, { opacity: feedbackOpacity }]}>
-            {sharePosted ? (
-              <View style={styles.shareSuccessRow}>
-                <Text style={styles.shareSuccessText}>Posted to feed ✓</Text>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.shareCardTitle}>Share your progress?</Text>
-                <Text style={styles.shareCardSub}>{params.lessonTitle}</Text>
-                <TextInput
-                  style={styles.shareCaptionInput}
-                  placeholder="Add a caption… (optional)"
-                  placeholderTextColor={colors.muted}
-                  value={shareCaption}
-                  onChangeText={setShareCaption}
-                  maxLength={200}
-                />
-                <Pressable
-                  onPress={handleShareToFeed}
-                  disabled={sharePosting}
-                  style={[styles.shareBtn, sharePosting && styles.btnDisabled]}
-                >
-                  <Text style={styles.shareBtnText}>
-                    {sharePosting ? 'Posting…' : 'Post to Feed'}
-                  </Text>
-                </Pressable>
-              </>
-            )}
-          </Animated.View>
-        )}
+        <Text style={[styles.sectionHeading, { marginTop: 24, textAlign: 'center' }]}>Lesson complete! 🎉</Text>
+        <Text style={[styles.bodyText, { marginTop: 16, textAlign: 'center' }]}>
+          +{Math.max(1, completedActivities.size) * 20} XP
+        </Text>
 
         <View style={styles.spacer} />
+
         <Pressable
-          onPress={() => { resetSubmission(); advanceCard(CARD_MISSIONS) }}
+          onPress={() => setPhotoModalVisible(true)}
+          style={[styles.primaryBtn, shadows.peach, { marginBottom: 12 }]}
+        >
+          <Text style={styles.primaryBtnText}>Share your cooking? 📷</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => navigation.goBack()}
           style={[styles.primaryBtn, shadows.mint]}
         >
-          <Text style={styles.primaryBtnText}>Next mission →</Text>
-        </Pressable>
-        <Pressable onPress={handleExit} style={styles.exitBtn}>
-          <Text style={[styles.exitBtnText, !isRequiredComplete && { color: colors.muted }]}>
-            {isRequiredComplete ? 'Back to your path' : 'Exit lesson'}
-          </Text>
+          <Text style={styles.primaryBtnText}>Back to your path →</Text>
         </Pressable>
       </ScrollView>
     )
@@ -1832,10 +1253,8 @@ export default function LessonScreen() {
   const cards = [
     renderCard0,
     renderCard2,
-    ...(hasInteractiveCard ? [renderCardInteractive] : []),
-    renderCard3,
-    renderCard4,
-    renderCard5,
+    ...activities.map((_, i) => () => renderActivityCard(i)),
+    renderCompletionCard,
   ]
 
   return (
@@ -2711,5 +2130,235 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: 16,
+  },
+
+  // Activity cards
+  activityNumber: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 12,
+    color: colors.muted,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  activityQuestion: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 17,
+    color: colors.foreground,
+    marginBottom: 20,
+    lineHeight: 24,
+  },
+
+  // Multiple choice options
+  optionsList: { gap: 10, marginBottom: 16 },
+  optionButton: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  optionSelected: {
+    borderColor: colors.mint,
+    backgroundColor: colors.mint + '11',
+  },
+  optionCorrect: {
+    borderColor: colors.mint,
+    backgroundColor: colors.mint + '22',
+  },
+  optionWrong: {
+    borderColor: colors.peach,
+    backgroundColor: colors.peach + '22',
+  },
+  optionText: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 15,
+    color: colors.foreground,
+  },
+  optionTextSelected: {
+    fontFamily: 'Nunito_600SemiBold',
+  },
+
+  // Feedback panel
+  feedbackPanel: {
+    borderRadius: radius.md,
+    padding: 16,
+    marginTop: 16,
+    borderLeftWidth: 4,
+  },
+  feedbackCorrect: {
+    borderLeftColor: colors.mint,
+    backgroundColor: colors.mint + '11',
+  },
+  feedbackWrong: {
+    borderLeftColor: colors.peach,
+    backgroundColor: colors.peach + '11',
+  },
+  feedbackText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 15,
+    color: colors.foreground,
+    marginBottom: 8,
+  },
+  explanationText: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 14,
+    color: colors.muted,
+    lineHeight: 20,
+  },
+  tryAgainBtn: {
+    marginTop: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  tryAgainText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 13,
+    color: colors.mint,
+  },
+
+  // Image grid
+  imageGrid2x2: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  imageOptionCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 100,
+  },
+  imageOptionCorrect: {
+    borderColor: colors.mint,
+    backgroundColor: colors.mint + '22',
+  },
+  imageOptionWrong: {
+    borderColor: colors.peach,
+    backgroundColor: colors.peach + '22',
+  },
+
+  // Fill blank
+  fillBlankBox: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 16,
+    marginBottom: 16,
+  },
+  textInput: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 14,
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 15,
+    color: colors.foreground,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 16,
+  },
+
+  // Matching
+  matchingContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  matchingColumn: {
+    flex: 1,
+    gap: 8,
+  },
+  matchingTerm: {
+    backgroundColor: colors.card,
+    borderRadius: radius.sm,
+    padding: 12,
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  matchingTermSelected: {
+    borderColor: colors.sky,
+    backgroundColor: colors.sky + '22',
+  },
+  matchingTermMatched: {
+    borderColor: colors.mint,
+    backgroundColor: colors.mint + '22',
+  },
+  matchingTermText: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 14,
+    color: colors.foreground,
+  },
+  matchingDef: {
+    backgroundColor: colors.card,
+    borderRadius: radius.sm,
+    padding: 12,
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  matchingDefSelected: {
+    borderColor: colors.sky,
+    backgroundColor: colors.sky + '22',
+  },
+  matchingDefMatched: {
+    borderColor: colors.mint,
+    backgroundColor: colors.mint + '22',
+  },
+  matchingDefText: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 14,
+    color: colors.foreground,
+  },
+
+  // Sequence
+  stepsList: { gap: 10, marginBottom: 16 },
+  stepItem: {
+    backgroundColor: colors.card,
+    borderRadius: radius.sm,
+    padding: 14,
+    borderWidth: 2,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  stepNumber: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 18,
+    color: colors.mint,
+    minWidth: 24,
+  },
+  stepText: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 14,
+    color: colors.foreground,
+    flex: 1,
+  },
+  orderedSteps: { gap: 10, marginBottom: 16 },
+  orderedStepItem: {
+    backgroundColor: colors.mint + '22',
+    borderRadius: radius.sm,
+    padding: 14,
+    borderWidth: 2,
+    borderColor: colors.mint,
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  orderedStepNumber: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 18,
+    color: colors.mint,
+    minWidth: 24,
+  },
+  orderedStepText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 14,
+    color: colors.foreground,
+    flex: 1,
   },
 })

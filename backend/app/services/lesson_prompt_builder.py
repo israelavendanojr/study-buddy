@@ -5,6 +5,7 @@ Builds prompts specific to lesson type (technique, food_science, recipe, minigam
 """
 
 from .mission_rules import get_mission_rules
+from .activity_rules import get_activity_types
 
 
 def build_type_aware_prompt(
@@ -218,3 +219,235 @@ MISSION DETAILS:
 - missions: reflection_journal (required) + 1 optional (minigame_matching or pop_quiz)
 
 Similar to food_science but slightly less rigorous. Ingredient knowledge, professional mindset, etc."""
+
+
+def build_activity_prompt(
+    lesson_title: str,
+    chapter_title: str,
+    goal: str,
+    experience: int,
+    lesson_type: str | None = None,
+    completed_lesson_titles: list[str] | None = None,
+    chunks: list[dict] | None = None,
+) -> str:
+    """
+    Build a type-aware lesson prompt that generates ACTIVITIES instead of missions.
+    Activities are 4-6 sequential mini-games: multiple_choice, image_id, matching, fill_blank, sequence.
+    Returns the full prompt string ready to send to Claude.
+    """
+
+    if not lesson_type:
+        lesson_type = "technique"
+    if not completed_lesson_titles:
+        completed_lesson_titles = []
+    if not chunks:
+        chunks = []
+
+    exp_label = (
+        "total beginner"
+        if experience <= 1
+        else "some experience" if experience <= 3
+        else "experienced"
+    )
+
+    completed_block = (
+        f"They've already completed: {', '.join(completed_lesson_titles)}."
+        if completed_lesson_titles
+        else "This is one of their first lessons."
+    )
+
+    # Build RAG block (same as missions)
+    rag_block = ""
+    if chunks:
+        parts = []
+        for c in chunks:
+            header = f"[SOURCE: {c['source_id']}]"
+            if c.get("source_title"):
+                header += f" | Title: {c['source_title']}"
+            if c.get("author"):
+                header += f" | Author: {c['author']}"
+            if c.get("quote_page") is not None:
+                header += f" | Page: {c['quote_page']}"
+            body = c["text"]
+            if c.get("key_quote"):
+                body = f'KEY QUOTE: "{c["key_quote"]}"\n\n{c["text"]}'
+            parts.append(f"{header}\n{body}")
+        rag_block = (
+            "Reference material from culinary textbooks — cite SOURCE IDs inline:\n\n"
+            + "\n\n---\n\n".join(parts)
+            + "\n\n"
+        )
+
+    # Type-specific structure instructions for activities
+    activity_types = get_activity_types(lesson_type)
+    structure_block = _build_activity_structure_block(lesson_type, activity_types)
+
+    # Base prompt with rag + context + structure + schema
+    base = f"""{rag_block}Generate a {lesson_type} lesson for a learning app. Return ONLY valid JSON — no markdown, no explanation.
+
+Lesson context:
+- Lesson title: {lesson_title}
+- Chapter: {chapter_title}
+- Goal: {goal}
+- Experience: {experience}/5 ({exp_label})
+- {completed_block}
+
+{structure_block}
+
+Return JSON matching this exact schema:
+
+{{
+  "card1": {{
+    "motivation": "One verb-first sentence — why THIS skill matters for THIS goal",
+    "learn_points": [
+      {{
+        "text": "Specific skill point 1 (≤12 words)",
+        "source_ids": ["source_id_if_grounded"],
+        "quote": "Exact quote text supporting this point, if available",
+        "quote_author": "Author First Last",
+        "quote_book": "Book Title",
+        "quote_page": 42
+      }},
+      {{"text": "Point 2", "source_ids": []}},
+      {{"text": "Point 3", "source_ids": []}}
+    ],
+    "images": null
+  }},
+  "card3": {{
+    "headline": "The single most important insight in 1 sentence",
+    "points": [
+      {{
+        "text": "Key point 1 — short and direct",
+        "source_ids": ["source_id_if_grounded"],
+        "quote": "Exact quote text supporting this point, if available",
+        "quote_author": "Author First Last",
+        "quote_book": "Book Title",
+        "quote_page": 154
+      }},
+      {{"text": "Key point 2", "source_ids": []}},
+      {{"text": "Key point 3", "source_ids": []}}
+    ],
+    "tell_me_more": "2-3 sentences deepening the concept",
+    "images": null
+  }},
+  "activities": [
+    {{
+      "id": "act_1",
+      "type": "multiple_choice",
+      "question": "What does [technique] require?",
+      "options": ["Option A (≤15 words)", "Option B (≤15 words)", "Option C (≤15 words)"],
+      "correct_index": 0,
+      "explanation": "1-2 sentences explaining why correct"
+    }},
+    {{
+      "id": "act_2",
+      "type": "image_id",
+      "prompt": "Which image shows proper [technique]?",
+      "options": ["Image description 1", "Image description 2", "Image description 3"],
+      "correct_index": 1,
+      "explanation": "1-2 sentences explaining why"
+    }},
+    {{
+      "id": "act_3",
+      "type": "matching",
+      "prompt": "Match each term to its definition",
+      "pairs": [
+        {{"term": "Term 1", "definition": "Definition 1"}},
+        {{"term": "Term 2", "definition": "Definition 2"}},
+        {{"term": "Term 3", "definition": "Definition 3"}}
+      ]
+    }},
+    {{
+      "id": "act_4",
+      "type": "fill_blank",
+      "sentence": "To [technique], you need ___ on the surface.",
+      "options": ["low moisture", "high heat", "sharp knife", "plenty of salt"],
+      "correct_answer": "low moisture",
+      "explanation": "1-2 sentences explaining the principle"
+    }},
+    {{
+      "id": "act_5",
+      "type": "sequence",
+      "prompt": "Put these steps in the correct order",
+      "steps": ["Step 1", "Step 2", "Step 3", "Step 4", "Step 5"],
+      "correct_order": [0, 1, 2, 3, 4]
+    }}
+  ],
+  "sources_cited": [
+    {{"source_id": "source_id", "title": "Title", "author": "Author", "page_start": 42}}
+  ]
+}}
+
+Rules for all lessons:
+- learn_points and points are arrays of objects with text, source_ids, and optional quote fields
+- Only add source_ids when the point is directly supported by reference material. Leave empty [] if not grounded
+- sources_cited must ONLY include sources you actually referenced
+- motivation and headline must remain plain strings — do NOT cite them
+- images: Always emit null
+- activities: Generate 4-6 activities total. Activity IDs must be act_1, act_2, act_3, etc.
+- Activity types: Use only the types specified in the STRUCTURE section
+- question/prompt: 1 sentence, clear and specific. If matching, use "prompt" field instead of "question"
+- options (for multiple_choice, image_id): exactly 3 items, each ≤15 words
+- correct_index: 0-based index of the correct answer
+- explanation (for multiple_choice, image_id, fill_blank): 1-2 sentences, explain the principle
+- pairs (for matching): array of {{term, definition}} objects. 3-5 pairs. Definitions ≤15 words each
+- steps (for sequence): array of steps as strings, in scrambled order
+- correct_order (for sequence): array of indices showing the correct order (e.g., [2, 0, 1, 3])
+- sentence (for fill_blank): use ___ as placeholder. ≤20 words
+- options (for fill_blank): exactly 4 short words/phrases (1-3 words each). One must match correct_answer exactly; others are plausible distractors
+- correct_answer (for fill_blank): 1-3 word answer or phrase. Must match exactly one item in options
+- quote: Only include when a KEY QUOTE directly supports this point. Quote must be exact. If no key quote, omit entirely (do not set to null)
+- Return ONLY the JSON object"""
+
+    return base
+
+
+def _build_activity_structure_block(lesson_type: str, activity_types: list[str]) -> str:
+    """Build the type-specific structure guidance block for activities."""
+
+    activity_types_str = ", ".join(activity_types)
+
+    if lesson_type == "technique":
+        return f"""STRUCTURE FOR TECHNIQUE LESSONS:
+- card1: Hook with motivation + 3 learn points (what they'll be able to do)
+- card3: Deep dive on mechanics (no quiz_checkpoint or reflection_prompt)
+- activities: 4-6 activities mixing {activity_types_str}
+
+These are mini-games done back-to-back. Each is on its own screen.
+Focus on visual and procedural understanding of the technique."""
+
+    elif lesson_type == "food_science":
+        return f"""STRUCTURE FOR FOOD SCIENCE LESSONS:
+- card1: Hook with motivation + 3 conceptual points
+- card3: Deep dive on the science (no quiz_checkpoint or reflection_prompt)
+- activities: 4-6 activities mixing {activity_types_str}
+
+These are mini-games testing conceptual knowledge. No kitchen required.
+Make them reinforcing and engaging."""
+
+    elif lesson_type == "recipe":
+        return f"""STRUCTURE FOR RECIPE LESSONS:
+- card1: Ingredients list + mise visual layout + motivation
+- card3: Step-by-step walkthrough with technique tips
+- activities: 4-6 activities mixing {activity_types_str}
+
+These mini-games should reinforce the recipe steps and technique mastery.
+Focus on sequencing and ingredient knowledge."""
+
+    elif lesson_type == "minigame":
+        return f"""STRUCTURE FOR MINIGAME LESSONS:
+- card1: Brief hook explaining what to practice (2-3 sentences)
+- card3: Can be minimal
+- activities: 4-6 activities, all game-like. Use {activity_types_str}
+
+Make it fast (~5 min total), fun, and reinforcing. No kitchen required.
+This is pure skill drill — keep it snappy."""
+
+    else:  # concept
+        return f"""STRUCTURE FOR CONCEPT LESSONS:
+- card1: Hook with motivation + 3 key points
+- card3: Deep dive with conceptual explanation
+- activities: 4-6 activities mixing {activity_types_str}
+
+Similar to food_science but focused on ingredient/technique concepts.
+Make activities engaging and reflective."""

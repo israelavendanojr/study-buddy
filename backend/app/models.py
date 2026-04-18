@@ -118,6 +118,7 @@ class UserLessonProgress(Base):
     clerk_user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     lesson_key: Mapped[str] = mapped_column(String, nullable=False, index=True)
     completed_missions: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    completed_activities: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     is_required_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_fully_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     started_at: Mapped[datetime] = mapped_column(

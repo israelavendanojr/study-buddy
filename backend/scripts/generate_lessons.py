@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text as sql_text
 
 from backend.app.models import Lesson, KbChunk
-from backend.app.services.lesson_prompt_builder import build_type_aware_prompt
+from backend.app.services.lesson_prompt_builder import build_activity_prompt
 from backend.scripts.config import (
     CURRICULUM_TAXONOMY_PATH,
     ANTHROPIC_MODEL,
@@ -81,7 +81,7 @@ def retrieve_rag_chunks(lesson_title: str, chapter_title: str, domain: str, db, 
 
 def build_lesson_prompt(lesson_entry: dict, chunks: list) -> str:
     """Build type-aware Claude prompt for lesson generation using shared builder."""
-    return build_type_aware_prompt(
+    return build_activity_prompt(
         lesson_title=lesson_entry["lesson_title"],
         chapter_title=lesson_entry["chapter_title"],
         goal="become a confident home cook",
@@ -106,9 +106,12 @@ def parse_lesson_json(raw_text: str, lesson_key: str) -> dict | None:
 
     try:
         lesson_data = json.loads(text)
-        # Validate structure
-        if "card1" not in lesson_data or "card3" not in lesson_data or "missions" not in lesson_data:
+        # Validate structure (support both old missions and new activities format)
+        if "card1" not in lesson_data or "card3" not in lesson_data:
             print(f"    Missing required keys in JSON")
+            return None
+        if "missions" not in lesson_data and "activities" not in lesson_data:
+            print(f"    Missing both missions and activities")
             return None
         return lesson_data
     except json.JSONDecodeError as e:

@@ -18,7 +18,7 @@ from ..services.companion_service import (
     update_last_practice,
     update_mood_for_user,
 )
-from ..services.lesson_prompt_builder import build_type_aware_prompt
+from ..services.lesson_prompt_builder import build_type_aware_prompt, build_activity_prompt
 from .roadmap import _strip_and_parse
 
 router = APIRouter()
@@ -85,6 +85,28 @@ class Mission(BaseModel):
     fill_blank_answer: str | None = None
 
 
+class Activity(BaseModel):
+    id: str
+    type: str  # multiple_choice|image_id|matching|fill_blank|sequence
+    question: str | None = None
+    prompt: str | None = None
+    options: list[str] = []
+    correct_index: int | None = None
+    explanation: str | None = None
+    pairs: list[MatchingPair] = []
+    sentence: str | None = None
+    correct_answer: str | None = None
+    steps: list[str] = []
+    correct_order: list[int] = []
+
+
+class ActivityCompleteRequest(BaseModel):
+    user_id: str
+    lesson_key: str
+    activity_id: str
+    passed: bool
+
+
 class AnnotatedPoint(BaseModel):
     text: str
     source_ids: list[str] = []
@@ -142,7 +164,8 @@ class LessonContent(BaseModel):
     lesson_type: str | None = None  # technique | food_science | recipe | minigame | concept
     card1: Card1Hook
     card3: Card3Why
-    missions: list[Mission]
+    missions: list[Mission] = []  # deprecated, for backward compat only
+    activities: list[Activity] = []  # new: sequential activities
     sources_cited: list[SourceCited] = []
 
 
@@ -357,8 +380,8 @@ def _generate_reflection_feedback(
 # ---------------------------------------------------------------------------
 
 def _build_lesson_prompt(req: LessonRequest, chunks: list[dict]) -> str:
-    """Build type-aware prompt using shared builder."""
-    return build_type_aware_prompt(
+    """Build type-aware prompt using shared builder. Uses activities (not missions)."""
+    return build_activity_prompt(
         lesson_title=req.lesson_title,
         chapter_title=req.chapter_title,
         goal=req.goal,
@@ -426,6 +449,62 @@ def _mark_mission_complete(
     )
 
 
+def _mark_activity_complete(
+    user_id: str,
+    lesson_key: str,
+    activity_id: str,
+    activities: list[dict],
+    db: Session,
+) -> tuple["UserLessonProgress", bool, bool]:
+    """Mark activity_id complete on UserLessonProgress.
+    Returns (progress, lesson_now_required_complete, lesson_now_fully_complete).
+
+    Activities are always required (no distinction like missions).
+    Completion happens when all activities are done.
+    """
+    progress = db.query(UserLessonProgress).filter(
+        UserLessonProgress.clerk_user_id == user_id,
+        UserLessonProgress.lesson_key == lesson_key,
+    ).first()
+
+    if not progress:
+        progress = UserLessonProgress(
+            clerk_user_id=user_id,
+            lesson_key=lesson_key,
+            completed_activities=[],
+            is_required_complete=False,
+            is_fully_complete=False,
+        )
+        db.add(progress)
+
+    was_required_complete = progress.is_required_complete
+    was_fully_complete = progress.is_fully_complete
+
+    if activity_id not in progress.completed_activities:
+        progress.completed_activities = [*progress.completed_activities, activity_id]
+
+    # All activities are required; check if all are done
+    all_ids = {a["id"] for a in activities}
+    completed_set = set(progress.completed_activities)
+
+    if not progress.is_required_complete and all_ids.issubset(completed_set):
+        progress.is_required_complete = True
+        progress.first_required_completed_at = datetime.now(timezone.utc)
+
+    if all_ids.issubset(completed_set):
+        progress.is_fully_complete = True
+
+    progress.last_visited_at = datetime.now(timezone.utc)
+    progress.updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return (
+        progress,
+        not was_required_complete and progress.is_required_complete,
+        not was_fully_complete and progress.is_fully_complete,
+    )
+
+
 def _apply_xp_and_streak(
     user_id: str,
     lesson_now_required_complete: bool,
@@ -451,7 +530,11 @@ def _apply_xp_and_streak(
 
 def _is_lesson_json_stale(lj: dict) -> bool:
     """Return True if cached lesson JSON should be regenerated."""
-    if "missions" not in lj:
+    # New lessons must have activities (not missions)
+    if "activities" not in lj:
+        return True
+    # Old lessons have missions but no activities → stale
+    if "missions" in lj:
         return True
     if "card2" in lj:
         return True
@@ -467,6 +550,10 @@ def _is_lesson_json_stale(lj: dict) -> bool:
     points = card3.get("points", [])
     if points and isinstance(points[0], str):
         return True
+    # New check: fill_blank activities must have options array
+    for act in lj.get("activities", []):
+        if act.get("type") == "fill_blank" and not act.get("options"):
+            return True
     return False
 
 
@@ -527,6 +614,13 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
         )
 
     lesson_data = _strip_and_parse(full_text, "Lesson")
+
+    # ── 3b. Validate activities are present ───────────────────────────────────
+    if "activities" not in lesson_data or not lesson_data.get("activities"):
+        raise HTTPException(
+            status_code=503,
+            detail="Generated lesson missing activities. Regenerating with new prompt.",
+        )
 
     # ── 4. Store in DB ───────────────────────────────────────────────────────
     row = Lesson(
@@ -1037,7 +1131,7 @@ class MinigameCompleteRequest(BaseModel):
 class FillBlankRequest(BaseModel):
     user_id: str
     lesson_key: str
-    mission_id: str
+    activity_id: str
     user_answer: str
     correct_answer: str
     lesson_title: str
@@ -1119,6 +1213,65 @@ async def minigame_complete(req: MinigameCompleteRequest, db: Session = Depends(
     return response
 
 
+@router.post("/activity-complete")
+async def activity_complete(req: ActivityCompleteRequest, db: Session = Depends(get_db)):
+    """Record completion of a lesson activity (multiple_choice, image_id, matching, fill_blank, sequence)."""
+    lesson = db.query(Lesson).filter(Lesson.lesson_key == req.lesson_key).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+
+    activities = lesson.lesson_json.get("activities", [])
+    if not activities:
+        raise HTTPException(status_code=400, detail="Lesson has no activities")
+
+    if req.passed:
+        progress, lesson_now_required_complete, lesson_now_fully_complete = _mark_activity_complete(
+            req.user_id, req.lesson_key, req.activity_id, activities, db
+        )
+    else:
+        progress = db.query(UserLessonProgress).filter(
+            UserLessonProgress.clerk_user_id == req.user_id,
+            UserLessonProgress.lesson_key == req.lesson_key,
+        ).first()
+        lesson_now_required_complete = False
+        lesson_now_fully_complete = False
+
+    # XP and companion update
+    companion_result: dict | None = None
+    try:
+        initialize_companion(req.user_id, db)
+        if req.passed:
+            xp_result = add_xp_to_companion(req.user_id, XP_PER_MISSION, "lesson", db)
+            companion_result = {**xp_result}
+
+            if lesson_now_required_complete:
+                streak_result = update_last_practice(req.user_id, db)
+                new_mood = update_mood_for_user(req.user_id, db)
+                companion_result = {
+                    **xp_result,
+                    "mood": new_mood,
+                    "streak_days": streak_result["streak_days"],
+                    "streak_changed": streak_result["streak_changed"],
+                }
+        else:
+            _touch_last_practice_timestamp(req.user_id, db)
+            new_mood = update_mood_for_user(req.user_id, db)
+            companion_result = {"mood": new_mood}
+
+    except Exception as e:
+        print(f"[companion] update failed for user {req.user_id}: {e}")
+
+    response = {
+        "activity_completed": req.passed,
+        "xp_earned": XP_PER_MISSION if req.passed else 0,
+        "lesson_now_required_complete": lesson_now_required_complete,
+        "lesson_now_fully_complete": lesson_now_fully_complete,
+    }
+    if companion_result is not None:
+        response["companion"] = companion_result
+    return response
+
+
 @router.post("/grade-fill-blank")
 async def grade_fill_blank(req: FillBlankRequest, db: Session = Depends(get_db)):
     """LLM-grade fill-blank minigame answer."""
@@ -1153,7 +1306,7 @@ async def grade_fill_blank(req: FillBlankRequest, db: Session = Depends(get_db))
         print(f"[fill-blank grading] error: {e}")
         return {"correct": False, "feedback": "Couldn't grade answer. Try again!"}
 
-    # Mark mission complete if correct
+    # Mark activity complete if correct
     if correct:
         lesson = db.query(Lesson).filter(Lesson.lesson_key == req.lesson_key).first()
         if lesson:
@@ -1168,7 +1321,9 @@ async def grade_fill_blank(req: FillBlankRequest, db: Session = Depends(get_db))
             was_required_complete = progress and progress.is_required_complete
             was_fully_complete = progress and progress.is_fully_complete
 
-            _mark_mission_complete(req.lesson_key, req.mission_id, req.user_id, db)
+            # Get activities list from lesson JSON
+            activities = lesson.lesson_json.get("activities", [])
+            _mark_activity_complete(req.user_id, req.lesson_key, req.activity_id, activities, db)
 
             # Re-fetch progress
             progress = (
@@ -1209,7 +1364,7 @@ async def grade_fill_blank(req: FillBlankRequest, db: Session = Depends(get_db))
             response = {
                 "correct": correct,
                 "feedback": feedback,
-                "mission_completed": True,
+                "activity_completed": True,
                 "xp_earned": XP_PER_MISSION,
                 "lesson_now_required_complete": lesson_now_required_complete,
                 "lesson_now_fully_complete": lesson_now_fully_complete,
@@ -1218,4 +1373,4 @@ async def grade_fill_blank(req: FillBlankRequest, db: Session = Depends(get_db))
                 response["companion"] = companion_result
             return response
 
-    return {"correct": correct, "feedback": feedback, "mission_completed": False}
+    return {"correct": correct, "feedback": feedback, "activity_completed": False}
