@@ -385,7 +385,7 @@ export default function RoadmapScreen() {
         </ScrollView>
       )}
 
-      <TabBar activeTab="path" />
+      <TabBar activeTab="roadmap" />
 
       <ConfettiOverlay triggerRef={confettiTriggerRef} />
       {renderModal()}

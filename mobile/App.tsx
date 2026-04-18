@@ -26,11 +26,7 @@ import HomeScreen from './src/screens/main/HomeScreen'
 import SettingsScreen from './src/screens/main/SettingsScreen'
 import RoadmapScreen from './src/screens/roadmap/RoadmapScreen'
 import LessonScreen from './src/screens/roadmap/LessonScreen'
-import CompanionHomeScreen from './src/screens/companion/CompanionHomeScreen'
-import CompanionShopScreen from './src/screens/companion/CompanionShopScreen'
-import SocialFeedScreen from './src/screens/social/SocialFeedScreen'
-import FriendSearchScreen from './src/screens/social/FriendSearchScreen'
-import PostDetailScreen from './src/screens/social/PostDetailScreen'
+import ProfileScreen from './src/screens/main/ProfileScreen'
 
 const CLERK_PUBLISHABLE_KEY = 'pk_test_ZXhjaXRlZC1wb255LTQxLmNsZXJrLmFjY291bnRzLmRldiQ'
 
@@ -75,12 +71,8 @@ return <View style={{ flex: 1, backgroundColor: colors.background }} />
           <Stack.Screen name="Roadmap" component={RoadmapScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="LessonScreen" component={LessonScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Home" component={HomeScreen} options={{ cardStyleInterpolator: forFade }} />
-          <Stack.Screen name="CompanionHome" component={CompanionHomeScreen} options={{ cardStyleInterpolator: forFade }} />
-          <Stack.Screen name="Badges" component={SocialFeedScreen} options={{ cardStyleInterpolator: forFade }} />
+          <Stack.Screen name="Profile" component={ProfileScreen} options={{ cardStyleInterpolator: forFade }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ cardStyleInterpolator: forFade }} />
-          <Stack.Screen name="CompanionShop" component={CompanionShopScreen} options={{ cardStyleInterpolator: forFade }} />
-          <Stack.Screen name="FriendSearch" component={FriendSearchScreen} />
-          <Stack.Screen name="PostDetail" component={PostDetailScreen} />
         </>
       ) : (
         <>

@@ -2,199 +2,172 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Development Commands
+## Project Overview
 
-All primary commands are in the root `Makefile`:
+**StudBud** is an AI-powered learning companion mobile app (Duolingo-style for cooking). Core focus: personalized lesson generation and structured learning paths.
 
+- **Mobile frontend**: React Native + Expo (TypeScript)
+- **Backend API**: FastAPI (Python) with PostgreSQL
+- **AI integration**: Anthropic Claude API for lesson generation + vision grading
+- **Authentication**: Clerk OAuth
+
+## Key Commands
+
+### Initial Setup
 ```bash
-make setup       # First-time: install deps + start DB
-make dev         # Start DB + backend + mobile (expo run:ios) concurrently
-make backend     # FastAPI only (uvicorn --reload on :8000, binds 0.0.0.0)
-make mobile      # Build and run on iOS simulator (expo run:ios)
-make mobile-expo # Start Expo Go dev server (expo start)
-make db          # Start PostgreSQL container only
-make db-stop     # Stop PostgreSQL
-make ip          # Print local IP for physical device testing
-make clean       # Stop DB, remove venv and node_modules
+make setup      # First-time setup: install dependencies + start DB
+make install    # Install backend venv + mobile node_modules
 ```
 
-**Backend individually:**
+### Development Services
 ```bash
-cd backend && source venv/bin/activate
-uvicorn app.main:app --reload
+make db         # Start PostgreSQL (docker compose)
+make db-wait    # Start DB and wait until ready
+make db-stop    # Stop PostgreSQL
+make backend    # Start FastAPI server (requires DB running)
+make mobile     # Start Expo iOS dev server
+make mobile-expo # Start Expo dev server (web/any platform)
+make dev        # Start all services (DB + backend + mobile)
 ```
 
-**Type-check mobile:**
+### Database
 ```bash
-cd mobile && npx tsc --noEmit
+make delete-roadmap    # Clear user roadmaps
+make delete-lessons    # Clear lessons
 ```
 
-**Install new native packages** (use `expo install`, not `npm install`, to get SDK-compatible versions):
+### Utilities
 ```bash
-cd mobile && npx expo install <package-name>
+make ip         # Print local IP for physical device testing
+make sync-ip    # Write current IP to mobile/.env for API connection
+make clean      # Stop DB and remove venv + node_modules
 ```
 
-## Architecture Overview
+## Architecture
 
-### High-Level User Flow
-1. **Auth**: SignIn/SignUp via Clerk → LoadingScreen validates auth state
-2. **Onboarding**: HomeScreen → OnboardingScreen → BuddyNaming → GoalTuning → Confirmation → Roadmap
-3. **Lesson flow**: RoadmapScreen (tap a node) → modal → "Start Lesson →" → LessonScreen (6-card tap flow) → back to RoadmapScreen with `completedLessonId` param → confetti + progress advance
-4. **Persistence**: Roadmap in `user_roadmaps` (PostgreSQL), lesson content cached in `lesson_cache`, progress tracked via `active_index`
+### Backend (`/backend`)
 
-### Backend (`backend/`)
+**Core Routers** (only essential features):
+- `app/routers/onboarding.py` - User goal selection and preferences
+- `app/routers/roadmap.py` - AI-generated learning paths, curriculum injection, progress tracking
+- `app/routers/lesson.py` - Lesson generation (RAG + Claude), activity grading, vision-based photo validation
 
-**Stack:** FastAPI + SQLAlchemy + PostgreSQL 16 (Docker). DB credentials: `studbud:studbud_dev@localhost:5432/studbud`. Session via `get_db()` dependency.
+**Services** (business logic):
+- `app/services/lesson_prompt_builder.py` - Type-aware lesson prompt generation
+- `app/services/activity_rules.py` - Maps lesson types to activity types
+- `app/services/mission_rules.py` - Maps lesson types to required/optional missions
 
-**Routers:**
-- `app/routers/onboarding.py` — `/onboarding/submit`
-- `app/routers/roadmap.py` — `/roadmap/generate`, `/roadmap/coach`, `/roadmap/summarize`, `/roadmap/{user_id}`, `/roadmap/{user_id}/progress`
-- `app/routers/lesson.py` — `/lesson/generate`, `/lesson/validate`, `/lesson/{lesson_key}`, `/lesson/{lesson_key}/{user_id}/progress`
-- `app/routers/companion.py` — `/companion/{user_id}`, `/companion/{user_id}/stats`, `/companion/{user_id}/initialize`, `/companion/{user_id}/add-xp`, `/companion/{user_id}/progress`, `/companion/{user_id}/mood-breakdown`, `/companion/{user_id}/update-mood`
-- `app/routers/cosmetics.py` — `/cosmetics` (list with optional `?item_type=`), `/cosmetics/{user_id}/inventory`, `/cosmetics/{user_id}/equipped`, `/cosmetics/{user_id}/purchase`, `/cosmetics/{user_id}/equip`, `/cosmetics/{user_id}/unequip`
+**Models** (only active):
+- `Source`, `KbChunk` - RAG knowledge base indexing
+- `Lesson` - Cached generated lessons
+- `UserRoadmap` - User's generated curriculum
+- `UserLessonProgress` - Completion tracking (completed_activities, is_required_complete, is_fully_complete)
 
-**Models (`app/models.py`):**
-- `UserRoadmap` — `clerk_user_id` (unique), `roadmap_json` (JSONB), `active_index`, timestamps
-- `LessonCache` — `cache_key` (unique, indexed as `"{lesson_title}::{goal}::{experience}"`), `lesson_json` (JSONB), `created_at`
-- `Lesson` — `lesson_key` (unique), `title`, `chapter_title`, `domain`, `lesson_json` (JSONB), `sources_cited` (JSONB list of source_ids), `created_at`
-- `UserLessonProgress` — `clerk_user_id`, `lesson_key`, `completed_missions` (JSONB), `is_required_complete`, `is_fully_complete`, timestamps
-- `Source` — `source_id` (unique), `title`, `author`, `url`, `license`, `description`, `topics` (JSONB), timestamps
-- `KbChunk` — `source_id` (FK), `chunk_index`, `page_start`, `text`, `embedding` (pgvector 1536-dim), `key_quote` (extracted via `extract_quotes.py`), `quote_page`, timestamps
-- `CompanionState` — `clerk_user_id` (unique), `level`, `xp`, `mood` (0–100), `streak_days`, `coins`, `gems`, `last_practice_date`, `last_mood_update`, timestamps
-- `CosmeticItem` — `item_key` (unique), `name`, `item_type` (`ItemType` enum: `color|accessory|outfit|room_decoration`), `cost_coins`, `cost_gems`, `rarity` (`Rarity` enum: `common|uncommon|rare|legendary`), `unlock_condition`
-- `UserInventory` — `clerk_user_id` + `cosmetic_item_id` (unique pair), `is_equipped`, `owned_date`
-- `CompanionEquipped` — `clerk_user_id` (unique), `equipped_color_id` (FK), `equipped_outfit_id` (FK), `equipped_accessories` (JSONB list of item_keys), `equipped_room_decorations` (JSONB list of `{item_id, x, y}`)
+**DB**: PostgreSQL with pgvector extension. Core tables: users (via Clerk), lessons, user_roadmaps, user_lesson_progress, sources, kb_chunks.
 
-**AI pattern:** All Claude calls use `anthropic.Anthropic().messages.create`. Model from `ANTHROPIC_MODEL` env var (default `claude-haiku-4-5-20251001`). Responses parsed via `_strip_and_parse()` in `roadmap.py` — import it from there, never duplicate it. Vision calls in `/lesson/validate` hardcode `claude-sonnet-4-6`.
+**Key Dependencies:**
+- FastAPI + Uvicorn
+- SQLAlchemy + pgvector
+- Anthropic SDK (Claude API)
+- python-dotenv
 
-**Companion service (`app/services/companion_service.py`):** All companion business logic lives here — XP/leveling (`add_xp_to_companion` uses `SELECT FOR UPDATE` for concurrency safety), mood calculation (`calculate_mood` is pure/side-effect-free), streak tracking, initialization. XP formula: `xp_needed = 100 * current_level`. Mood = base 50 ± streak bonus (−30 to +20) + cosmetic bonus (up to +20) + room decoration bonus (up to +15). Milestone levels: 5, 10, 25, 50, 100.
-
-**Env vars (`backend/.env`):** `ANTHROPIC_API_KEY` (required), `ANTHROPIC_MODEL` (optional override).
-
-**Error handling pattern:** `HTTPException(status_code=503, ...)` for `APIConnectionError` and `APIStatusError` — follow this in all routers.
-
-**Roadmap JSON schema from LLM:**
+**Running the Backend:**
+```bash
+cd backend && venv/bin/uvicorn app.main:app --reload --host 0.0.0.0
 ```
-{ title, chapters[{ id, title, lessons[{ id, title, type: "lesson"|"practice"|"milestone", estimatedMinutes }] }] }
+Server: `http://localhost:8000`. Mobile connects via EXPO_PUBLIC_API_BASE.
+
+### Mobile App (`/mobile`)
+
+**Core Screens**:
+- `src/screens/auth/` - SignIn, SignUp, Loading
+- `src/screens/onboarding/` - 6-screen flow (Goal, Experience, Grading, Commitment, Coaching, Confirmation)
+- `src/screens/roadmap/` - RoadmapScreen (winding path visualization), LessonScreen (lesson cards + activities)
+- `src/screens/main/` - ProfileScreen (user stats), SettingsScreen (sign out)
+
+**Key Components**:
+- `TabBar` - 2-tab navigation (Roadmap, Profile)
+- `PathNode` - Individual lesson node on roadmap
+- `PathTrail` - SVG winding path visualization
+- `AnnotatedText` - Text with inline citation badges (RAG sources)
+
+**Theme** (`src/theme/`): Unified color palette, typography, spacing, shadows.
+
+**Key Dependencies:**
+- React Native 0.81.5 + Expo 54
+- React Navigation (Stack navigator)
+- Clerk OAuth
+- TypeScript
+
+**Running the Mobile App:**
+```bash
+cd mobile && npx expo start      # Web browser
+cd mobile && npx expo run:ios    # iOS
+cd mobile && npx expo run:android # Android
 ```
 
-**Lesson JSON schema from LLM:**
-```
-{ card1: { companion_message },
-  card3: { headline, points: [{ text, source_ids[], quote?, quote_author?, quote_book?, quote_page? }], tell_me_more },
-  missions: [{ id, title, description, why_it_matters, is_required, duration_minutes, prompt, reflection_choices[] }] }
-```
-- `points[]`: Each bullet point is an `AnnotatedPoint` — `text` (≤12 words) + optional `source_ids` (for backward compat badges) + optional citation fields
-- Citation fields (`quote`, `quote_author`, `quote_book`, `quote_page`) only included by LLM when a key quote from RAG material directly supports the point
-- Missions: 2–4 total, at least 1–2 `is_required: true`. XP per validated mission: `XP_PER_MISSION = 20`. Lesson is cached by `lesson_key`; old cache entries with `card2` or without `missions` are auto-deleted and regenerated.
+## Core Learning Loop
 
-### RAG System (`backend/app/rag_resources/`)
+The app's primary user journey:
+1. **Onboarding** → User selects goal + preferences (ExperienceScreen, GradingScreen, CommitmentScreen)
+2. **Roadmap Generation** → Claude generates personalized multi-chapter curriculum via `/roadmap/generate`
+3. **Lesson View** → User sees winding path of lessons (RoadmapScreen)
+4. **Lesson Completion** → User works through lesson cards (hook → deep dive → activities → completion)
+   - Activities: multiple_choice, image_id, matching, fill_blank, sequence
+   - Photo submission: vision model grading for cooking photos
+   - Missions deprecated (replaced by activities)
+5. **Progress Tracking** → UserLessonProgress updated; XP awarded per activity
+6. **Profile** → Shows stats (lessons completed, total XP, roadmap progress)
 
-Domain-scoped: scan `rag_resources/{domain}/` first; fall back to `rag_resources/` root if the folder doesn't exist. `video_mapping.json` always lives at the root (not inside a domain folder). Current domain: `cooking/` (with subfolders `proteins/`, `knife_skills/`, `sauces/`, `flavor/`, `heat_control/`). To add a new domain, create `rag_resources/{domain}/` with `.md` files — no code changes needed.
+## Key Concepts
 
-XP values: `lesson=50`, `practice=75`, `milestone=150`.
+### Lesson Generation
+`POST /lesson/generate` endpoint:
+1. Checks DB cache first
+2. RAG retrieval via pgvector (OpenAI embeddings)
+3. Type-aware Claude prompt (technique/recipe/concept/food_science/minigame)
+4. Returns structured lesson JSON with activities (not missions)
+5. Caches in DB
 
-### Citation Pipeline (RAG → Frontend)
+Lesson structure: `{ card1: { motivation, learn_points }, card3: { headline, points, tell_me_more }, activities: [...], sources_cited: [...] }`
 
-**Workflow:** MD files → `setup_knowledge_base.py` (chunks + embeddings) → `extract_quotes.py` (key_quote population) → `generate_lessons.py` or `/lesson/generate` (RAG retrieval + LLM) → `AnnotatedText` (inline quote rendering).
+### Activities (not Missions)
+- **Sequential**: User swipes through activities in order
+- **Types**: multiple_choice, image_id, matching, fill_blank, sequence
+- **Grading**: Server-side (activities marked passed/failed)
+- **Vision grading**: Claude 4 vision model for photo submission activities
+- **Completion**: All activities must be done; progression to next lesson only when all completed
 
-**Database Scripts** (`backend/scripts/`):
-- `setup_knowledge_base.py` — Parse `.md` files from `rag_resources/`, chunk text, create embeddings via OpenAI, populate `sources` and `kb_chunks` tables. Usage: `python scripts/setup_knowledge_base.py`. **Only run when adding new sources.**
-- `extract_quotes.py` — Extract 1-2 sentence key quotes from each chunk using Claude, populate `kb_chunks.key_quote` and `kb_chunks.quote_page`. Usage: `python scripts/extract_quotes.py`. **Run once after adding sources, or re-run to refresh existing quotes.**
-- `generate_lessons.py` — Generate ~150 lessons from curriculum taxonomy using RAG retrieval. UPSERT: overwrites existing lessons with same `lesson_key`, no manual deletion needed. Usage: `python scripts/generate_lessons.py`. **Run to bulk-regenerate lessons with updated quote data.**
+### Roadmap & Progress
+- Roadmap structure: chapters → lessons (with id, title, type, estimatedMinutes)
+- Progress tracking: `UserLessonProgress` tracks `completed_activities` (list of activity IDs)
+- Two completion states: `is_required_complete` (all required activities done), `is_fully_complete` (all activities done)
+- Active lesson advances via `active_index` in `UserRoadmap`
 
-**Quote Extraction Rules:**
-- `key_quote`: Exact text from chunk (≤30 words), 1–2 sentences, actionable/technique-focused, never LLM-invented
-- `quote_page`: Extracted from PDF page metadata (`chunk.page_start`); displayed in inline quote attribution
-- Inline rendering: `AnnotatedText` shows `"{quote}"` with attribution (author, book, page) under bullet point; falls back to numbered citation badges `[1][2]` if no quote extracted
-- Backward compat: Old cached lessons without quote fields render normally (badges only); no crashes
+### Grading Modes
+User's grading preference (from onboarding) affects AI feedback tone:
+- `encouraging`: Generous 4–5 star ratings, positive feedback
+- `strict`: High bar, honest 2–3 star ratings when criteria missed
+- `balanced` (default): Honest ratings, lenient pass threshold
 
-**RAG Retrieval in Lesson Generation:**
-- `_retrieve_rag_chunks()` in `lesson.py` and `generate_lessons.py`: pgvector similarity search, returns top-k chunks
-- Chunks include `key_quote` (if extracted) — formatted as `KEY QUOTE: "{quote}"` in the RAG block to the LLM
-- LLM prompt instructs: only include citation fields when a key quote from reference material directly supports the point
+Controlled in `/lesson/validate` endpoint via `_grading_mode` in roadmap `_meta`.
 
-### Mobile (`mobile/`)
+### API Base URL
+Mobile app uses `EXPO_PUBLIC_API_BASE` env var to connect to backend. Set via `make sync-ip` for development.
 
-**Stack:** Expo SDK 54 React Native + TypeScript. Do not upgrade to SDK 55+.
+## Development Workflow
 
-**Auth:** Clerk (`@clerk/clerk-expo`). Tokens in `expo-secure-store`. `CLERK_PUBLISHABLE_KEY` set directly in `App.tsx`.
+1. **Start all services**: `make dev` (DB + backend + mobile dev server)
+2. **Backend iteration**: Edit routers/services, server hot-reloads
+3. **Mobile iteration**: Edit screens/components, fast refresh works automatically
+4. **Clear test data**: `make delete-roadmap` or `make delete-lessons`
+5. **Reset fully**: `make clean` + `make setup`
 
-**Fonts:** `FredokaOne_400Regular` (headings/numbers), `Nunito_400Regular`, `Nunito_600SemiBold`, `Nunito_700Bold` (body/labels). Loaded via `@expo-google-fonts` in `App.tsx`.
+## Common Patterns
 
-**Navigation (`App.tsx`):** Single `createStackNavigator`. Authenticated stack: Loading, Onboarding, BuddyNaming, GoalTuning, Confirmation, Roadmap, LessonScreen, Home, **CompanionHome**, Badges, Settings, **CompanionShop**. Unauthenticated stack: SignIn, SignUp. All screens `headerShown: false`. Roadmap/Home/CompanionHome/Badges/Settings use `forFade` interpolator; CompanionShop uses default slide.
-
-**API base:** `const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'` — set `EXPO_PUBLIC_API_BASE` in `mobile/.env` or use `make ip` for physical device.
-
-**Params flow:**
-- Onboarding screens chain params forward via `navigation.navigate()`
-- GoalTuning → Confirmation passes `coachingResult` (from `/roadmap/coach`)
-- RoadmapScreen → LessonScreen passes `{ lessonKey, lessonTitle, chapterTitle, goal, buddyName, experience, completedLessonTitles, domain, userId, lessonId }`
-- LessonScreen → RoadmapScreen navigates back with `{ completedLessonId }` param, which the Roadmap focus listener picks up to fire confetti and advance `active_index`
-
-**LessonScreen card flow (5 cards, indices 0–4):**
-1. (0) Hook — `card1.companion_message`, loading state until API responds
-2. (1) Why It Matters — `card3.headline` + `card3.points[]` bullets + expandable "Tell me more"
-3. (2) Missions List — tap any mission to open it; review shortcuts to cards 0/1
-4. (3) Mission Submission — photo (`expo-image-picker`) + reflection choice; base64 via `expo-file-system`; submits to `/lesson/validate`
-5. (4) Feedback — validation result with companion scale pulse, feedback fade-in, XP spring animation; `lesson_now_required_complete` triggers roadmap advance
-
-Card transitions: fade out 150ms → set index + reset translateX to 20px → fade+slide in 250ms. Progress bar (animated width) + dots at top, rendered at screen level above card wrapper.
-
-### Design System (`mobile/src/theme/index.ts`)
-
-Always use theme tokens — never hardcode colors:
-- `colors.background` (`#FFFDF7`) — page background
-- `colors.card` (`#F7F3EC`) — soft card backgrounds
-- `colors.mint` (`#A8E6C3`) — primary actions, active states, progress
-- `colors.peach` (`#FFCBA4`) — secondary actions (e.g. "Complete" button)
-- `colors.golden` (`#FFE082`) — milestones, XP badges, focus callouts
-- `colors.sky` (`#B8D8F8`) — active node state on roadmap
-- `colors.foreground` (`#3D2C1E`) — all text
-- `colors.muted` (`#9E8E82`) — secondary text, back links, placeholders
-- `colors.border` (`#EDE7DF`) — borders, inactive dots, progress bar bg
-- `radius.sm/md/lg` (16/24/32) — border radii
-- `shadows.mint/peach/golden` — color-matched elevation shadows (spread onto button styles)
-
-### Companion Component (`mobile/src/components/Companion.tsx`)
-
-SVG mascot on every screen. Props: `size`, `mood` (`idle`|`happy`|`excited`|`thinking`|`sad`). Animations use `Animated` API with `useNativeDriver: true`. Wrap in `<Animated.View>` to apply external scale/transform animations on top.
-
-### TabBar Component (`mobile/src/components/TabBar.tsx`)
-
-Bottom tab bar shared across main app tabs. Accepts `activeTab` prop (`'home'|'roadmap'|'buddy'|'badges'|'settings'`). Navigates using `useNavigation` internally.
-
-### CompanionHomeScreen (`mobile/src/screens/CompanionHomeScreen.tsx`)
-
-Buddy tab showing companion level/XP bar, mood gauge (0–100 score mapped to color + emoji), streak card, and shortcuts to CompanionShop. Fetches `/companion/{user_id}/stats` + `/companion/{user_id}/progress` in parallel. XP bar width uses `Animated.Value` (cannot use native driver — pixel width). Companion bounces on mood change between fetches. Handles "not initialized" state with an "Wake Up Buddy" CTA that calls `POST /companion/{user_id}/initialize`.
-
-### CompanionShopScreen (`mobile/src/screens/CompanionShopScreen.tsx`)
-
-Cosmetics shop. Fetches `/cosmetics` catalog + `/cosmetics/{user_id}/inventory` + `/companion/{user_id}/stats` (for coin/gem balances). Purchase via `POST /cosmetics/{user_id}/purchase`; equip via `POST /cosmetics/{user_id}/equip`. Item types: `color`, `accessory`, `outfit`, `room_decoration`.
-
-### AnnotatedText Component (`mobile/src/components/AnnotatedText.tsx`)
-
-Renders a bullet point with optional inline citation. Props:
-- `text` — bullet point text
-- `source_ids` — array of source IDs (for numbered badge fallback)
-- `sourceMap` — mapping of source_ids to metadata (title, author, page)
-- `quote`, `quote_author`, `quote_book`, `quote_page` — optional citation fields from AnnotatedPoint
-- `textStyle`, `bulletDotStyle` — optional custom styles
-
-**Rendering logic:**
-- If `quote` is present: render inline quote block (left-bordered, italic text + attribution) below bullet
-- If `!quote && resolvedSources.length > 0`: render numbered citation badges `[1][2]...` (fallback for old lessons)
-- Modal opens on badge press to show source details (title, author, page)
-
-### RoadmapScreen
-
-- `computePathLayout()` builds the SVG winding path and node positions from `roadmap.chapters`
-- `PathTrail` renders the SVG path with animated progress fill; `PathNode` renders each lesson node
-- Active node: sky bg + pulse animation + Companion floating above at `top: -40`
-- `indexMap` (ref) maps `lesson.id → globalIndex` for O(1) progress lookup
-- Progress saved to `/roadmap/{user_id}/progress` (fire-and-forget PATCH)
-- Confetti triggered via `confettiTriggerRef`; milestone = full 50 pieces, lesson/practice = 20
-
-## Available Claude Models
-
-Only Claude 4.x models are available on this API key. Default (cheapest): `claude-haiku-4-5-20251001`. Override via `ANTHROPIC_MODEL` in `backend/.env`. Vision endpoint always uses `claude-sonnet-4-6` regardless of env var.
+- **Routers → Services → Models**: Routers parse HTTP, services contain business logic, models are DB schemas
+- **Activity-based lessons**: All new lessons use `activities` array, not deprecated `missions`
+- **Type-aware generation**: Lesson type (technique/recipe/etc) drives prompt and activity selection
+- **XP tracking**: Awarded per activity completion, no pet/companion system attached
+- **Progress is immutable**: Once activity marked complete, it stays complete (no undo)
+- **Caching by lesson_key**: Lesson JSON cached in DB; stale lessons regenerated on demand

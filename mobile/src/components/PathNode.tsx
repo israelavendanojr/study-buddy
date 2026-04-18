@@ -1,6 +1,5 @@
 import React, { useRef, useEffect } from 'react'
 import { View, Text, Pressable, Animated, StyleSheet, Dimensions } from 'react-native'
-import Companion from './Companion'
 import { colors } from '../theme'
 
 const { width: SW } = Dimensions.get('window')
@@ -133,13 +132,6 @@ function PathNodeInner({ lesson, x, y, labelSide, isDone, isPartialComplete = fa
 
   return (
     <View style={[styles.wrapper, { left: x - size / 2, top: y - size / 2 }]}>
-      {/* Companion above active node */}
-      {isActive && (
-        <View style={styles.companion}>
-          <Companion size={48} mood="happy" />
-        </View>
-      )}
-
       {/* Node */}
       <Pressable onPress={() => onPress(lesson)} disabled={isLocked}>
         {isActive ? <ActiveNodeWrap size={size}>{nodeInner}</ActiveNodeWrap> : nodeInner}
@@ -193,12 +185,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.foreground,
     lineHeight: 18,
-  },
-  companion: {
-    position: 'absolute',
-    top: -44,
-    alignSelf: 'center',
-    zIndex: 10,
   },
   typeBadge: {
     position: 'absolute',

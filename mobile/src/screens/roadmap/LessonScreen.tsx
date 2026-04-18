@@ -16,8 +16,6 @@ import { useRoute, useNavigation } from '@react-navigation/native'
 import type { RouteProp } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import * as ImagePicker from 'expo-image-picker'
-import { File } from 'expo-file-system'
-import { useUser } from '@clerk/clerk-expo'
 import Companion from '../../components/Companion'
 import AnnotatedText from '../../components/AnnotatedText'
 import { colors, radius, shadows } from '../../theme'
@@ -193,21 +191,26 @@ function toAnnotatedPoint(p: string | AnnotatedPoint): AnnotatedPoint {
 
 // ── Progress Indicator ─────────────────────────────────────────────────────────
 
-function ProgressIndicator({ current, progressAnim, totalCards }: { current: number; progressAnim: Animated.Value; totalCards: number }) {
+function ProgressIndicator({ current, progressAnim, totalCards, onExit }: { current: number; progressAnim: Animated.Value; totalCards: number; onExit: () => void }) {
   const barWidth = progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
   return (
     <View style={piStyles.wrapper}>
-      <View style={piStyles.dotsRow}>
-        {Array.from({ length: totalCards }).map((_, i) => (
-          <View
-            key={i}
-            style={[
-              piStyles.dot,
-              i < current && piStyles.dotDone,
-              i === current && piStyles.dotActive,
-            ]}
-          />
-        ))}
+      <View style={piStyles.topRow}>
+        <Pressable onPress={onExit} hitSlop={12} style={piStyles.exitBtn}>
+          <Text style={piStyles.exitBtnText}>×</Text>
+        </Pressable>
+        <View style={piStyles.dotsRow}>
+          {Array.from({ length: totalCards }).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                piStyles.dot,
+                i < current && piStyles.dotDone,
+                i === current && piStyles.dotActive,
+              ]}
+            />
+          ))}
+        </View>
       </View>
       <View style={piStyles.barBg}>
         <Animated.View style={[piStyles.barFill, { width: barWidth }]} />
@@ -218,7 +221,10 @@ function ProgressIndicator({ current, progressAnim, totalCards }: { current: num
 
 const piStyles = StyleSheet.create({
   wrapper: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 12 },
-  dotsRow: { flexDirection: 'row', gap: 6, justifyContent: 'center', marginBottom: 8 },
+  topRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  exitBtn: { marginRight: 12, padding: 4 },
+  exitBtnText: { fontSize: 24, color: colors.muted, fontFamily: 'Nunito_400Regular', lineHeight: 26 },
+  dotsRow: { flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center' },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border },
   dotDone: { backgroundColor: colors.mint, opacity: 0.4 },
   dotActive: { backgroundColor: colors.mint, opacity: 1 },
@@ -232,7 +238,6 @@ export default function LessonScreen() {
   const route = useRoute<RouteProp<{ params: LessonParams }, 'params'>>()
   const navigation = useNavigation<StackNavigationProp<any>>()
   const params = route.params as LessonParams
-  const { user } = useUser()
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [cardIndex, setCardIndex] = useState(0)
@@ -248,8 +253,11 @@ export default function LessonScreen() {
   const [completedActivities, setCompletedActivities] = useState<Set<string>>(new Set())
   const [activityResults, setActivityResults] = useState<Record<string, { passed: boolean; explanation: string }>>({})
   const [lessonComplete, setLessonComplete] = useState(false)
-  const [photoModalVisible, setPhotoModalVisible] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+
+  // Photo submission state (for photo_submission activities)
+  const [photoUri, setPhotoUri] = useState<string | null>(null)
+  const [photoMimeType, setPhotoMimeType] = useState<string>('image/jpeg')
 
   // Per-activity selection state
   const [selectedOptions, setSelectedOptions] = useState<Record<string, number | null>>({})
@@ -268,13 +276,6 @@ export default function LessonScreen() {
     }
     return map
   }, [lessonContent?.lesson_key])
-
-  // Photo submission state (used for post-lesson modal)
-  const [photoUri, setPhotoUri] = useState<string | null>(null)
-  const [photoMimeType, setPhotoMimeType] = useState<string>('image/jpeg')
-  const [shareCaption, setShareCaption] = useState('')
-  const [sharePosting, setSharePosting] = useState(false)
-  const [sharePosted, setSharePosted] = useState(false)
 
   // Shared
   const [tellMeMoreOpen, setTellMeMoreOpen] = useState(false)
@@ -555,39 +556,9 @@ export default function LessonScreen() {
     navigation.goBack()
   }
 
-  // ── Share to feed ────────────────────────────────────────────────────────────
-  const handleShareToFeed = async () => {
-    if (!photoUri || !params.userId) return
-    setSharePosting(true)
-    try {
-      const base64 = await new File(photoUri).base64()
-      const res = await fetch(`${API_BASE}/social/posts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clerk_user_id: params.userId,
-          photo_base64: base64,
-          display_name: user?.fullName ?? user?.firstName ?? null,
-          caption: shareCaption.trim() || null,
-          lesson_key: params.lessonKey,
-          lesson_title: params.lessonTitle,
-          chapter_title: params.chapterTitle,
-          domain: params.domain,
-        }),
-      })
-      if (res.ok) setSharePosted(true)
-    } catch { /* ignore */ } finally {
-      setSharePosting(false)
-    }
-  }
-
   // ── Reset between missions ──────────────────────────────────────────────────
-  // Reset function for activities (minimal - mostly for photo modal state)
   const resetSubmission = () => {
-    setPhotoUri(null)
-    setPhotoMimeType('image/jpeg')
-    setShareCaption('')
-    setSharePosted(false)
+    // No longer needed, but kept for swipe responder compatibility
   }
   resetSubmissionRef.current = resetSubmission
 
@@ -1233,13 +1204,6 @@ export default function LessonScreen() {
         <View style={styles.spacer} />
 
         <Pressable
-          onPress={() => setPhotoModalVisible(true)}
-          style={[styles.primaryBtn, shadows.peach, { marginBottom: 12 }]}
-        >
-          <Text style={styles.primaryBtnText}>Share your cooking? 📷</Text>
-        </Pressable>
-
-        <Pressable
           onPress={() => navigation.goBack()}
           style={[styles.primaryBtn, shadows.mint]}
         >
@@ -1259,10 +1223,7 @@ export default function LessonScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Pressable style={styles.exitButton} onPress={handleExit} hitSlop={8}>
-        <Text style={styles.exitButtonText}>×</Text>
-      </Pressable>
-      <ProgressIndicator current={cardIndex} progressAnim={progressAnim} totalCards={TOTAL_CARDS} />
+      <ProgressIndicator current={cardIndex} progressAnim={progressAnim} totalCards={TOTAL_CARDS} onExit={handleExit} />
       <Animated.View
         style={[
           styles.cardWrapper,
@@ -1282,22 +1243,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  exitButton: {
-    position: 'absolute',
-    top: 12,
-    left: 16,
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
-  },
-  exitButtonText: {
-    fontSize: 28,
-    color: colors.muted,
-    fontFamily: 'Nunito_400Regular',
-    lineHeight: 28,
   },
   cardWrapper: {
     flex: 1,
@@ -1846,57 +1791,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: 20,
     marginBottom: 24,
-  },
-
-  // Share to feed
-  shareCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  shareCardTitle: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 17,
-    color: colors.foreground,
-    marginBottom: 2,
-  },
-  shareCardSub: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 13,
-    color: colors.muted,
-    marginBottom: 12,
-  },
-  shareCaptionInput: {
-    backgroundColor: colors.background,
-    borderRadius: radius.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 14,
-    color: colors.foreground,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 10,
-  },
-  shareBtn: {
-    backgroundColor: colors.peach,
-    borderRadius: radius.sm,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  shareBtnText: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 14,
-    color: colors.foreground,
-  },
-  shareSuccessRow: { alignItems: 'center', paddingVertical: 8 },
-  shareSuccessText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 14,
-    color: colors.foreground,
   },
 
   // Gallery styles

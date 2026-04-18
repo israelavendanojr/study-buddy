@@ -11,13 +11,6 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Lesson, UserLessonProgress, UserRoadmap
-from ..services.companion_service import (
-    _touch_last_practice_timestamp,
-    add_xp_to_companion,
-    initialize_companion,
-    update_last_practice,
-    update_mood_for_user,
-)
 from ..services.lesson_prompt_builder import build_type_aware_prompt, build_activity_prompt
 from .roadmap import _strip_and_parse
 
@@ -505,29 +498,6 @@ def _mark_activity_complete(
     )
 
 
-def _apply_xp_and_streak(
-    user_id: str,
-    lesson_now_required_complete: bool,
-    db: Session,
-) -> dict:
-    """Award XP and update streak/mood. Returns companion_result dict."""
-    initialize_companion(user_id, db)
-    xp_result = add_xp_to_companion(user_id, XP_PER_MISSION, "lesson", db)
-    companion_result: dict = {**xp_result}
-
-    if lesson_now_required_complete:
-        streak_result = update_last_practice(user_id, db)
-        new_mood = update_mood_for_user(user_id, db)
-        companion_result = {
-            **xp_result,
-            "mood": new_mood,
-            "streak_days": streak_result["streak_days"],
-            "streak_changed": streak_result["streak_changed"],
-        }
-
-    return companion_result
-
-
 def _is_lesson_json_stale(lj: dict) -> bool:
     """Return True if cached lesson JSON should be regenerated."""
     # New lessons must have activities (not missions)
@@ -672,20 +642,12 @@ async def submit_reflection(req: ReflectRequest, db: Session = Depends(get_db)) 
         print(f"[reflect] progress DB error for user {req.user_id}: {e}")
         db.rollback()
 
-    # XP and streak — reflection counts for streak
-    companion_result: dict | None = None
-    try:
-        companion_result = _apply_xp_and_streak(req.user_id, lesson_now_required_complete, db)
-    except Exception as e:
-        print(f"[companion] reflect update failed for user {req.user_id}: {e}")
-
     return {
         "feedback": feedback,
         "mission_completed": True,
         "lesson_now_required_complete": lesson_now_required_complete,
         "lesson_now_fully_complete": lesson_now_fully_complete,
         "xp_earned": XP_PER_MISSION,
-        "companion": companion_result,
     }
 
 
@@ -748,12 +710,6 @@ async def submit_quiz(req: QuizAnswerRequest, db: Session = Depends(get_db)) -> 
         print(f"[quiz] progress DB error for user {req.user_id}: {e}")
         db.rollback()
 
-    companion_result: dict | None = None
-    try:
-        companion_result = _apply_xp_and_streak(req.user_id, lesson_now_required_complete, db)
-    except Exception as e:
-        print(f"[companion] quiz update failed for user {req.user_id}: {e}")
-
     return {
         "results": results,
         "score": correct_count,
@@ -763,7 +719,6 @@ async def submit_quiz(req: QuizAnswerRequest, db: Session = Depends(get_db)) -> 
         "lesson_now_required_complete": lesson_now_required_complete,
         "lesson_now_fully_complete": lesson_now_fully_complete,
         "xp_earned": XP_PER_MISSION,
-        "companion": companion_result,
     }
 
 
@@ -1070,32 +1025,6 @@ async def validate_lesson(req: ValidateRequest, db: Session = Depends(get_db)) -
         and progress.is_required_complete
     )
 
-    # XP and companion update
-    companion_result: dict | None = None
-    if req.user_id:
-        try:
-            initialize_companion(req.user_id, db)
-
-            if is_valid:
-                xp_result = add_xp_to_companion(req.user_id, XP_PER_MISSION, "lesson", db)
-                companion_result = {**xp_result}
-
-                if lesson_now_required_complete:
-                    streak_result = update_last_practice(req.user_id, db)
-                    new_mood = update_mood_for_user(req.user_id, db)
-                    companion_result = {
-                        **xp_result,
-                        "mood": new_mood,
-                        "streak_days": streak_result["streak_days"],
-                        "streak_changed": streak_result["streak_changed"],
-                    }
-            else:
-                _touch_last_practice_timestamp(req.user_id, db)
-                new_mood = update_mood_for_user(req.user_id, db)
-                companion_result = {"mood": new_mood}
-
-        except Exception as e:
-            print(f"[companion] update failed for user {req.user_id}: {e}")
 
     lesson_now_fully_complete = bool(
         req.user_id
@@ -1104,16 +1033,13 @@ async def validate_lesson(req: ValidateRequest, db: Session = Depends(get_db)) -
         and progress.is_fully_complete
     )
 
-    response = {
+    return {
         **parsed,
         "xp_earned": XP_PER_MISSION,
         "mission_completed": is_valid,
         "lesson_now_required_complete": lesson_now_required_complete,
         "lesson_now_fully_complete": lesson_now_fully_complete,
     }
-    if companion_result is not None:
-        response["companion"] = companion_result
-    return response
 
 
 # ---------------------------------------------------------------------------
@@ -1177,40 +1103,12 @@ async def minigame_complete(req: MinigameCompleteRequest, db: Session = Depends(
         progress and not was_fully_complete and progress.is_fully_complete
     )
 
-    # XP and companion update
-    companion_result: dict | None = None
-    try:
-        initialize_companion(req.user_id, db)
-        if req.passed:
-            xp_result = add_xp_to_companion(req.user_id, XP_PER_MISSION, "lesson", db)
-            companion_result = {**xp_result}
-
-            if lesson_now_required_complete:
-                streak_result = update_last_practice(req.user_id, db)
-                new_mood = update_mood_for_user(req.user_id, db)
-                companion_result = {
-                    **xp_result,
-                    "mood": new_mood,
-                    "streak_days": streak_result["streak_days"],
-                    "streak_changed": streak_result["streak_changed"],
-                }
-        else:
-            _touch_last_practice_timestamp(req.user_id, db)
-            new_mood = update_mood_for_user(req.user_id, db)
-            companion_result = {"mood": new_mood}
-
-    except Exception as e:
-        print(f"[companion] update failed for user {req.user_id}: {e}")
-
-    response = {
+    return {
         "mission_completed": req.passed,
         "xp_earned": XP_PER_MISSION if req.passed else 0,
         "lesson_now_required_complete": lesson_now_required_complete,
         "lesson_now_fully_complete": lesson_now_fully_complete,
     }
-    if companion_result is not None:
-        response["companion"] = companion_result
-    return response
 
 
 @router.post("/activity-complete")
@@ -1236,40 +1134,12 @@ async def activity_complete(req: ActivityCompleteRequest, db: Session = Depends(
         lesson_now_required_complete = False
         lesson_now_fully_complete = False
 
-    # XP and companion update
-    companion_result: dict | None = None
-    try:
-        initialize_companion(req.user_id, db)
-        if req.passed:
-            xp_result = add_xp_to_companion(req.user_id, XP_PER_MISSION, "lesson", db)
-            companion_result = {**xp_result}
-
-            if lesson_now_required_complete:
-                streak_result = update_last_practice(req.user_id, db)
-                new_mood = update_mood_for_user(req.user_id, db)
-                companion_result = {
-                    **xp_result,
-                    "mood": new_mood,
-                    "streak_days": streak_result["streak_days"],
-                    "streak_changed": streak_result["streak_changed"],
-                }
-        else:
-            _touch_last_practice_timestamp(req.user_id, db)
-            new_mood = update_mood_for_user(req.user_id, db)
-            companion_result = {"mood": new_mood}
-
-    except Exception as e:
-        print(f"[companion] update failed for user {req.user_id}: {e}")
-
-    response = {
+    return {
         "activity_completed": req.passed,
         "xp_earned": XP_PER_MISSION if req.passed else 0,
         "lesson_now_required_complete": lesson_now_required_complete,
         "lesson_now_fully_complete": lesson_now_fully_complete,
     }
-    if companion_result is not None:
-        response["companion"] = companion_result
-    return response
 
 
 @router.post("/grade-fill-blank")
@@ -1342,26 +1212,7 @@ async def grade_fill_blank(req: FillBlankRequest, db: Session = Depends(get_db))
                 progress and not was_fully_complete and progress.is_fully_complete
             )
 
-            # XP and companion update
-            companion_result: dict | None = None
-            try:
-                initialize_companion(req.user_id, db)
-                xp_result = add_xp_to_companion(req.user_id, XP_PER_MISSION, "lesson", db)
-                companion_result = {**xp_result}
-
-                if lesson_now_required_complete:
-                    streak_result = update_last_practice(req.user_id, db)
-                    new_mood = update_mood_for_user(req.user_id, db)
-                    companion_result = {
-                        **xp_result,
-                        "mood": new_mood,
-                        "streak_days": streak_result["streak_days"],
-                        "streak_changed": streak_result["streak_changed"],
-                    }
-            except Exception as e:
-                print(f"[companion] update failed for user {req.user_id}: {e}")
-
-            response = {
+            return {
                 "correct": correct,
                 "feedback": feedback,
                 "activity_completed": True,
@@ -1369,8 +1220,5 @@ async def grade_fill_blank(req: FillBlankRequest, db: Session = Depends(get_db))
                 "lesson_now_required_complete": lesson_now_required_complete,
                 "lesson_now_fully_complete": lesson_now_fully_complete,
             }
-            if companion_result is not None:
-                response["companion"] = companion_result
-            return response
 
     return {"correct": correct, "feedback": feedback, "activity_completed": False}

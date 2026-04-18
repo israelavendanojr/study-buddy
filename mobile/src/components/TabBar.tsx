@@ -8,7 +8,7 @@ import { colors } from '../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
 
-type ActiveTab = 'path' | 'home' | 'shop' | 'badges'
+type ActiveTab = 'roadmap' | 'profile'
 
 function MapIcon({ active }: { active?: boolean }) {
   const c = active ? colors.mint : colors.muted
@@ -20,35 +20,12 @@ function MapIcon({ active }: { active?: boolean }) {
   )
 }
 
-function HomeIcon({ active }: { active?: boolean }) {
+function ProfileIcon({ active }: { active?: boolean }) {
   const c = active ? colors.mint : colors.muted
   return (
     <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
-      <Path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z" stroke={c} strokeWidth={1.8} strokeLinejoin="round" />
-      <Path d="M9 21V12h6v9" stroke={c} strokeWidth={1.8} strokeLinejoin="round" />
-    </Svg>
-  )
-}
-
-
-function BadgeIcon({ active }: { active?: boolean }) {
-  const c = active ? colors.mint : colors.muted
-  return (
-    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
-      <Circle cx="12" cy="9" r="6" stroke={c} strokeWidth={1.8} />
-      <Path d="M8.5 14.5L7 21l5-2 5 2-1.5-6.5" stroke={c} strokeWidth={1.8} strokeLinejoin="round" />
-    </Svg>
-  )
-}
-
-function ShopIcon({ active }: { active?: boolean }) {
-  const c = active ? colors.mint : colors.muted
-  return (
-    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
-      <Path d="M3 4h2l2 14h12l2-14H5" stroke={c} strokeWidth={1.8} strokeLinejoin="round" />
-      <Path d="M9 9v3m6-3v3" stroke={c} strokeWidth={1.8} strokeLinecap="round" />
-      <Circle cx="9" cy="20" r="1" fill={c} />
-      <Circle cx="18" cy="20" r="1" fill={c} />
+      <Circle cx="12" cy="8" r="4" stroke={c} strokeWidth={1.8} />
+      <Path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" stroke={c} strokeWidth={1.8} strokeLinejoin="round" />
     </Svg>
   )
 }
@@ -64,7 +41,7 @@ export default function TabBar({ activeTab }: TabBarProps) {
   const fadeAnim = React.useRef(new Animated.Value(1)).current
 
   async function handleRoadmapPress() {
-    if (activeTab === 'path' || loading) return
+    if (activeTab === 'roadmap' || loading) return
     if (!user) return
 
     setLoading(true)
@@ -108,28 +85,16 @@ export default function TabBar({ activeTab }: TabBarProps) {
     <View style={styles.tabBar}>
       <Pressable style={styles.tab} onPress={handleRoadmapPress} disabled={loading}>
         <Animated.View style={{ opacity: fadeAnim, alignItems: 'center', gap: 3 }}>
-          <MapIcon active={activeTab === 'path'} />
-          <Text style={[styles.tabLabel, activeTab === 'path' && { color: colors.mint }]}>Path</Text>
-          {activeTab === 'path' && <View style={styles.tabIndicator} />}
+          <MapIcon active={activeTab === 'roadmap'} />
+          <Text style={[styles.tabLabel, activeTab === 'roadmap' && { color: colors.mint }]}>Roadmap</Text>
+          {activeTab === 'roadmap' && <View style={styles.tabIndicator} />}
         </Animated.View>
       </Pressable>
 
-      <Pressable style={styles.tab} onPress={() => activeTab !== 'home' && navigation.replace('CompanionHome')}>
-        <HomeIcon active={activeTab === 'home'} />
-        <Text style={[styles.tabLabel, activeTab === 'home' && { color: colors.mint }]}>Home</Text>
-        {activeTab === 'home' && <View style={styles.tabIndicator} />}
-      </Pressable>
-
-      <Pressable style={styles.tab} onPress={() => activeTab !== 'shop' && navigation.replace('CompanionShop')}>
-        <ShopIcon active={activeTab === 'shop'} />
-        <Text style={[styles.tabLabel, activeTab === 'shop' && { color: colors.mint }]}>Shop</Text>
-        {activeTab === 'shop' && <View style={styles.tabIndicator} />}
-      </Pressable>
-
-      <Pressable style={styles.tab} onPress={() => activeTab !== 'badges' && navigation.replace('Badges')}>
-        <BadgeIcon active={activeTab === 'badges'} />
-        <Text style={[styles.tabLabel, activeTab === 'badges' && { color: colors.mint }]}>Badges</Text>
-        {activeTab === 'badges' && <View style={styles.tabIndicator} />}
+      <Pressable style={styles.tab} onPress={() => activeTab !== 'profile' && navigation.replace('Profile')}>
+        <ProfileIcon active={activeTab === 'profile'} />
+        <Text style={[styles.tabLabel, activeTab === 'profile' && { color: colors.mint }]}>Profile</Text>
+        {activeTab === 'profile' && <View style={styles.tabIndicator} />}
       </Pressable>
     </View>
   )

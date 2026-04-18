@@ -36,7 +36,7 @@ export default function HomeScreen() {
       {/* Content area (blank) */}
       <View style={styles.content} />
 
-      <TabBar activeTab="home" />
+      <TabBar activeTab="roadmap" />
     </View>
   )
 }
