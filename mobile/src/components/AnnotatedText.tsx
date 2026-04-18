@@ -3,7 +3,6 @@ import {
   View,
   Text,
   Pressable,
-  Modal,
   StyleSheet,
 } from 'react-native'
 import { colors, radius } from '../theme'
@@ -38,7 +37,7 @@ export default function AnnotatedText({
   quote_book,
   quote_page,
 }: AnnotatedTextProps) {
-  const [modalSource, setModalSource] = useState<SourceCited | null>(null)
+  const [expandedCitation, setExpandedCitation] = useState(false)
 
   // Resolve source_ids to actual SourceCited objects, filtering out any
   // source_ids that aren't in the map (defensive against LLM hallucination)
@@ -46,71 +45,56 @@ export default function AnnotatedText({
     .map(id => sourceMap[id])
     .filter(Boolean)
 
+  // Has citation if quote exists or sources exist
+  const hasCitation = !!quote || resolvedSources.length > 0
+
   return (
     <>
-      {/* Bullet row — mimics existing hookBulletRow / bulletRow layout */}
+      {/* Bullet row — tap to expand citation */}
       <View style={styles.row}>
         <Text style={[styles.dot, bulletDotStyle]}>•</Text>
-        <View style={styles.textWrap}>
+        <Pressable
+          style={styles.textWrap}
+          onPress={() => hasCitation && setExpandedCitation(!expandedCitation)}
+        >
           <Text style={[styles.text, textStyle]}>
             {text}
+            {hasCitation && <Text style={styles.citationIndicator}>·</Text>}
           </Text>
-          {!!quote && (
-            <View style={styles.inlineQuote}>
+        </Pressable>
+      </View>
+
+      {/* Expanded citation panel (inline, toggle on tap) */}
+      {expandedCitation && hasCitation && (
+        <>
+          {!!quote ? (
+            // Quote block
+            <View style={styles.expandedQuote}>
               <Text style={styles.inlineQuoteText}>"{quote}"</Text>
               <Text style={styles.inlineQuoteAttrib}>
                 — {quote_author ?? 'Source'}{quote_book ? `, ${quote_book}` : ''}{quote_page ? `, p. ${quote_page}` : ''}
               </Text>
             </View>
-          )}
-          {!quote && resolvedSources.length > 0 && (
-            <View style={styles.citationRow}>
-              {resolvedSources.map((src, idx) => (
-                <Pressable
-                  key={src.source_id}
-                  onPress={() => {
-                    setModalSource(src)
-                  }}
-                  hitSlop={8}
-                  style={styles.citationBadge}
-                >
-                  <Text style={styles.citationBadgeText}>
-                    {idx + 1}
-                  </Text>
-                </Pressable>
-              ))}
+          ) : (
+            // Source detail block
+            <View style={styles.expandedSource}>
+              {resolvedSources[0] && (
+                <>
+                  {resolvedSources[0].title && (
+                    <Text style={styles.sourceTitle}>{resolvedSources[0].title}</Text>
+                  )}
+                  {resolvedSources[0].author && (
+                    <Text style={styles.sourceAuthor}>{resolvedSources[0].author}</Text>
+                  )}
+                  {resolvedSources[0].page_start != null && (
+                    <Text style={styles.sourcePage}>p. {resolvedSources[0].page_start}</Text>
+                  )}
+                </>
+              )}
             </View>
           )}
-        </View>
-      </View>
-
-      {/* Source detail modal */}
-      <Modal
-        visible={!!modalSource}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setModalSource(null)}
-      >
-        <Pressable style={styles.overlay} onPress={() => setModalSource(null)}>
-          <View style={styles.sheet}>
-            <Text style={styles.sheetLabel}>Source</Text>
-            {modalSource?.title ? (
-              <Text style={styles.sheetTitle}>{modalSource.title}</Text>
-            ) : (
-              <Text style={styles.sheetTitle}>{modalSource?.source_id}</Text>
-            )}
-            {modalSource?.author && (
-              <Text style={styles.sheetAuthor}>{modalSource.author}</Text>
-            )}
-            {modalSource?.page_start != null && (
-              <Text style={styles.sheetPage}>Page {modalSource.page_start}</Text>
-            )}
-            <Pressable onPress={() => setModalSource(null)} style={styles.sheetClose}>
-              <Text style={styles.sheetCloseText}>Close</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
+        </>
+      )}
     </>
   )
 }
@@ -228,5 +212,43 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_700Bold',
     fontSize: 15,
     color: colors.foreground,
+  },
+  citationIndicator: {
+    fontSize: 10,
+    color: colors.muted,
+    marginLeft: 2,
+    verticalAlign: 'middle',
+  },
+  expandedQuote: {
+    borderLeftWidth: 2,
+    borderLeftColor: colors.sky,
+    paddingLeft: 10,
+    marginTop: 6,
+    marginBottom: 2,
+    marginLeft: 22,
+  },
+  expandedSource: {
+    backgroundColor: colors.card,
+    borderRadius: radius.sm,
+    padding: 12,
+    marginTop: 6,
+    marginLeft: 22,
+  },
+  sourceTitle: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 13,
+    color: colors.foreground,
+    marginBottom: 4,
+  },
+  sourceAuthor: {
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 12,
+    color: colors.muted,
+    marginBottom: 2,
+  },
+  sourcePage: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 11,
+    color: colors.sky,
   },
 })

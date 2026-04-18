@@ -14,8 +14,9 @@ const EDGE_PADDING = 16
 interface Lesson {
   id: string
   title: string
-  type: 'lesson' | 'practice' | 'milestone'
+  type: 'lesson' | 'practice' | 'milestone' | 'recipe' | 'minigame'
   estimatedMinutes: number
+  lesson_type?: 'technique' | 'food_science' | 'recipe' | 'minigame' | 'concept'
 }
 
 interface PathNodeProps {
@@ -51,6 +52,18 @@ function ActiveNodeWrap({ size, children }: { size: number; children: React.Reac
 
 // ── Node content ─────────────────────────────────────────────────────────────
 
+// Helper: get type badge letter and color
+function getTypeBadge(lessonType: string | undefined): { letter: string; color: string } {
+  const badges: Record<string, { letter: string; color: string }> = {
+    technique: { letter: 'T', color: colors.mint },
+    food_science: { letter: 'S', color: colors.sky },
+    recipe: { letter: 'R', color: colors.peach },
+    minigame: { letter: 'G', color: colors.golden },
+    concept: { letter: 'C', color: colors.border },
+  }
+  return badges[lessonType || ''] || { letter: '', color: '' }
+}
+
 function NodeContent({ isDone, isPartialComplete, isActive, isMilestone }: {
   isDone: boolean; isPartialComplete: boolean; isActive: boolean; isMilestone: boolean
 }) {
@@ -68,6 +81,8 @@ function NodeContent({ isDone, isPartialComplete, isActive, isMilestone }: {
 function PathNodeInner({ lesson, x, y, labelSide, isDone, isPartialComplete = false, isActive, isLocked, onPress }: PathNodeProps) {
   const isMilestone = lesson.type === 'milestone'
   const size = isMilestone ? MILESTONE_SIZE : NODE_SIZE
+  const badge = getTypeBadge(lesson.lesson_type)
+  const showBadge = !isMilestone && badge.letter && lesson.lesson_type
 
   const nodeStyle = [
     styles.node,
@@ -78,6 +93,11 @@ function PathNodeInner({ lesson, x, y, labelSide, isDone, isPartialComplete = fa
     isActive && !isMilestone && { backgroundColor: colors.sky },
     isLocked && isMilestone && { backgroundColor: colors.golden + '50' },
     isLocked && !isMilestone && { backgroundColor: colors.border },
+    // Type-based tint for locked nodes
+    isLocked && !isMilestone && lesson.lesson_type === 'technique' && { backgroundColor: colors.mint + '40' },
+    isLocked && !isMilestone && lesson.lesson_type === 'food_science' && { backgroundColor: colors.sky + '40' },
+    isLocked && !isMilestone && lesson.lesson_type === 'recipe' && { backgroundColor: colors.peach + '60' },
+    isLocked && !isMilestone && lesson.lesson_type === 'minigame' && { backgroundColor: colors.golden + '60' },
   ]
 
   const labelStyle = [
@@ -90,6 +110,19 @@ function PathNodeInner({ lesson, x, y, labelSide, isDone, isPartialComplete = fa
   const nodeInner = (
     <View style={nodeStyle as object[]}>
       <NodeContent isDone={isDone} isPartialComplete={isPartialComplete} isActive={isActive} isMilestone={isMilestone} />
+      {showBadge && (
+        <View
+          style={[
+            styles.typeBadge,
+            {
+              backgroundColor: badge.color,
+              opacity: (isDone || isActive) ? 0.6 : 1,
+            },
+          ]}
+        >
+          <Text style={styles.typeBadgeText}>{badge.letter}</Text>
+        </View>
+      )}
     </View>
   )
 
@@ -166,5 +199,22 @@ const styles = StyleSheet.create({
     top: -44,
     alignSelf: 'center',
     zIndex: 10,
+  },
+  typeBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    width: 16,
+    height: 16,
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.background,
+  },
+  typeBadgeText: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 9,
+    color: colors.foreground,
   },
 })

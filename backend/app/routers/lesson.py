@@ -1020,3 +1020,202 @@ async def validate_lesson(req: ValidateRequest, db: Session = Depends(get_db)) -
     if companion_result is not None:
         response["companion"] = companion_result
     return response
+
+
+# ---------------------------------------------------------------------------
+# Minigame endpoints
+# ---------------------------------------------------------------------------
+
+
+class MinigameCompleteRequest(BaseModel):
+    user_id: str
+    lesson_key: str
+    mission_id: str
+    passed: bool
+
+
+class FillBlankRequest(BaseModel):
+    user_id: str
+    lesson_key: str
+    mission_id: str
+    user_answer: str
+    correct_answer: str
+    lesson_title: str
+    goal: str
+
+
+@router.post("/minigame-complete")
+async def minigame_complete(req: MinigameCompleteRequest, db: Session = Depends(get_db)):
+    """Record completion of locally-graded minigame (matching, image_id, sequencing)."""
+    lesson = db.query(Lesson).filter(Lesson.lesson_key == req.lesson_key).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+
+    # Fetch/create progress
+    progress = (
+        db.query(UserLessonProgress)
+        .filter(
+            UserLessonProgress.clerk_user_id == req.user_id,
+            UserLessonProgress.lesson_key == req.lesson_key,
+        )
+        .first()
+    )
+
+    was_required_complete = progress and progress.is_required_complete
+    was_fully_complete = progress and progress.is_fully_complete
+
+    if req.passed:
+        _mark_mission_complete(req.lesson_key, req.mission_id, req.user_id, db)
+        # Re-fetch progress after marking complete
+        progress = (
+            db.query(UserLessonProgress)
+            .filter(
+                UserLessonProgress.clerk_user_id == req.user_id,
+                UserLessonProgress.lesson_key == req.lesson_key,
+            )
+            .first()
+        )
+
+    lesson_now_required_complete = bool(
+        progress and not was_required_complete and progress.is_required_complete
+    )
+    lesson_now_fully_complete = bool(
+        progress and not was_fully_complete and progress.is_fully_complete
+    )
+
+    # XP and companion update
+    companion_result: dict | None = None
+    try:
+        initialize_companion(req.user_id, db)
+        if req.passed:
+            xp_result = add_xp_to_companion(req.user_id, XP_PER_MISSION, "lesson", db)
+            companion_result = {**xp_result}
+
+            if lesson_now_required_complete:
+                streak_result = update_last_practice(req.user_id, db)
+                new_mood = update_mood_for_user(req.user_id, db)
+                companion_result = {
+                    **xp_result,
+                    "mood": new_mood,
+                    "streak_days": streak_result["streak_days"],
+                    "streak_changed": streak_result["streak_changed"],
+                }
+        else:
+            _touch_last_practice_timestamp(req.user_id, db)
+            new_mood = update_mood_for_user(req.user_id, db)
+            companion_result = {"mood": new_mood}
+
+    except Exception as e:
+        print(f"[companion] update failed for user {req.user_id}: {e}")
+
+    response = {
+        "mission_completed": req.passed,
+        "xp_earned": XP_PER_MISSION if req.passed else 0,
+        "lesson_now_required_complete": lesson_now_required_complete,
+        "lesson_now_fully_complete": lesson_now_fully_complete,
+    }
+    if companion_result is not None:
+        response["companion"] = companion_result
+    return response
+
+
+@router.post("/grade-fill-blank")
+async def grade_fill_blank(req: FillBlankRequest, db: Session = Depends(get_db)):
+    """LLM-grade fill-blank minigame answer."""
+    client = anthropic.Anthropic()
+
+    prompt = (
+        f"Grade this answer as semantically equivalent to the correct answer.\n\n"
+        f"Correct answer: '{req.correct_answer}'\n"
+        f"User's answer: '{req.user_answer}'\n\n"
+        f"Return JSON: {{\"correct\": bool, \"feedback\": \"1-2 sentence explanation\"}}"
+    )
+
+    try:
+        message = client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=128,
+            system=PEPPER_SYSTEM,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = message.content[0].text.strip()
+
+        # Parse JSON response
+        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if not json_match:
+            raise ValueError("No JSON found in response")
+
+        result = json.loads(json_match.group())
+        correct = bool(result.get("correct", False))
+        feedback = str(result.get("feedback", "Try again!"))
+
+    except Exception as e:
+        print(f"[fill-blank grading] error: {e}")
+        return {"correct": False, "feedback": "Couldn't grade answer. Try again!"}
+
+    # Mark mission complete if correct
+    if correct:
+        lesson = db.query(Lesson).filter(Lesson.lesson_key == req.lesson_key).first()
+        if lesson:
+            progress = (
+                db.query(UserLessonProgress)
+                .filter(
+                    UserLessonProgress.clerk_user_id == req.user_id,
+                    UserLessonProgress.lesson_key == req.lesson_key,
+                )
+                .first()
+            )
+            was_required_complete = progress and progress.is_required_complete
+            was_fully_complete = progress and progress.is_fully_complete
+
+            _mark_mission_complete(req.lesson_key, req.mission_id, req.user_id, db)
+
+            # Re-fetch progress
+            progress = (
+                db.query(UserLessonProgress)
+                .filter(
+                    UserLessonProgress.clerk_user_id == req.user_id,
+                    UserLessonProgress.lesson_key == req.lesson_key,
+                )
+                .first()
+            )
+
+            lesson_now_required_complete = bool(
+                progress and not was_required_complete and progress.is_required_complete
+            )
+            lesson_now_fully_complete = bool(
+                progress and not was_fully_complete and progress.is_fully_complete
+            )
+
+            # XP and companion update
+            companion_result: dict | None = None
+            try:
+                initialize_companion(req.user_id, db)
+                xp_result = add_xp_to_companion(req.user_id, XP_PER_MISSION, "lesson", db)
+                companion_result = {**xp_result}
+
+                if lesson_now_required_complete:
+                    streak_result = update_last_practice(req.user_id, db)
+                    new_mood = update_mood_for_user(req.user_id, db)
+                    companion_result = {
+                        **xp_result,
+                        "mood": new_mood,
+                        "streak_days": streak_result["streak_days"],
+                        "streak_changed": streak_result["streak_changed"],
+                    }
+            except Exception as e:
+                print(f"[companion] update failed for user {req.user_id}: {e}")
+
+            response = {
+                "correct": correct,
+                "feedback": feedback,
+                "mission_completed": True,
+                "xp_earned": XP_PER_MISSION,
+                "lesson_now_required_complete": lesson_now_required_complete,
+                "lesson_now_fully_complete": lesson_now_fully_complete,
+            }
+            if companion_result is not None:
+                response["companion"] = companion_result
+            return response
+
+    return {"correct": correct, "feedback": feedback, "mission_completed": False}

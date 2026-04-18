@@ -149,6 +149,47 @@ function GlobeIcon() {
   )
 }
 
+function LeafIcon() {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 2C12 2 5 8 5 14a7 7 0 0 0 14 0C19 8 12 2 12 2z"
+        stroke={colors.foreground}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M12 2v12"
+        stroke={colors.foreground}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+      />
+    </Svg>
+  )
+}
+
+function ShieldIcon() {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 2L4 6v6c0 6 8 8 8 8s8-2 8-8V6l-8-4z"
+        stroke={colors.foreground}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M9 12l3 3 4-4"
+        stroke={colors.foreground}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
 // ── Goal options ───────────────────────────────────────────────────────────────
 
 const GOALS = [
@@ -157,36 +198,56 @@ const GOALS = [
     title: 'Learn to cook from scratch',
     description: 'Build real skills from the ground up',
     Icon: PanIcon,
+    comingSoon: false,
   },
   {
     slug: 'cook_better',
     title: 'Cook better at home',
     description: 'Understand why your food tastes the way it does',
     Icon: HouseIcon,
+    comingSoon: false,
   },
   {
     slug: 'skill_focus',
     title: 'Master a specific skill',
     description: 'Knife work, sauces, heat control, flavor',
     Icon: KnifeIcon,
+    comingSoon: false,
   },
   {
     slug: 'host_impress',
     title: 'Cook for others',
     description: 'Dinner parties, dates, cooking for people you care about',
     Icon: ClocheIcon,
+    comingSoon: false,
   },
   {
     slug: 'understand_flavor',
     title: 'Understand flavor',
     description: 'Learn to season, balance, and taste like a cook',
     Icon: DropletIcon,
+    comingSoon: false,
   },
   {
     slug: 'cuisine_focus',
     title: 'Learn a cuisine',
     description: 'Italian, Asian, French — more coming soon',
     Icon: GlobeIcon,
+    comingSoon: true,
+  },
+  {
+    slug: 'cook_healthier',
+    title: 'Cook healthier',
+    description: 'Balanced meals, nutrition-forward cooking',
+    Icon: LeafIcon,
+    comingSoon: true,
+  },
+  {
+    slug: 'cook_allergy',
+    title: 'Allergy-aware cooking',
+    description: 'Substitutions, safe swaps, and inclusive recipes',
+    Icon: ShieldIcon,
+    comingSoon: true,
   },
 ]
 
@@ -251,18 +312,20 @@ function GoalCard({
     Animated.timing(scale, { toValue: 1, duration: 75, useNativeDriver: true }).start()
 
   return (
-    <Animated.View style={[styles.cardWrapper, { transform: [{ scale }] }]}>
+    <Animated.View style={[styles.cardWrapper, { transform: [{ scale }], opacity: goal.comingSoon ? 0.5 : 1 }]}>
       <Pressable
-        onPress={() => onSelect(goal.slug)}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-        style={styles.card}
+        onPress={() => !goal.comingSoon && onSelect(goal.slug)}
+        onPressIn={goal.comingSoon ? undefined : onPressIn}
+        onPressOut={goal.comingSoon ? undefined : onPressOut}
+        disabled={goal.comingSoon}
+        style={[styles.card, goal.comingSoon && { pointerEvents: 'none' }]}
       >
         <View style={styles.cardIcon}>
           <goal.Icon />
         </View>
         <Text style={styles.cardTitle}>{goal.title}</Text>
         <Text style={styles.cardDescription}>{goal.description}</Text>
+        {goal.comingSoon && <Text style={styles.comingSoonLabel}>Coming soon</Text>}
       </Pressable>
     </Animated.View>
   )
@@ -329,5 +392,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.muted,
     lineHeight: 17,
+  },
+  comingSoonLabel: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 8,
   },
 })

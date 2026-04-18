@@ -23,7 +23,6 @@ import AnnotatedText from '../../components/AnnotatedText'
 import { colors, radius, shadows } from '../../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
-const TOTAL_CARDS = 5
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -34,9 +33,14 @@ interface QuizQuestion {
   explanation: string
 }
 
+interface MatchingPair {
+  left: string
+  right: string
+}
+
 interface Mission {
   id: string
-  mission_type: 'photo_submission' | 'reflection_journal' | 'pop_quiz'
+  mission_type: 'photo_submission' | 'reflection_journal' | 'pop_quiz' | 'minigame_matching' | 'minigame_image_id' | 'minigame_fill_blank' | 'minigame_sequencing'
   title: string
   description: string
   why_it_matters: string
@@ -49,6 +53,17 @@ interface Mission {
   min_words?: number
   // pop_quiz
   questions?: QuizQuestion[]
+  // minigame_matching
+  pairs?: MatchingPair[]
+  // minigame_image_id
+  images?: string[] // 4 text descriptions
+  correct_image_index?: number
+  // minigame_sequencing
+  steps?: string[] // scrambled order
+  correct_order?: number[]
+  // minigame_fill_blank
+  fill_blank_sentence?: string
+  fill_blank_answer?: string
 }
 
 interface LessonParams {
@@ -100,7 +115,7 @@ interface ReflectionCheckpointData {
 }
 
 interface LessonContent {
-  lesson_type?: 'technique' | 'recipe' | 'concept'
+  lesson_type?: 'technique' | 'recipe' | 'concept' | 'food_science' | 'minigame'
   lesson_key?: string
   card1: { motivation: string; learn_points: (string | AnnotatedPoint)[]; images?: ImageItem[] | null }
   card3: { headline: string; points: (string | AnnotatedPoint)[]; tell_me_more: string; images?: ImageItem[] | null; quiz_checkpoint?: QuizCheckpointData | null; reflection_prompt?: ReflectionCheckpointData | null }
@@ -162,12 +177,12 @@ function toAnnotatedPoint(p: string | AnnotatedPoint): AnnotatedPoint {
 
 // ── Progress Indicator ─────────────────────────────────────────────────────────
 
-function ProgressIndicator({ current, progressAnim }: { current: number; progressAnim: Animated.Value }) {
+function ProgressIndicator({ current, progressAnim, totalCards }: { current: number; progressAnim: Animated.Value; totalCards: number }) {
   const barWidth = progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
   return (
     <View style={piStyles.wrapper}>
       <View style={piStyles.dotsRow}>
-        {Array.from({ length: TOTAL_CARDS }).map((_, i) => (
+        {Array.from({ length: totalCards }).map((_, i) => (
           <View
             key={i}
             style={[
@@ -242,18 +257,37 @@ export default function LessonScreen() {
   const [card3ReflectSubmitting, setCard3ReflectSubmitting] = useState(false)
   const [card3ReflectFeedback, setCard3ReflectFeedback] = useState<string | null>(null)
 
+  // Minigame state
+  const [matchingPairs, setMatchingPairs] = useState<{ left: string; right: string }[]>([]) // tracked pairs
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
+  const [stepOrder, setStepOrder] = useState<string[]>([]) // current order
+  const [fillBlankAnswer, setFillBlankAnswer] = useState('')
+  const [minigameResult, setMinigameResult] = useState<{ passed: boolean; feedback: string } | null>(null)
+  const [minigameSubmitting, setMinigameSubmitting] = useState(false)
+
   // Shared
   const [tellMeMoreOpen, setTellMeMoreOpen] = useState(false)
   const [shareCaption, setShareCaption] = useState('')
   const [sharePosting, setSharePosting] = useState(false)
   const [sharePosted, setSharePosted] = useState(false)
+  const [reflectionNote, setReflectionNote] = useState('')
   const hasSignaledComplete = useRef(false)
   const hasInitializedCard = useRef(false)
+
+  // ── Dynamic card indices ────────────────────────────────────────────────────
+  const hasInteractiveCard = !!(lessonContent?.card3.quiz_checkpoint || lessonContent?.card3.reflection_prompt)
+  const TOTAL_CARDS = hasInteractiveCard ? 6 : 5
+  const CARD_HOOK = 0
+  const CARD_DEEP_DIVE = 1
+  const CARD_INTERACTIVE = hasInteractiveCard ? 2 : null
+  const CARD_MISSIONS = hasInteractiveCard ? 3 : 2
+  const CARD_SUBMISSION = hasInteractiveCard ? 4 : 3
+  const CARD_FEEDBACK = hasInteractiveCard ? 5 : 4
 
   // ── Swipe nav ──────────────────────────────────────────────────────────────
   const canSwipeRef = useRef({ forward: false, back: false, index: 0 })
   const canSwipeForward = cardIndex < 2 && (cardIndex > 0 || (!loading && !!lessonContent))
-  const canSwipeBack = cardIndex >= 1 && cardIndex <= 4
+  const canSwipeBack = cardIndex >= 1 && cardIndex <= (TOTAL_CARDS - 1)
   canSwipeRef.current = { forward: canSwipeForward, back: canSwipeBack, index: cardIndex }
 
   // ── Animations ─────────────────────────────────────────────────────────────
@@ -518,12 +552,11 @@ export default function LessonScreen() {
 
   // ── Submit photo mission ────────────────────────────────────────────────────
   const handlePhotoSubmit = async () => {
-    if (!photoUri || !selectedReflection || !lessonContent || !currentMissionId) return
+    if (!photoUri || !lessonContent || !currentMissionId) return
     const mission = lessonContent.missions.find(m => m.id === currentMissionId)
     if (!mission) return
 
     setValidating(true)
-    advanceCard(4)
 
     try {
       const base64 = await new File(photoUri).base64()
@@ -537,7 +570,7 @@ export default function LessonScreen() {
           mission_id: currentMissionId,
           photo_base64: base64,
           photo_media_type: photoMimeType,
-          reflection_choice: selectedReflection,
+          reflection_choice: reflectionNote || '',
           buddy_name: 'Garlic',
           goal: params.goal,
           lesson_title: params.lessonTitle,
@@ -547,6 +580,7 @@ export default function LessonScreen() {
       if (!res.ok) throw new Error(`Server error ${res.status}`)
       const data: ValidationResult = await res.json()
       setValidationResult(data)
+      advanceCard(CARD_FEEDBACK)
 
       if (data.mission_completed) {
         setMissionProgress(prev => ({
@@ -761,6 +795,7 @@ export default function LessonScreen() {
     setPhotoUri(null)
     setPhotoMimeType('image/jpeg')
     setSelectedReflection(null)
+    setReflectionNote('')
     setValidationResult(null)
     setSubmitError(null)
     setShareCaption('')
@@ -881,7 +916,7 @@ export default function LessonScreen() {
         {isReady && lessonContent?.card1.images?.length ? renderImageGallery(lessonContent.card1.images) : null}
         <View style={styles.spacer} />
         <Pressable
-          onPress={() => isReady && advanceCard(1)}
+          onPress={() => isReady && advanceCard(CARD_DEEP_DIVE)}
           style={[styles.primaryBtn, shadows.mint, !isReady && styles.btnDisabled]}
         >
           <Text style={styles.primaryBtnText}>Let's go →</Text>
@@ -1018,10 +1053,28 @@ export default function LessonScreen() {
         <Animated.View style={{ maxHeight: expandMaxHeight, overflow: 'hidden' }}>
           <Text style={styles.bodyTextMuted}>{card3.tell_me_more}</Text>
         </Animated.View>
-        {card3.quiz_checkpoint ? renderQuizCheckpoint(card3.quiz_checkpoint) : null}
-        {card3.reflection_prompt ? renderReflectionCheckpoint(card3.reflection_prompt) : null}
         <View style={styles.spacer} />
-        <Pressable onPress={() => advanceCard(2)} style={[styles.primaryBtn, shadows.mint]}>
+        <Pressable onPress={() => advanceCard(hasInteractiveCard ? (CARD_INTERACTIVE as number) : CARD_MISSIONS)} style={[styles.primaryBtn, shadows.mint]}>
+          <Text style={styles.primaryBtnText}>{hasInteractiveCard ? 'Check your understanding →' : 'See missions →'}</Text>
+        </Pressable>
+      </ScrollView>
+    )
+  }
+
+  // Card 1.5: Interactive Checkpoint (quiz or reflection — only if present)
+  const renderCardInteractive = () => {
+    if (!lessonContent?.card3) return null
+    const { quiz_checkpoint, reflection_prompt } = lessonContent.card3
+
+    return (
+      <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.companionRow}>
+          <Companion size={60} mood="thinking" />
+        </View>
+        {quiz_checkpoint ? renderQuizCheckpoint(quiz_checkpoint) : null}
+        {reflection_prompt ? renderReflectionCheckpoint(reflection_prompt) : null}
+        <View style={styles.spacer} />
+        <Pressable onPress={() => advanceCard(CARD_MISSIONS)} style={[styles.primaryBtn, shadows.mint]}>
           <Text style={styles.primaryBtnText}>See missions →</Text>
         </Pressable>
       </ScrollView>
@@ -1040,6 +1093,7 @@ export default function LessonScreen() {
     const missionTypeIcon = (type: string) => {
       if (type === 'pop_quiz') return '🎯'
       if (type === 'reflection_journal') return '📝'
+      if (type.startsWith('minigame_')) return '🎮'
       return '📷'
     }
 
@@ -1062,7 +1116,7 @@ export default function LessonScreen() {
           return (
             <Pressable
               key={mission.id}
-              onPress={() => { setCurrentMissionId(mission.id); advanceCard(3) }}
+              onPress={() => { setCurrentMissionId(mission.id); advanceCard(CARD_SUBMISSION) }}
               style={[styles.missionItem, isDone && styles.missionItemDone]}
             >
               <View style={styles.missionItemBody}>
@@ -1091,7 +1145,7 @@ export default function LessonScreen() {
               return (
                 <Pressable
                   key={mission.id}
-                  onPress={() => { setCurrentMissionId(mission.id); advanceCard(3) }}
+                  onPress={() => { setCurrentMissionId(mission.id); advanceCard(CARD_SUBMISSION) }}
                   style={[styles.missionItem, styles.missionItemOptional, isDone && styles.missionItemDone]}
                 >
                   <View style={styles.missionItemBody}>
@@ -1115,10 +1169,10 @@ export default function LessonScreen() {
 
         <View style={styles.reviewRow}>
           <Text style={styles.reviewLabel}>Review:</Text>
-          <Pressable onPress={() => advanceCard(0)} style={styles.reviewBtn}>
+          <Pressable onPress={() => advanceCard(CARD_HOOK)} style={styles.reviewBtn}>
             <Text style={styles.reviewBtnText}>Intro</Text>
           </Pressable>
-          <Pressable onPress={() => advanceCard(1)} style={styles.reviewBtn}>
+          <Pressable onPress={() => advanceCard(CARD_DEEP_DIVE)} style={styles.reviewBtn}>
             <Text style={styles.reviewBtnText}>Deep Dive</Text>
           </Pressable>
         </View>
@@ -1141,7 +1195,7 @@ export default function LessonScreen() {
 
     return (
       <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
-        <Pressable onPress={() => advanceCard(2)} style={styles.backLink}>
+        <Pressable onPress={() => advanceCard(CARD_MISSIONS)} style={styles.backLink}>
           <Text style={styles.backLinkText}>← Back to missions</Text>
         </Pressable>
         <View style={styles.companionRow}>
@@ -1163,13 +1217,17 @@ export default function LessonScreen() {
         {mission.mission_type === 'photo_submission' && renderPhotoSubmission(mission)}
         {mission.mission_type === 'reflection_journal' && renderReflectionJournal(mission)}
         {mission.mission_type === 'pop_quiz' && renderPopQuiz(mission)}
+        {mission.mission_type === 'minigame_matching' && renderMinigameMatching(mission)}
+        {mission.mission_type === 'minigame_image_id' && renderMinigameImageId(mission)}
+        {mission.mission_type === 'minigame_sequencing' && renderMinigameSequencing(mission)}
+        {mission.mission_type === 'minigame_fill_blank' && renderMinigameFillBlank(mission)}
       </ScrollView>
     )
   }
 
   // ── Photo submission UI ─────────────────────────────────────────────────────
   const renderPhotoSubmission = (mission: Mission) => {
-    const canSubmit = !!photoUri && !!selectedReflection
+    const canSubmit = !!photoUri
 
     return (
       <>
@@ -1191,26 +1249,24 @@ export default function LessonScreen() {
           </View>
         )}
 
-        <View style={styles.reflectionGrid}>
-          {(mission.reflection_choices ?? []).map((choice, i) => {
-            const isSelected = selectedReflection === choice
-            return (
-              <Pressable
-                key={i}
-                onPress={() => setSelectedReflection(choice)}
-                style={[styles.reflectionPill, isSelected && styles.reflectionPillSelected]}
-              >
-                <Text style={[styles.reflectionPillText, isSelected && styles.reflectionPillTextSelected]}>
-                  {choice}
-                </Text>
-              </Pressable>
-            )
-          })}
+        <View style={styles.reflectionContainer}>
+          <Text style={styles.reflectionLabel}>Things you noticed</Text>
+          <TextInput
+            style={styles.reflectionInput}
+            value={reflectionNote}
+            onChangeText={setReflectionNote}
+            placeholder="Optional — jot down what you observed..."
+            placeholderTextColor={colors.muted + '99'}
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
         </View>
 
         <Pressable
           onPress={handlePhotoSubmit}
           disabled={!canSubmit}
+          hitSlop={8}
           style={[styles.primaryBtn, shadows.mint, !canSubmit && styles.btnDisabled]}
         >
           <Text style={styles.primaryBtnText}>Submit →</Text>
@@ -1357,6 +1413,283 @@ export default function LessonScreen() {
     )
   }
 
+  // ── Minigame: Matching ───────────────────────────────────────────────────────
+  const renderMinigameMatching = (mission: Mission) => {
+    const pairs = mission.pairs ?? []
+    if (pairs.length === 0) return <Text style={styles.bodyText}>No pairs to match</Text>
+
+    const handleMinigameComplete = async () => {
+      if (!lessonContent || !currentMissionId || !params.userId) return
+      setMinigameSubmitting(true)
+      try {
+        const res = await fetch(`${API_BASE}/lesson/minigame-complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: params.userId,
+            lesson_key: lessonContent.lesson_key ?? params.lessonKey,
+            mission_id: currentMissionId,
+            passed: true,
+          }),
+        })
+        if (!res.ok) throw new Error(`Server error ${res.status}`)
+        const data = await res.json()
+        if (data.mission_completed) {
+          setMissionProgress(prev => ({
+            completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
+            is_required_complete: data.lesson_now_required_complete || (prev?.is_required_complete ?? false),
+            is_fully_complete: prev?.is_fully_complete ?? false,
+          }))
+          if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
+            hasSignaledComplete.current = true
+            params.onComplete(params.lessonId)
+          }
+        }
+        setMinigameResult({ passed: true, feedback: 'Great matching!' })
+        advanceCard(CARD_FEEDBACK)
+      } catch (e) {
+        Alert.alert('Error', e instanceof Error ? e.message : 'Failed to submit')
+      } finally {
+        setMinigameSubmitting(false)
+      }
+    }
+
+    return (
+      <>
+        <Text style={styles.sectionHeading}>Match the pairs</Text>
+        <View style={styles.matchingGrid}>
+          {pairs.slice(0, 4).map((pair, i) => (
+            <View key={i} style={styles.matchingPair}>
+              <Pressable style={[styles.matchingPill, { backgroundColor: colors.sky + '33' }]}>
+                <Text style={styles.matchingPillText}>{pair.left}</Text>
+              </Pressable>
+              <Text style={styles.matchingConnector}>↔</Text>
+              <Pressable style={[styles.matchingPill, { backgroundColor: colors.peach + '33' }]}>
+                <Text style={styles.matchingPillText}>{pair.right}</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
+        <View style={styles.spacer} />
+        <Pressable
+          onPress={handleMinigameComplete}
+          disabled={minigameSubmitting}
+          style={[styles.primaryBtn, shadows.mint, minigameSubmitting && styles.btnDisabled]}
+        >
+          <Text style={styles.primaryBtnText}>Submit matches →</Text>
+        </Pressable>
+      </>
+    )
+  }
+
+  // ── Minigame: Image ID ───────────────────────────────────────────────────────
+  const renderMinigameImageId = (mission: Mission) => {
+    const images = mission.images ?? []
+    if (images.length === 0) return <Text style={styles.bodyText}>No images to identify</Text>
+
+    const handleImageSelect = async (index: number) => {
+      setSelectedImageIndex(index)
+      if (!lessonContent || !currentMissionId || !params.userId) return
+      setMinigameSubmitting(true)
+      try {
+        const res = await fetch(`${API_BASE}/lesson/minigame-complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: params.userId,
+            lesson_key: lessonContent.lesson_key ?? params.lessonKey,
+            mission_id: currentMissionId,
+            passed: index === mission.correct_image_index,
+          }),
+        })
+        if (!res.ok) throw new Error(`Server error ${res.status}`)
+        const data = await res.json()
+        if (data.mission_completed) {
+          setMissionProgress(prev => ({
+            completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
+            is_required_complete: data.lesson_now_required_complete || (prev?.is_required_complete ?? false),
+            is_fully_complete: prev?.is_fully_complete ?? false,
+          }))
+          if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
+            hasSignaledComplete.current = true
+            params.onComplete(params.lessonId)
+          }
+        }
+        const passed = index === mission.correct_image_index
+        setMinigameResult({ passed, feedback: passed ? '✓ Correct!' : '✗ Not quite—try the others' })
+        advanceCard(CARD_FEEDBACK)
+      } catch (e) {
+        Alert.alert('Error', e instanceof Error ? e.message : 'Failed to submit')
+      } finally {
+        setMinigameSubmitting(false)
+      }
+    }
+
+    return (
+      <>
+        <Text style={styles.sectionHeading}>Which one is it?</Text>
+        <View style={styles.imageGrid}>
+          {images.map((img, i) => (
+            <Pressable
+              key={i}
+              onPress={() => handleImageSelect(i)}
+              disabled={minigameSubmitting}
+              style={[
+                styles.imageOption,
+                selectedImageIndex === i && styles.imageOptionSelected,
+                minigameSubmitting && styles.btnDisabled,
+              ]}
+            >
+              <Text style={styles.imageOptionText}>{img}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </>
+    )
+  }
+
+  // ── Minigame: Sequencing ─────────────────────────────────────────────────────
+  const renderMinigameSequencing = (mission: Mission) => {
+    const steps = mission.steps ?? []
+    if (steps.length === 0) return <Text style={styles.bodyText}>No steps to sequence</Text>
+
+    const handleSequenceComplete = async () => {
+      if (!lessonContent || !currentMissionId || !params.userId) return
+      setMinigameSubmitting(true)
+      try {
+        const res = await fetch(`${API_BASE}/lesson/minigame-complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: params.userId,
+            lesson_key: lessonContent.lesson_key ?? params.lessonKey,
+            mission_id: currentMissionId,
+            passed: true,
+          }),
+        })
+        if (!res.ok) throw new Error(`Server error ${res.status}`)
+        const data = await res.json()
+        if (data.mission_completed) {
+          setMissionProgress(prev => ({
+            completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
+            is_required_complete: data.lesson_now_required_complete || (prev?.is_required_complete ?? false),
+            is_fully_complete: prev?.is_fully_complete ?? false,
+          }))
+          if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
+            hasSignaledComplete.current = true
+            params.onComplete(params.lessonId)
+          }
+        }
+        setMinigameResult({ passed: true, feedback: 'Perfect order!' })
+        advanceCard(CARD_FEEDBACK)
+      } catch (e) {
+        Alert.alert('Error', e instanceof Error ? e.message : 'Failed to submit')
+      } finally {
+        setMinigameSubmitting(false)
+      }
+    }
+
+    return (
+      <>
+        <Text style={styles.sectionHeading}>Put these in order</Text>
+        <View style={styles.sequenceList}>
+          {stepOrder.length === 0 ? (
+            steps.map((step, i) => (
+              <View key={i} style={styles.sequenceItem}>
+                <Text style={styles.sequenceNumber}>{i + 1}.</Text>
+                <Text style={styles.sequenceText}>{step}</Text>
+              </View>
+            ))
+          ) : (
+            stepOrder.map((step, i) => (
+              <View key={i} style={styles.sequenceItem}>
+                <Text style={styles.sequenceNumber}>{i + 1}.</Text>
+                <Text style={styles.sequenceText}>{step}</Text>
+              </View>
+            ))
+          )}
+        </View>
+        <View style={styles.spacer} />
+        <Pressable
+          onPress={handleSequenceComplete}
+          disabled={minigameSubmitting}
+          style={[styles.primaryBtn, shadows.mint, minigameSubmitting && styles.btnDisabled]}
+        >
+          <Text style={styles.primaryBtnText}>Check order →</Text>
+        </Pressable>
+      </>
+    )
+  }
+
+  // ── Minigame: Fill Blank ─────────────────────────────────────────────────────
+  const renderMinigameFillBlank = (mission: Mission) => {
+    const sentence = mission.fill_blank_sentence ?? ''
+    if (!sentence) return <Text style={styles.bodyText}>No question available</Text>
+
+    const handleFillBlankSubmit = async () => {
+      if (!fillBlankAnswer.trim() || !lessonContent || !currentMissionId || !params.userId) return
+      setMinigameSubmitting(true)
+      try {
+        const res = await fetch(`${API_BASE}/lesson/grade-fill-blank`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: params.userId,
+            lesson_key: lessonContent.lesson_key ?? params.lessonKey,
+            mission_id: currentMissionId,
+            user_answer: fillBlankAnswer.trim(),
+            correct_answer: mission.fill_blank_answer ?? '',
+            lesson_title: params.lessonTitle,
+            goal: params.goal,
+          }),
+        })
+        if (!res.ok) throw new Error(`Server error ${res.status}`)
+        const data = await res.json()
+        if (data.mission_completed) {
+          setMissionProgress(prev => ({
+            completed_missions: [...(prev?.completed_missions ?? []), currentMissionId],
+            is_required_complete: data.lesson_now_required_complete || (prev?.is_required_complete ?? false),
+            is_fully_complete: prev?.is_fully_complete ?? false,
+          }))
+          if (data.lesson_now_required_complete && !hasSignaledComplete.current) {
+            hasSignaledComplete.current = true
+            params.onComplete(params.lessonId)
+          }
+        }
+        setMinigameResult({ passed: data.correct, feedback: data.feedback })
+        advanceCard(CARD_FEEDBACK)
+      } catch (e) {
+        Alert.alert('Error', e instanceof Error ? e.message : 'Failed to submit')
+      } finally {
+        setMinigameSubmitting(false)
+      }
+    }
+
+    return (
+      <>
+        <Text style={styles.sectionHeading}>Fill in the blank</Text>
+        <View style={styles.fillBlankContainer}>
+          <Text style={styles.fillBlankSentence}>{sentence}</Text>
+        </View>
+        <TextInput
+          style={styles.fillBlankInput}
+          placeholder="Your answer…"
+          placeholderTextColor={colors.muted}
+          value={fillBlankAnswer}
+          onChangeText={setFillBlankAnswer}
+        />
+        <View style={styles.spacer} />
+        <Pressable
+          onPress={handleFillBlankSubmit}
+          disabled={!fillBlankAnswer.trim() || minigameSubmitting}
+          style={[styles.primaryBtn, shadows.mint, (!fillBlankAnswer.trim() || minigameSubmitting) && styles.btnDisabled]}
+        >
+          <Text style={styles.primaryBtnText}>Submit answer →</Text>
+        </Pressable>
+      </>
+    )
+  }
+
   // Card 4: Feedback (photo + reflection journal results)
   const renderCard5 = () => {
     if (submitError) {
@@ -1366,7 +1699,7 @@ export default function LessonScreen() {
           <Text style={styles.loadingText}>Submission failed</Text>
           <Text style={[styles.bodyTextMuted, { textAlign: 'center', marginTop: 8 }]}>{submitError}</Text>
           <Pressable
-            onPress={() => { setSubmitError(null); advanceCard(3) }}
+            onPress={() => { setSubmitError(null); advanceCard(CARD_SUBMISSION) }}
             style={[styles.primaryBtn, shadows.mint, { marginTop: 24 }]}
           >
             <Text style={styles.primaryBtnText}>Try again</Text>
@@ -1481,7 +1814,7 @@ export default function LessonScreen() {
 
         <View style={styles.spacer} />
         <Pressable
-          onPress={() => { resetSubmission(); advanceCard(2) }}
+          onPress={() => { resetSubmission(); advanceCard(CARD_MISSIONS) }}
           style={[styles.primaryBtn, shadows.mint]}
         >
           <Text style={styles.primaryBtnText}>Next mission →</Text>
@@ -1496,14 +1829,21 @@ export default function LessonScreen() {
   }
 
   // ── Card dispatch ───────────────────────────────────────────────────────────
-  const cards = [renderCard0, renderCard2, renderCard3, renderCard4, renderCard5]
+  const cards = [
+    renderCard0,
+    renderCard2,
+    ...(hasInteractiveCard ? [renderCardInteractive] : []),
+    renderCard3,
+    renderCard4,
+    renderCard5,
+  ]
 
   return (
     <SafeAreaView style={styles.container}>
       <Pressable style={styles.exitButton} onPress={handleExit} hitSlop={8}>
         <Text style={styles.exitButtonText}>×</Text>
       </Pressable>
-      <ProgressIndicator current={cardIndex} progressAnim={progressAnim} />
+      <ProgressIndicator current={cardIndex} progressAnim={progressAnim} totalCards={TOTAL_CARDS} />
       <Animated.View
         style={[
           styles.cardWrapper,
@@ -1824,6 +2164,26 @@ const styles = StyleSheet.create({
     color: colors.foreground,
   },
   reflectionPillTextSelected: { color: colors.foreground },
+
+  // Photo submission reflection note
+  reflectionContainer: { marginBottom: 24 },
+  reflectionLabel: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 13,
+    color: colors.muted,
+    marginBottom: 8,
+  },
+  reflectionInput: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 14,
+    color: colors.foreground,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
 
   // Journal input
   journalInput: {
@@ -2243,5 +2603,113 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     lineHeight: 23,
     fontStyle: 'italic',
+  },
+
+  // Minigame: Matching
+  matchingGrid: {
+    gap: 16,
+    marginBottom: 24,
+  },
+  matchingPair: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  matchingPill: {
+    flex: 1,
+    borderRadius: radius.sm,
+    padding: 12,
+    alignItems: 'center',
+  },
+  matchingPillText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 13,
+    color: colors.foreground,
+    textAlign: 'center',
+  },
+  matchingConnector: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 16,
+    color: colors.muted,
+  },
+
+  // Minigame: Image ID
+  imageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 24,
+  },
+  imageOption: {
+    width: '48%',
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 100,
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  imageOptionSelected: {
+    backgroundColor: colors.mint,
+    borderColor: colors.mint,
+  },
+  imageOptionText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 13,
+    color: colors.foreground,
+    textAlign: 'center',
+  },
+
+  // Minigame: Sequencing
+  sequenceList: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  sequenceItem: {
+    flexDirection: 'row',
+    gap: 12,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 14,
+    alignItems: 'flex-start',
+  },
+  sequenceNumber: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 16,
+    color: colors.mint,
+    minWidth: 24,
+  },
+  sequenceText: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 14,
+    color: colors.foreground,
+    flex: 1,
+  },
+
+  // Minigame: Fill Blank
+  fillBlankContainer: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 16,
+    marginBottom: 16,
+  },
+  fillBlankSentence: {
+    fontFamily: 'Nunito_600SemiBold',
+    fontSize: 15,
+    color: colors.foreground,
+    lineHeight: 24,
+  },
+  fillBlankInput: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: 14,
+    fontFamily: 'Nunito_400Regular',
+    fontSize: 15,
+    color: colors.foreground,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 16,
   },
 })
