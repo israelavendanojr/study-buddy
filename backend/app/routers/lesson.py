@@ -18,6 +18,7 @@ from ..services.companion_service import (
     update_last_practice,
     update_mood_for_user,
 )
+from ..services.lesson_prompt_builder import build_type_aware_prompt
 from .roadmap import _strip_and_parse
 
 router = APIRouter()
@@ -51,9 +52,14 @@ class QuizQuestion(BaseModel):
     explanation: str
 
 
+class MatchingPair(BaseModel):
+    term: str
+    definition: str
+
+
 class Mission(BaseModel):
     id: str
-    mission_type: str = "photo_submission"  # photo_submission | reflection_journal | pop_quiz
+    mission_type: str = "photo_submission"  # photo_submission | reflection_journal | pop_quiz | minigame_*
     title: str
     description: str
     why_it_matters: str
@@ -66,6 +72,17 @@ class Mission(BaseModel):
     min_words: int | None = None
     # pop_quiz fields
     questions: list[QuizQuestion] = []
+    # minigame_matching fields
+    pairs: list[MatchingPair] = []
+    # minigame_image_id fields
+    images: list[str] = []  # 4 text descriptions of images
+    correct_image_index: int | None = None
+    # minigame_sequencing fields
+    steps: list[str] = []  # scrambled order
+    correct_order: list[int] | None = None
+    # minigame_fill_blank fields
+    fill_blank_sentence: str | None = None
+    fill_blank_answer: str | None = None
 
 
 class AnnotatedPoint(BaseModel):
@@ -122,6 +139,7 @@ class Card3Why(BaseModel):
 
 
 class LessonContent(BaseModel):
+    lesson_type: str | None = None  # technique | food_science | recipe | minigame | concept
     card1: Card1Hook
     card3: Card3Why
     missions: list[Mission]
@@ -138,6 +156,7 @@ class LessonRequest(BaseModel):
     experience: int
     completed_lesson_titles: list[str] = []
     domain: str = "cooking"
+    lesson_type: str | None = None  # technique | food_science | recipe | minigame | concept
 
 
 class ValidateRequest(BaseModel):
@@ -186,6 +205,31 @@ def _get_grading_mode(user_id: str, db: Session) -> str:
     if not roadmap:
         return "balanced"
     return roadmap.roadmap_json.get("_meta", {}).get("grading_mode", "balanced")
+
+
+# ---------------------------------------------------------------------------
+# Taxonomy helpers
+# ---------------------------------------------------------------------------
+
+def _get_lesson_type_from_taxonomy(lesson_key: str) -> str | None:
+    """
+    Load lesson_type from CURRICULUM_TAXONOMY.json based on lesson_key.
+    Returns the lesson_type string or None if not found.
+    """
+    try:
+        taxonomy_path = RAG_ROOT.parent / "CURRICULUM_TAXONOMY.json"
+        if not taxonomy_path.exists():
+            return None
+        with open(taxonomy_path) as f:
+            data = json.load(f)
+        lessons = data.get("curriculum", {}).get("lessons", [])
+        for lesson in lessons:
+            if lesson.get("lesson_key") == lesson_key:
+                return lesson.get("lesson_type")
+        return None
+    except Exception as e:
+        print(f"[taxonomy] Failed to load lesson_type for {lesson_key}: {e}")
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -284,32 +328,28 @@ def _generate_reflection_feedback(
     mission_prompt: str,
     goal: str,
 ) -> str:
-    """Generate Pepper's coaching response to a reflection journal entry."""
+    """Generate Pepper's quippy 1-2 sentence coaching response to a reflection journal entry."""
     prompt = (
         f"The user is learning '{lesson_title}' toward their goal: {goal}.\n"
         f"The reflection prompt was: {mission_prompt}\n"
         f"Their reflection: {reflection_text}\n\n"
-        f"Write a 2-3 sentence response that: "
-        f"(1) references something specific they mentioned, "
-        f"(2) validates what they noticed, and "
-        f"(3) gives exactly one concrete actionable tip for next time. "
-        f"Return only the feedback text."
+        f"Write exactly 1-2 sentences, ~25 words total. Style: quippy, like a chef mentor dropping one sharp observation.\n"
+        f"(1) Reference something specific they mentioned, "
+        f"(2) Validate what they noticed. "
+        f"Return only the feedback text, no extra commentary."
     )
 
     try:
         client = anthropic.Anthropic()
         message = client.messages.create(
             model=ANTHROPIC_MODEL,
-            max_tokens=256,
+            max_tokens=128,
             system=PEPPER_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )
         return message.content[0].text.strip()
     except Exception:
-        return (
-            "Thanks for reflecting on that. Next time, try to notice one specific thing that "
-            "surprised you — those surprises are where the real learning lives."
-        )
+        return "That's a solid observation. Next time, notice what surprised you—that's where learning happens."
 
 
 # ---------------------------------------------------------------------------
@@ -317,133 +357,16 @@ def _generate_reflection_feedback(
 # ---------------------------------------------------------------------------
 
 def _build_lesson_prompt(req: LessonRequest, chunks: list[dict]) -> str:
-    exp_label = (
-        "total beginner" if req.experience <= 1
-        else "some experience" if req.experience <= 3
-        else "experienced"
+    """Build type-aware prompt using shared builder."""
+    return build_type_aware_prompt(
+        lesson_title=req.lesson_title,
+        chapter_title=req.chapter_title,
+        goal=req.goal,
+        experience=req.experience,
+        lesson_type=req.lesson_type,
+        completed_lesson_titles=req.completed_lesson_titles,
+        chunks=chunks,
     )
-    completed_block = (
-        f"They've already completed: {', '.join(req.completed_lesson_titles)}."
-        if req.completed_lesson_titles
-        else "This is one of their first lessons."
-    )
-    rag_block = ""
-    if chunks:
-        parts = []
-        for c in chunks:
-            header = f"[SOURCE: {c['source_id']}]"
-            if c.get("source_title"):
-                header += f" | Title: {c['source_title']}"
-            if c.get("author"):
-                header += f" | Author: {c['author']}"
-            if c.get("quote_page") is not None:
-                header += f" | Page: {c['quote_page']}"
-            body = c['text']
-            if c.get("key_quote"):
-                body = f"KEY QUOTE: \"{c['key_quote']}\"\n\n{c['text']}"
-            parts.append(f"{header}\n{body}")
-        rag_block = "Reference material from culinary textbooks — cite SOURCE IDs inline:\n\n" + "\n\n---\n\n".join(parts) + "\n\n"
-
-    return f"""{rag_block}Generate a structured lesson for a learning app. Return ONLY valid JSON — no markdown, no explanation.
-
-Lesson context:
-- Lesson title: {req.lesson_title}
-- Chapter: {req.chapter_title}
-- Goal: {req.goal}
-- Experience: {req.experience}/5 ({exp_label})
-- {completed_block}
-
-Return JSON matching this exact schema:
-
-{{
-  "card1": {{
-    "motivation": "One verb-first sentence — why THIS skill matters for THIS goal (e.g. 'Master the 3-min sear that turns flat chicken into restaurant-quality browning')",
-    "learn_points": [
-      {{
-        "text": "Specific skill point 1 — what they'll be able to do (≤12 words)",
-        "source_ids": ["source_id_if_grounded"],
-        "quote": "Exact quote text supporting this point, if available",
-        "quote_author": "Author First Last",
-        "quote_book": "Book Title",
-        "quote_page": 42
-      }},
-      {{"text": "Point 2 — no citation needed", "source_ids": []}},
-      {{"text": "Point 3", "source_ids": []}}
-    ],
-    "images": null
-  }},
-  "card3": {{
-    "headline": "The single most important insight in 1 sentence",
-    "points": [
-      {{
-        "text": "Key point 1 — short and direct",
-        "source_ids": ["source_id_if_grounded"],
-        "quote": "Exact quote text supporting this point, if available",
-        "quote_author": "Author First Last",
-        "quote_book": "Book Title",
-        "quote_page": 154
-      }},
-      {{"text": "Key point 2", "source_ids": []}},
-      {{"text": "Key point 3", "source_ids": []}}
-    ],
-    "tell_me_more": "2-3 sentences deepening the concept, revealed on tap",
-    "images": null,
-    "quiz_checkpoint": {{
-      "question": "One concrete question testing the card3 headline insight",
-      "options": ["Option A (≤8 words)", "Option B (≤8 words)", "Option C (≤8 words)"],
-      "correct_index": 0,
-      "explanation": "1-2 sentences explaining why correct"
-    }},
-    "reflection_prompt": {{
-      "prompt": "Open-ended personal question connecting the concept to their own cooking",
-      "min_words": 30
-    }}
-  }},
-  "missions": [
-    {{
-      "id": "mission_1",
-      "mission_type": "photo_submission",
-      "title": "Short mission title",
-      "description": "1-2 sentences max: the specific thing the learner will do",
-      "why_it_matters": "1 sentence: why this task builds the skill",
-      "is_required": true,
-      "duration_minutes": 10,
-      "prompt": "A specific question about what they made or discovered — NOT generic",
-      "reflection_choices": ["Option 1 specific to this skill", "Option 2", "Option 3", "Option 4"]
-    }},
-    {{
-      "id": "mission_2",
-      "mission_type": "photo_submission",
-      "title": "Second mission title",
-      "description": "1-2 sentences max",
-      "why_it_matters": "1 sentence",
-      "is_required": false,
-      "duration_minutes": 15,
-      "prompt": "Specific question about mission 2",
-      "reflection_choices": ["Option 1", "Option 2", "Option 3", "Option 4"]
-    }}
-  ],
-  "sources_cited": [
-    {{"source_id": "culinary_foundations_cheramie", "title": "Culinary Foundations", "author": "Cheramie", "page_start": 42}}
-  ]
-}}
-
-Rules:
-- learn_points and points are arrays of objects with text and source_ids fields
-- Only add source_ids when the point is directly supported by the reference material. Leave source_ids: [] if not grounded
-- sources_cited must ONLY include sources you actually referenced in learn_points or points
-- motivation and headline must remain plain strings — do NOT cite them
-- Generate 2-4 missions total. Must include at least 1-2 required missions
-- Each mission must include mission_type field set to "photo_submission"
-- reflection_choices must be exactly 3-4 options
-- images: Always emit null — do not generate image URLs
-- quiz_checkpoint: Always include for technique and concept lessons; question must test the card3 headline specifically
-- reflection_prompt: Always include; must be open-ended and personal, not factual recall
-- options in quiz_checkpoint must be exactly 3 items, ≤8 words each
-- quote: Only include when a KEY QUOTE appears in the reference material above that directly supports this point. Quote must be word-for-word exact. If no key quote supports this point, omit the field entirely (do not set to null — just omit).
-- quote_author, quote_book, quote_page: Must match the SOURCE metadata exactly. Never invent author/book/page.
-- source_ids: Still required when grounded — used for backward compat
-- Return ONLY the JSON object"""
 
 
 # ---------------------------------------------------------------------------
@@ -553,6 +476,12 @@ def _is_lesson_json_stale(lj: dict) -> bool:
 
 @router.post("/generate")
 async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> dict:
+    # ── 0. Load lesson_type from taxonomy if not provided ────────────────────
+    if not req.lesson_type:
+        req.lesson_type = _get_lesson_type_from_taxonomy(req.lesson_key)
+    if not req.lesson_type:
+        req.lesson_type = "technique"  # fallback
+
     # ── 1. DB cache check ────────────────────────────────────────────────────
     cached = db.query(Lesson).filter(Lesson.lesson_key == req.lesson_key).first()
     if cached:
@@ -605,6 +534,7 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
         title=req.lesson_title,
         chapter_title=req.chapter_title,
         domain=req.domain,
+        lesson_type=req.lesson_type,  # NEW: write lesson_type to DB
         lesson_json=lesson_data,
         sources_cited=[c["source_id"] for c in chunks] if chunks else None,
         generated_at=datetime.now(timezone.utc),

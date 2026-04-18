@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text as sql_text
 
 from backend.app.models import Lesson, KbChunk
+from backend.app.services.lesson_prompt_builder import build_type_aware_prompt
 from backend.scripts.config import (
     CURRICULUM_TAXONOMY_PATH,
     ANTHROPIC_MODEL,
@@ -41,7 +42,7 @@ def load_taxonomy() -> list:
             "lesson_title": lesson.get("title", ""),
             "chapter_title": lesson.get("chapter", ""),
             "domain": "cooking",
-            "lesson_type": "technique",
+            "lesson_type": lesson.get("lesson_type", "concept"),  # Read from taxonomy
             "skill_tags": lesson.get("topic", "").split(", ") if lesson.get("topic") else [],
             "rag_query": lesson.get("rag_query", ""),  # Use provided query if available
         })
@@ -79,76 +80,16 @@ def retrieve_rag_chunks(lesson_title: str, chapter_title: str, domain: str, db, 
 
 
 def build_lesson_prompt(lesson_entry: dict, chunks: list) -> str:
-    """Build Claude prompt for lesson generation."""
-    exp_label = "beginner (2/5)"
-    goal = "become a confident home cook"
-    completed_block = "This is one of their first lessons."
-
-    rag_block = ""
-    if chunks:
-        parts = []
-        for c in chunks:
-            header = f"[Source: {c['source_id']}]"
-            if c.get("quote_page") is not None:
-                header += f" | Page: {c['quote_page']}"
-            body = c['text'][:1000]
-            if c.get("key_quote"):
-                body = f"KEY QUOTE: \"{c['key_quote']}\"\n\n{body}"
-            parts.append(f"{header}\n{body}")
-        rag_block = "Reference material from culinary textbooks:\n\n" + "\n\n---\n\n".join(parts) + "\n\n"
-
-    return f"""{rag_block}Generate a structured lesson for a learning app. Return ONLY valid JSON — no markdown, no explanation.
-
-Lesson context:
-- Lesson title: {lesson_entry['lesson_title']}
-- Chapter: {lesson_entry['chapter_title']}
-- Goal: {goal}
-- Experience: 2/5 ({exp_label})
-- {completed_block}
-
-Return JSON matching this exact schema:
-
-{{
-  "card1": {{
-    "motivation": "One verb-first sentence — why THIS skill matters for THIS goal (e.g. 'Master the 3-min sear that turns flat chicken into restaurant-quality browning')",
-    "learn_points": ["Specific skill point 1 — what they'll be able to do (≤12 words)", "Point 2", "Point 3"]
-  }},
-  "card3": {{
-    "headline": "The single most important insight in 1 sentence",
-    "points": ["Key point 1 — short and direct", "Key point 2", "Key point 3"],
-    "tell_me_more": "2-3 sentences deepening the concept, revealed on tap"
-  }},
-  "missions": [
-    {{
-      "id": "mission_1",
-      "mission_type": "photo_submission",
-      "title": "Short mission title",
-      "description": "1-2 sentences max: the specific thing the learner will do",
-      "why_it_matters": "1 sentence: why this task builds the skill",
-      "is_required": true,
-      "duration_minutes": 10,
-      "prompt": "A specific question about what they made or discovered — NOT generic",
-      "reflection_choices": ["Option 1 specific to this skill", "Option 2", "Option 3", "Option 4"]
-    }},
-    {{
-      "id": "mission_2",
-      "mission_type": "photo_submission",
-      "title": "Second mission title",
-      "description": "1-2 sentences max",
-      "why_it_matters": "1 sentence",
-      "is_required": false,
-      "duration_minutes": 15,
-      "prompt": "Specific question about mission 2",
-      "reflection_choices": ["Option 1", "Option 2", "Option 3", "Option 4"]
-    }}
-  ]
-}}
-
-Rules:
-- Generate 2-4 missions total. Must include at least 1-2 required missions
-- Each mission must include mission_type field set to "photo_submission"
-- reflection_choices must be exactly 3-4 options
-- Return ONLY the JSON object"""
+    """Build type-aware Claude prompt for lesson generation using shared builder."""
+    return build_type_aware_prompt(
+        lesson_title=lesson_entry["lesson_title"],
+        chapter_title=lesson_entry["chapter_title"],
+        goal="become a confident home cook",
+        experience=2,  # Assume beginner for bulk generation
+        lesson_type=lesson_entry.get("lesson_type", "concept"),
+        completed_lesson_titles=[],
+        chunks=chunks,
+    )
 
 
 def parse_lesson_json(raw_text: str, lesson_key: str) -> dict | None:
@@ -182,6 +123,7 @@ def store_lesson(lesson_entry: dict, lesson_data: dict, chunks: list, db) -> Non
     existing = db.query(Lesson).filter(Lesson.lesson_key == lesson_entry["lesson_key"]).first()
     if existing:
         existing.lesson_json = lesson_data
+        existing.lesson_type = lesson_entry.get("lesson_type")
         existing.sources_cited = sources_cited
         existing.generated_at = datetime.now(timezone.utc)
     else:

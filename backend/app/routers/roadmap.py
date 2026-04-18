@@ -316,6 +316,78 @@ def _strip_and_parse(text: str, context: str) -> dict:
         )
 
 
+def _inject_special_lessons(roadmap: dict) -> dict:
+    """
+    Post-process roadmap to inject minigame and recipe lesson nodes.
+    - Recipe node: inserted 2nd-to-last in each chapter (before milestone)
+    - Minigame nodes: appended at end of each chapter (1-2 nodes for chapter review)
+
+    Returns modified roadmap with injected nodes.
+    """
+    chapters = roadmap.get("chapters", [])
+
+    for chapter in chapters:
+        lessons = chapter.get("lessons", [])
+        if not lessons:
+            continue
+
+        # Remove any existing recipe/minigame nodes (shouldn't be there, but be safe)
+        lessons = [l for l in lessons if l.get("type") not in ["recipe", "minigame"]]
+
+        # Find the milestone (usually last lesson)
+        milestone_idx = -1
+        for i, lesson in enumerate(lessons):
+            if lesson.get("type") == "milestone":
+                milestone_idx = i
+                break
+
+        # Inject recipe node just before milestone (if milestone exists)
+        if milestone_idx >= 0:
+            recipe_node = {
+                "id": f"{chapter.get('id', 'ch0')}-recipe",
+                "title": f"Put It Together: {chapter.get('title', 'Chapter Recipe')}",
+                "type": "recipe",
+                "estimatedMinutes": 30,
+                "lesson_type": "recipe",
+            }
+            lessons.insert(milestone_idx, recipe_node)
+        else:
+            # No milestone found, append recipe at end
+            recipe_node = {
+                "id": f"{chapter.get('id', 'ch0')}-recipe",
+                "title": f"Put It Together: {chapter.get('title', 'Chapter Recipe')}",
+                "type": "recipe",
+                "estimatedMinutes": 30,
+                "lesson_type": "recipe",
+            }
+            lessons.append(recipe_node)
+
+        # Inject 1-2 minigame nodes at the end (after all other lessons)
+        minigame_node1 = {
+            "id": f"{chapter.get('id', 'ch0')}-mg1",
+            "title": f"Chapter Review: {chapter.get('title', 'Review')}",
+            "type": "minigame",
+            "estimatedMinutes": 8,
+            "lesson_type": "minigame",
+        }
+        lessons.append(minigame_node1)
+
+        # Optional: add a second minigame if the chapter is large (5+ lessons)
+        if len([l for l in lessons if l.get("type") not in ["minigame", "recipe", "milestone"]]) >= 5:
+            minigame_node2 = {
+                "id": f"{chapter.get('id', 'ch0')}-mg2",
+                "title": f"Quick Practice: {chapter.get('title', 'Practice')}",
+                "type": "minigame",
+                "estimatedMinutes": 6,
+                "lesson_type": "minigame",
+            }
+            lessons.append(minigame_node2)
+
+        chapter["lessons"] = lessons
+
+    return roadmap
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -346,6 +418,9 @@ async def generate_roadmap(req: RoadmapRequest, db: Session = Depends(get_db)) -
         )
 
     roadmap = _strip_and_parse(full_text, "Claude")
+
+    # Inject minigame and recipe lesson nodes
+    roadmap = _inject_special_lessons(roadmap)
 
     # Embed generation context so LoadingScreen can pass it back for next-chapter calls
     roadmap["_context"] = {

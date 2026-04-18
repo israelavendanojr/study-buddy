@@ -34,6 +34,8 @@ class LessonType(str, enum.Enum):
     technique = "technique"
     recipe = "recipe"
     concept = "concept"
+    food_science = "food_science"
+    minigame = "minigame"
 
 
 class LessonCache(Base):
