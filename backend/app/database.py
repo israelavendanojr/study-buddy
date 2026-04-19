@@ -22,3 +22,19 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def get_lessons_by_type(db, lesson_type: str):
+    """Return all Lesson rows matching the given lesson_type."""
+    from .models import Lesson
+    return db.query(Lesson).filter(Lesson.lesson_type == lesson_type).all()
+
+
+def get_recipe_lesson(db, lesson_key: str):
+    """Return a recipe Lesson by key, or None if not found or not a recipe."""
+    from .models import Lesson
+    return (
+        db.query(Lesson)
+        .filter(Lesson.lesson_key == lesson_key, Lesson.lesson_type == "recipe")
+        .first()
+    )

@@ -12,7 +12,12 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text as sql_text
 
 from backend.app.models import Lesson, KbChunk
-from backend.app.services.lesson_prompt_builder import build_activity_prompt
+from backend.app.services.lesson_prompt_builder import (
+    build_activity_prompt,
+    build_technique_lesson_prompt,
+    build_food_science_lesson_prompt,
+    build_recipe_lesson_prompt,
+)
 from backend.scripts.config import (
     CURRICULUM_TAXONOMY_PATH,
     ANTHROPIC_MODEL,
@@ -80,20 +85,44 @@ def retrieve_rag_chunks(lesson_title: str, chapter_title: str, domain: str, db, 
 
 
 def build_lesson_prompt(lesson_entry: dict, chunks: list) -> str:
-    """Build type-aware Claude prompt for lesson generation using shared builder."""
-    return build_activity_prompt(
-        lesson_title=lesson_entry["lesson_title"],
-        chapter_title=lesson_entry["chapter_title"],
-        goal="become a confident home cook",
-        experience=2,  # Assume beginner for bulk generation
-        lesson_type=lesson_entry.get("lesson_type", "concept"),
-        completed_lesson_titles=[],
-        chunks=chunks,
-    )
+    """Build type-aware Claude prompt for lesson generation, routing to specialized builders."""
+    lesson_type = lesson_entry.get("lesson_type", "concept")
+    common_args = {
+        "lesson_title": lesson_entry["lesson_title"],
+        "chapter_title": lesson_entry["chapter_title"],
+        "goal": "become a confident home cook",
+        "experience": 2,  # Assume beginner for bulk generation
+        "chunks": chunks,
+    }
+
+    if lesson_type == "technique":
+        return build_technique_lesson_prompt(
+            completed_lesson_titles=[],
+            **common_args,
+        )
+    elif lesson_type == "food_science":
+        return build_food_science_lesson_prompt(
+            completed_lesson_titles=[],
+            **common_args,
+        )
+    elif lesson_type == "recipe":
+        # Batch script has no DB access for recipe lookup, pass None
+        return build_recipe_lesson_prompt(
+            recipe_json=None,
+            techniques_to_teach=[],
+            food_science_to_reinforce=[],
+            **common_args,
+        )
+    else:  # concept, minigame, or unknown
+        return build_activity_prompt(
+            lesson_type=lesson_type,
+            completed_lesson_titles=[],
+            **common_args,
+        )
 
 
-def parse_lesson_json(raw_text: str, lesson_key: str) -> dict | None:
-    """Parse lesson JSON from Claude response."""
+def parse_lesson_json(raw_text: str, lesson_key: str, lesson_type: str = "concept") -> dict | None:
+    """Parse lesson JSON from Claude response, with type-aware validation."""
     # Strip markdown fences
     text = raw_text.strip()
     if text.startswith("```json"):
@@ -106,29 +135,60 @@ def parse_lesson_json(raw_text: str, lesson_key: str) -> dict | None:
 
     try:
         lesson_data = json.loads(text)
-        # Validate structure (support both old missions and new activities format)
-        if "card1" not in lesson_data or "card3" not in lesson_data:
-            print(f"    Missing required keys in JSON")
-            return None
-        if "missions" not in lesson_data and "activities" not in lesson_data:
-            print(f"    Missing both missions and activities")
-            return None
-        return lesson_data
+
+        # Type-aware validation
+        if lesson_type == "recipe":
+            # Recipe lessons must have ingredient_list and steps, NO card3/activities
+            if "card1" not in lesson_data:
+                print(f"    Recipe lesson missing card1")
+                return None
+            if "ingredient_list" not in lesson_data or not lesson_data.get("ingredient_list"):
+                print(f"    Recipe lesson missing ingredient_list")
+                return None
+            if "steps" not in lesson_data or not lesson_data.get("steps"):
+                print(f"    Recipe lesson missing steps")
+                return None
+            return lesson_data
+        else:
+            # Non-recipe lessons must have card1, card3, and activities (not missions)
+            if "card1" not in lesson_data or "card3" not in lesson_data:
+                print(f"    Missing required keys (card1/card3) in JSON")
+                return None
+            if "activities" not in lesson_data:
+                # Old missions format or malformed
+                if "missions" not in lesson_data:
+                    print(f"    Missing activities array")
+                    return None
+            return lesson_data
     except json.JSONDecodeError as e:
         print(f"    JSON parse error: {e}")
         return None
 
 
 def store_lesson(lesson_entry: dict, lesson_data: dict, chunks: list, db) -> None:
-    """Upsert lesson in database."""
+    """Upsert lesson in database, populating recipe columns when applicable."""
     sources_cited = list({c["source_id"] for c in chunks}) if chunks else None
+    lesson_type = lesson_entry.get("lesson_type")
+
+    now = datetime.now(timezone.utc)
+    recipe_columns = {}
+    if lesson_type == "recipe":
+        recipe_columns = {
+            "ingredient_list": lesson_data.get("ingredient_list"),
+            "steps": lesson_data.get("steps"),
+            "final_photo_prompt": lesson_data.get("final_photo_prompt"),
+            "reflection_prompt": lesson_data.get("reflection_prompt"),
+        }
 
     existing = db.query(Lesson).filter(Lesson.lesson_key == lesson_entry["lesson_key"]).first()
     if existing:
         existing.lesson_json = lesson_data
-        existing.lesson_type = lesson_entry.get("lesson_type")
+        existing.lesson_type = lesson_type
         existing.sources_cited = sources_cited
-        existing.generated_at = datetime.now(timezone.utc)
+        existing.generated_at = now
+        existing.updated_at = now
+        for col, val in recipe_columns.items():
+            setattr(existing, col, val)
     else:
         row = Lesson(
             lesson_key=lesson_entry["lesson_key"],
@@ -136,11 +196,13 @@ def store_lesson(lesson_entry: dict, lesson_data: dict, chunks: list, db) -> Non
             chapter_title=lesson_entry["chapter_title"],
             domain=lesson_entry["domain"],
             lesson_json=lesson_data,
-            lesson_type=lesson_entry.get("lesson_type"),
+            lesson_type=lesson_type,
             skill_tags=lesson_entry.get("skill_tags"),
             sources_cited=sources_cited,
-            generated_at=datetime.now(timezone.utc),
-            created_at=datetime.now(timezone.utc),
+            generated_at=now,
+            created_at=now,
+            updated_at=now,
+            **recipe_columns,
         )
         db.add(row)
     db.commit()
@@ -187,9 +249,10 @@ def main():
 
         # Generate with Claude
         try:
+            max_tokens = 4096 if lesson_entry.get("lesson_type") == "recipe" else 2048
             message = anthropic_client.messages.create(
                 model=ANTHROPIC_MODEL,
-                max_tokens=2048,
+                max_tokens=max_tokens,
                 system=PEPPER_SYSTEM,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -200,7 +263,7 @@ def main():
             continue
 
         # Parse JSON
-        lesson_data = parse_lesson_json(raw_text, lesson_key)
+        lesson_data = parse_lesson_json(raw_text, lesson_key, lesson_type=lesson_entry.get("lesson_type", "concept"))
         if lesson_data is None:
             print(f"  ERROR: JSON parse failed")
             failed += 1

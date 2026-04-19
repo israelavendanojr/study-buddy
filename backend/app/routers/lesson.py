@@ -10,8 +10,14 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Lesson, UserLessonProgress, UserRoadmap
-from ..services.lesson_prompt_builder import build_type_aware_prompt, build_activity_prompt
+from ..models import Lesson, UserLessonProgress, UserRoadmap, Recipe
+from ..services.lesson_prompt_builder import (
+    build_type_aware_prompt,
+    build_activity_prompt,
+    build_technique_lesson_prompt,
+    build_food_science_lesson_prompt,
+    build_recipe_lesson_prompt,
+)
 from .roadmap import _strip_and_parse
 
 router = APIRouter()
@@ -162,6 +168,38 @@ class LessonContent(BaseModel):
     sources_cited: list[SourceCited] = []
 
 
+# ── Recipe lesson models ─────────────────────────────────────────────────────
+
+class IngredientItem(BaseModel):
+    name: str
+    amount: str
+    unit: str
+
+
+class StepCheckpoint(BaseModel):
+    type: str  # "quiz" | "photo" | "reflection"
+    question: str | None = None
+    options: list[str] = []
+
+
+class RecipeStep(BaseModel):
+    step_number: int
+    title: str
+    instruction: str
+    image_prompt: str | None = None
+    checkpoint: StepCheckpoint | None = None
+
+
+class RecipeLesson(BaseModel):
+    lesson_type: str = "recipe"
+    card1: Card1Hook
+    ingredient_list: list[IngredientItem]
+    steps: list[RecipeStep]
+    final_photo_prompt: str | None = None
+    reflection_prompt: str | None = None
+    sources_cited: list[SourceCited] = []
+
+
 class LessonRequest(BaseModel):
     user_id: str | None = None
     lesson_key: str
@@ -173,6 +211,7 @@ class LessonRequest(BaseModel):
     completed_lesson_titles: list[str] = []
     domain: str = "cooking"
     lesson_type: str | None = None  # technique | food_science | recipe | minigame | concept
+    recipe_id: int | None = None  # optional recipe lookup by DB primary key
 
 
 class ValidateRequest(BaseModel):
@@ -369,20 +408,97 @@ def _generate_reflection_feedback(
 
 
 # ---------------------------------------------------------------------------
-# Prompt builder (legacy full-generation fallback)
+# Recipe lookup helpers (Phase 3)
 # ---------------------------------------------------------------------------
 
-def _build_lesson_prompt(req: LessonRequest, chunks: list[dict]) -> str:
-    """Build type-aware prompt using shared builder. Uses activities (not missions)."""
-    return build_activity_prompt(
-        lesson_title=req.lesson_title,
-        chapter_title=req.chapter_title,
-        goal=req.goal,
-        experience=req.experience,
-        lesson_type=req.lesson_type,
-        completed_lesson_titles=req.completed_lesson_titles,
-        chunks=chunks,
-    )
+def _extract_technique_keyword(chapter_title: str) -> str:
+    """Extract first substantive word (>3 chars) from chapter title for recipe lookup."""
+    text = re.sub(r'\b(chapter|unit|part|the|and|of|a|an|for|in|on|intro|introduction)\b', '', chapter_title.lower())
+    for word in re.findall(r'[a-z]{4,}', text):
+        return word
+    return ""
+
+
+def _get_recipe_for_lesson(req: LessonRequest, db: Session) -> dict | None:
+    """Look up a recipe for a recipe-type lesson from the recipes table."""
+    try:
+        recipe_row = None
+        if req.recipe_id is not None:
+            recipe_row = db.query(Recipe).filter(Recipe.id == req.recipe_id).first()
+        else:
+            keyword = _extract_technique_keyword(req.chapter_title)
+            if not keyword:
+                return None
+            from sqlalchemy import text as sql_text
+            result = db.execute(
+                sql_text("SELECT * FROM recipes WHERE primary_technique ILIKE :kw ORDER BY RANDOM() LIMIT 1"),
+                {"kw": f"%{keyword}%"}
+            ).fetchone()
+            if result:
+                recipe_row = result
+
+        if recipe_row is None:
+            return None
+
+        return {
+            "name": recipe_row.name,
+            "ingredients": recipe_row.ingredients,
+            "steps": recipe_row.steps,
+            "techniques": recipe_row.techniques or [],
+            "food_science": recipe_row.food_science or [],
+            "primary_technique": recipe_row.primary_technique,
+        }
+    except Exception as e:
+        print(f"[recipe_lookup] failed for {req.lesson_key}: {e}")
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Prompt builder (routes to specialized builders)
+# ---------------------------------------------------------------------------
+
+def _build_lesson_prompt(req: LessonRequest, chunks: list[dict], db: Session | None = None) -> str:
+    """Build type-aware prompt, routing to specialized builders based on lesson_type."""
+    if req.lesson_type == "technique":
+        return build_technique_lesson_prompt(
+            lesson_title=req.lesson_title,
+            chapter_title=req.chapter_title,
+            goal=req.goal,
+            experience=req.experience,
+            completed_lesson_titles=req.completed_lesson_titles,
+            chunks=chunks,
+        )
+    elif req.lesson_type == "food_science":
+        return build_food_science_lesson_prompt(
+            lesson_title=req.lesson_title,
+            chapter_title=req.chapter_title,
+            goal=req.goal,
+            experience=req.experience,
+            completed_lesson_titles=req.completed_lesson_titles,
+            chunks=chunks,
+        )
+    elif req.lesson_type == "recipe":
+        recipe = _get_recipe_for_lesson(req, db) if db is not None else None
+        return build_recipe_lesson_prompt(
+            recipe_json=recipe,
+            techniques_to_teach=recipe.get("techniques", []) if recipe else [],
+            food_science_to_reinforce=recipe.get("food_science", []) if recipe else [],
+            lesson_title=req.lesson_title,
+            chapter_title=req.chapter_title,
+            goal=req.goal,
+            experience=req.experience,
+            chunks=chunks,
+        )
+    else:  # concept, minigame, or unknown
+        return build_activity_prompt(
+            lesson_title=req.lesson_title,
+            chapter_title=req.chapter_title,
+            goal=req.goal,
+            experience=req.experience,
+            lesson_type=req.lesson_type,
+            completed_lesson_titles=req.completed_lesson_titles,
+            chunks=chunks,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -498,8 +614,21 @@ def _mark_activity_complete(
     )
 
 
-def _is_lesson_json_stale(lj: dict) -> bool:
+def _is_lesson_json_stale(lj: dict, lesson_type: str | None = None) -> bool:
     """Return True if cached lesson JSON should be regenerated."""
+    # Recipe lessons have ingredient_list + steps, not card3 + activities
+    if lesson_type == "recipe":
+        # Old-format recipe (generated as technique/food_science): stale
+        if "card3" in lj or "activities" in lj:
+            return True
+        # New format must have ingredient_list and steps
+        if "ingredient_list" not in lj or "steps" not in lj:
+            return True
+        if not lj.get("ingredient_list") or not lj.get("steps"):
+            return True
+        return False
+
+    # Non-recipe: existing checks unchanged
     # New lessons must have activities (not missions)
     if "activities" not in lj:
         return True
@@ -543,7 +672,7 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
     cached = db.query(Lesson).filter(Lesson.lesson_key == req.lesson_key).first()
     if cached:
         lj = cached.lesson_json
-        if not _is_lesson_json_stale(lj):
+        if not _is_lesson_json_stale(lj, lesson_type=cached.lesson_type):
             # Valid cache hit — return with prior feedback if available
             last_rf = None
             if req.user_id:
@@ -560,14 +689,15 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
 
     # ── 2. RAG retrieval ─────────────────────────────────────────────────────
     chunks = _retrieve_rag_chunks(req.lesson_title, req.chapter_title, req.domain, db)
-    prompt = _build_lesson_prompt(req, chunks)
+    prompt = _build_lesson_prompt(req, chunks, db)
 
     # ── 3. LLM generation ────────────────────────────────────────────────────
     try:
         client = anthropic.Anthropic()
+        max_tokens = 4096 if req.lesson_type == "recipe" else 2560
         message = client.messages.create(
             model=ANTHROPIC_MODEL,
-            max_tokens=2560,
+            max_tokens=max_tokens,
             system=PEPPER_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -585,12 +715,24 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
 
     lesson_data = _strip_and_parse(full_text, "Lesson")
 
-    # ── 3b. Validate activities are present ───────────────────────────────────
-    if "activities" not in lesson_data or not lesson_data.get("activities"):
-        raise HTTPException(
-            status_code=503,
-            detail="Generated lesson missing activities. Regenerating with new prompt.",
-        )
+    # ── 3b. Validate structure is present (type-aware) ────────────────────────
+    if req.lesson_type == "recipe":
+        if "ingredient_list" not in lesson_data or not lesson_data.get("ingredient_list"):
+            raise HTTPException(
+                status_code=503,
+                detail="Recipe lesson missing ingredient_list.",
+            )
+        if "steps" not in lesson_data or not lesson_data.get("steps"):
+            raise HTTPException(
+                status_code=503,
+                detail="Recipe lesson missing steps.",
+            )
+    else:
+        if "activities" not in lesson_data or not lesson_data.get("activities"):
+            raise HTTPException(
+                status_code=503,
+                detail="Generated lesson missing activities.",
+            )
 
     # ── 4. Store in DB ───────────────────────────────────────────────────────
     row = Lesson(
@@ -598,11 +740,16 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
         title=req.lesson_title,
         chapter_title=req.chapter_title,
         domain=req.domain,
-        lesson_type=req.lesson_type,  # NEW: write lesson_type to DB
+        lesson_type=req.lesson_type,
         lesson_json=lesson_data,
         sources_cited=[c["source_id"] for c in chunks] if chunks else None,
         generated_at=datetime.now(timezone.utc),
         created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+        ingredient_list=lesson_data.get("ingredient_list") if req.lesson_type == "recipe" else None,
+        steps=lesson_data.get("steps") if req.lesson_type == "recipe" else None,
+        final_photo_prompt=lesson_data.get("final_photo_prompt") if req.lesson_type == "recipe" else None,
+        reflection_prompt=lesson_data.get("reflection_prompt") if req.lesson_type == "recipe" else None,
     )
     db.add(row)
     db.commit()

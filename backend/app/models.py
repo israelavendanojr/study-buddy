@@ -70,6 +70,13 @@ class Lesson(Base):
     lesson_type: Mapped[str | None] = mapped_column(String, nullable=True)  # technique|recipe|concept
     skill_tags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     sources_cited: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # Recipe-specific columns (null for non-recipe lessons)
+    ingredient_list: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    steps: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    final_photo_prompt: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    reflection_prompt: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # All lessons
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -120,6 +127,26 @@ class UserRoadmap(Base):
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class Recipe(Base):
+    __tablename__ = "recipes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    ingredients: Mapped[list] = mapped_column(JSONB, nullable=False)
+    steps: Mapped[list] = mapped_column(JSONB, nullable=False)
+    techniques: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    primary_technique: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    food_science: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    difficulty: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    estimated_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
