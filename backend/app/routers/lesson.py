@@ -17,6 +17,9 @@ from ..services.lesson_prompt_builder import (
     build_technique_lesson_prompt,
     build_food_science_lesson_prompt,
     build_recipe_lesson_prompt,
+    build_flow_technique_prompt,
+    build_flow_food_science_prompt,
+    build_flow_concept_prompt,
 )
 from .roadmap import _strip_and_parse
 
@@ -166,6 +169,35 @@ class LessonContent(BaseModel):
     missions: list[Mission] = []  # deprecated, for backward compat only
     activities: list[Activity] = []  # new: sequential activities
     sources_cited: list[SourceCited] = []
+
+
+# ── Flow lesson models (interleaved content + activities) ─────────────────────
+
+class FlowActivityItem(BaseModel):
+    type: str  # "activity" | "capstone"
+    id: str
+    activity_type: str  # multiple_choice|image_id|matching|fill_blank|sequence
+    question: str | None = None
+    prompt: str | None = None
+    options: list[str] = []
+    correct_index: int | None = None
+    explanation: str | None = None
+    pairs: list[MatchingPair] = []
+    sentence: str | None = None
+    correct_answer: str | None = None
+    steps: list[str] = []
+    correct_order: list[int] = []
+
+
+class FlowHook(BaseModel):
+    type: str = "hook"
+    motivation: str
+    learn_points: list[AnnotatedPoint | str]
+
+
+class FlowConcept(BaseModel):
+    type: str = "concept"
+    point: str
 
 
 # ── Recipe lesson models ─────────────────────────────────────────────────────
@@ -458,9 +490,9 @@ def _get_recipe_for_lesson(req: LessonRequest, db: Session) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def _build_lesson_prompt(req: LessonRequest, chunks: list[dict], db: Session | None = None) -> str:
-    """Build type-aware prompt, routing to specialized builders based on lesson_type."""
+    """Build type-aware prompt, routing to flow builders based on lesson_type."""
     if req.lesson_type == "technique":
-        return build_technique_lesson_prompt(
+        return build_flow_technique_prompt(
             lesson_title=req.lesson_title,
             chapter_title=req.chapter_title,
             goal=req.goal,
@@ -469,7 +501,7 @@ def _build_lesson_prompt(req: LessonRequest, chunks: list[dict], db: Session | N
             chunks=chunks,
         )
     elif req.lesson_type == "food_science":
-        return build_food_science_lesson_prompt(
+        return build_flow_food_science_prompt(
             lesson_title=req.lesson_title,
             chapter_title=req.chapter_title,
             goal=req.goal,
@@ -490,7 +522,7 @@ def _build_lesson_prompt(req: LessonRequest, chunks: list[dict], db: Session | N
             chunks=chunks,
         )
     else:  # concept, minigame, or unknown
-        return build_activity_prompt(
+        return build_flow_concept_prompt(
             lesson_title=req.lesson_title,
             chapter_title=req.chapter_title,
             goal=req.goal,
@@ -628,31 +660,16 @@ def _is_lesson_json_stale(lj: dict, lesson_type: str | None = None) -> bool:
             return True
         return False
 
-    # Non-recipe: existing checks unchanged
-    # New lessons must have activities (not missions)
-    if "activities" not in lj:
+    # Non-recipe: check for new flow format first
+    if "flow" not in lj:
+        # Old card1+card3+activities format → stale
         return True
-    # Old lessons have missions but no activities → stale
-    if "missions" in lj:
+    # New format: validate basic structure
+    flow = lj.get("flow", [])
+    if not flow or flow[0].get("type") != "hook":
         return True
-    if "card2" in lj:
+    if not any(f.get("type") in ("activity", "capstone") for f in flow):
         return True
-    card1 = lj.get("card1", {})
-    if "motivation" not in card1:
-        return True
-    # New check: learn_points must be list of dicts, not strings (old format)
-    learn_points = card1.get("learn_points", [])
-    if learn_points and isinstance(learn_points[0], str):
-        return True
-    # New check: card3.points must be list of dicts
-    card3 = lj.get("card3", {})
-    points = card3.get("points", [])
-    if points and isinstance(points[0], str):
-        return True
-    # New check: fill_blank activities must have options array
-    for act in lj.get("activities", []):
-        if act.get("type") == "fill_blank" and not act.get("options"):
-            return True
     return False
 
 
@@ -728,7 +745,19 @@ async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> 
                 detail="Recipe lesson missing steps.",
             )
     else:
-        if "activities" not in lesson_data or not lesson_data.get("activities"):
+        if "flow" in lesson_data:
+            flow = lesson_data["flow"]
+            if not flow or flow[0].get("type") != "hook":
+                raise HTTPException(
+                    status_code=503,
+                    detail="Flow lesson missing hook as first element.",
+                )
+            if not any(f.get("type") in ("activity", "capstone") for f in flow):
+                raise HTTPException(
+                    status_code=503,
+                    detail="Flow lesson has no activity or capstone items.",
+                )
+        elif "activities" not in lesson_data or not lesson_data.get("activities"):
             raise HTTPException(
                 status_code=503,
                 detail="Generated lesson missing activities.",
@@ -1265,7 +1294,11 @@ async def activity_complete(req: ActivityCompleteRequest, db: Session = Depends(
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
 
-    activities = lesson.lesson_json.get("activities", [])
+    lesson_json = lesson.lesson_json
+    if "flow" in lesson_json:
+        activities = [item for item in lesson_json["flow"] if item.get("type") in ("activity", "capstone")]
+    else:
+        activities = lesson_json.get("activities", [])
     if not activities:
         raise HTTPException(status_code=400, detail="Lesson has no activities")
 

@@ -264,7 +264,12 @@ function PathNodeInner({
       />
     )
   } else if (isLocked) {
-    nodeContent = <LockIcon />
+    nodeContent = (
+      <LessonIllustration
+        lessonType={isMilestone ? undefined : lesson.lesson_type}
+        state={isMilestone ? 'milestone' : 'locked'}
+      />
+    )
   } else {
     nodeContent = (
       <LessonIllustration

@@ -929,3 +929,418 @@ Rules for recipe lessons:
 - Return ONLY the JSON object"""
 
     return base
+
+
+# ============================================================================
+# PHASE 4: FLOW BUILDERS — interleaved content + activities
+# ============================================================================
+
+
+def build_flow_technique_prompt(
+    lesson_title: str,
+    chapter_title: str,
+    goal: str,
+    experience: int,
+    completed_lesson_titles: list[str] | None = None,
+    chunks: list[dict] | None = None,
+) -> str:
+    """
+    Build a flow-format technique lesson.
+    Structure: hook → mc → concept → fill_blank → concept → image_id → sequence capstone
+    """
+    if not completed_lesson_titles:
+        completed_lesson_titles = []
+    if not chunks:
+        chunks = []
+
+    exp_label = (
+        "total beginner"
+        if experience <= 1
+        else "some experience" if experience <= 3
+        else "experienced"
+    )
+    completed_block = (
+        f"They've already completed: {', '.join(completed_lesson_titles)}."
+        if completed_lesson_titles
+        else "This is one of their first lessons."
+    )
+    rag_block = _build_rag_block(chunks)
+
+    return f"""{rag_block}Generate a technique lesson for a learning app. Return ONLY valid JSON — no markdown, no explanation.
+
+Lesson context:
+- Lesson title: {lesson_title}
+- Chapter: {chapter_title}
+- Goal: {goal}
+- Experience: {experience}/5 ({exp_label})
+- {completed_block}
+
+STRUCTURE: A single "flow" array with items in this exact order:
+1. hook — motivation + 2-3 learn_points
+2. activity (multiple_choice) — test a key decision point within the technique
+3. concept — 1-2 sentence teaching beat (<=25 words) that explains WHY the next activity matters
+4. activity (fill_blank) — complete a sentence about a mechanical principle
+5. concept — another short insight (<=25 words) that sets up the capstone
+6. activity (image_id) — identify the correct visual outcome
+7. capstone (sequence) — put the technique steps in correct order
+
+WORD LIMITS (strictly enforced):
+- hook.motivation: 1 sentence, max 12 words, verb-first
+- hook.learn_points: 2-3 items, each <=12 words
+- concept.point: 1-2 sentences, <=25 words total
+- activity question/prompt: 1 sentence, max 20 words
+- options: each <=15 words
+
+Return JSON matching this exact schema:
+
+{{
+  "flow": [
+    {{
+      "type": "hook",
+      "motivation": "Verb-first sentence why THIS skill matters for THIS goal (<=12 words)",
+      "learn_points": [
+        {{"text": "Specific skill point <=12 words", "source_ids": ["source_id_if_grounded"]}},
+        {{"text": "Point 2 <=12 words", "source_ids": []}},
+        {{"text": "Point 3 <=12 words", "source_ids": []}}
+      ]
+    }},
+    {{
+      "type": "activity",
+      "id": "act_1",
+      "activity_type": "multiple_choice",
+      "question": "What does [technique] require to work correctly?",
+      "options": ["Option A (<=15 words)", "Option B (<=15 words)", "Option C (<=15 words)"],
+      "correct_index": 0,
+      "explanation": "1-2 sentences explaining why correct"
+    }},
+    {{
+      "type": "concept",
+      "point": "1-2 sentence insight <=25 words that sets up the fill-blank activity"
+    }},
+    {{
+      "type": "activity",
+      "id": "act_2",
+      "activity_type": "fill_blank",
+      "sentence": "To achieve [result], you need ___ on the surface.",
+      "options": ["word 1", "word 2", "word 3", "word 4"],
+      "correct_answer": "word 1",
+      "explanation": "1-2 sentences explaining the mechanical principle"
+    }},
+    {{
+      "type": "concept",
+      "point": "1-2 sentence insight <=25 words that connects to the visual/sequencing challenge ahead"
+    }},
+    {{
+      "type": "activity",
+      "id": "act_3",
+      "activity_type": "image_id",
+      "prompt": "Which shows proper [technique] result?",
+      "options": ["Image description 1", "Image description 2", "Image description 3"],
+      "correct_index": 1,
+      "explanation": "1-2 sentences explaining the visual cue"
+    }},
+    {{
+      "type": "capstone",
+      "id": "act_4",
+      "activity_type": "sequence",
+      "prompt": "Put these technique steps in the correct order",
+      "steps": ["Step A", "Step B", "Step C", "Step D", "Step E"],
+      "correct_order": [2, 0, 1, 3, 4]
+    }}
+  ],
+  "sources_cited": [
+    {{"source_id": "source_id", "title": "Title", "author": "Author", "page_start": 42}}
+  ]
+}}
+
+Rules:
+- learn_points: arrays of objects with text + source_ids. source_ids only when directly grounded in reference material.
+- sources_cited must ONLY include sources actually referenced
+- activity IDs must be act_1, act_2, act_3 for activities and act_4 for capstone
+- activity_type field (not "type") carries the mini-game type
+- options (multiple_choice, image_id): exactly 3 items each <=15 words
+- options (fill_blank): exactly 4 short words/phrases (1-3 words). One must match correct_answer exactly
+- correct_answer (fill_blank): 1-3 words, must match exactly one option
+- steps (sequence): 5 items in scrambled order
+- correct_order (sequence): array of 0-based indices showing the correct order
+- Do NOT include card1, card3, or activities keys
+- Return ONLY the JSON object"""
+
+
+def build_flow_food_science_prompt(
+    lesson_title: str,
+    chapter_title: str,
+    goal: str,
+    experience: int,
+    completed_lesson_titles: list[str] | None = None,
+    chunks: list[dict] | None = None,
+) -> str:
+    """
+    Build a flow-format food science lesson.
+    Structure: hook → mc → concept → matching → concept → fill_blank → mc capstone
+    Entirely conceptual — no kitchen access required.
+    """
+    if not completed_lesson_titles:
+        completed_lesson_titles = []
+    if not chunks:
+        chunks = []
+
+    exp_label = (
+        "total beginner"
+        if experience <= 1
+        else "some experience" if experience <= 3
+        else "experienced"
+    )
+    completed_block = (
+        f"They've already completed: {', '.join(completed_lesson_titles)}."
+        if completed_lesson_titles
+        else "This is one of their first lessons."
+    )
+    rag_block = _build_rag_block(chunks)
+
+    return f"""{rag_block}Generate a food science lesson for a learning app. Return ONLY valid JSON — no markdown, no explanation.
+
+Lesson context:
+- Lesson title: {lesson_title}
+- Chapter: {chapter_title}
+- Goal: {goal}
+- Experience: {experience}/5 ({exp_label})
+- {completed_block}
+
+STRUCTURE: A single "flow" array with items in this exact order:
+1. hook — motivation + 2-3 learn_points
+2. activity (multiple_choice) — test understanding of the core mechanism
+3. concept — plain-English explanation of HOW the mechanism works (<=25 words, no jargon, use a kitchen analogy)
+4. activity (matching) — pair cooking scenarios to scientific explanations (4 pairs)
+5. concept — connect the science to a practical cooking decision (<=25 words)
+6. activity (fill_blank) — complete a sentence with a technical term
+7. capstone (multiple_choice) — harder application question combining all concepts
+
+CRITICAL CONSTRAINTS:
+- DO NOT use sequence or image_id activity types.
+- Entirely conceptual — answerable from memory. No kitchen access needed.
+
+WORD LIMITS (strictly enforced):
+- hook.motivation: 1 sentence, max 12 words, verb-first
+- hook.learn_points: 2-3 items, each <=12 words
+- concept.point: 1-2 sentences, <=25 words total
+
+Return JSON matching this exact schema:
+
+{{
+  "flow": [
+    {{
+      "type": "hook",
+      "motivation": "Verb-first sentence why THIS concept matters for THIS goal (<=12 words)",
+      "learn_points": [
+        {{"text": "Concept point <=12 words", "source_ids": ["source_id_if_grounded"]}},
+        {{"text": "Point 2 <=12 words", "source_ids": []}},
+        {{"text": "Point 3 <=12 words", "source_ids": []}}
+      ]
+    }},
+    {{
+      "type": "activity",
+      "id": "act_1",
+      "activity_type": "multiple_choice",
+      "question": "Which best explains [mechanism]?",
+      "options": ["Explanation A (<=15 words)", "Explanation B (<=15 words)", "Explanation C (<=15 words)"],
+      "correct_index": 0,
+      "explanation": "1-2 sentences explaining the science"
+    }},
+    {{
+      "type": "concept",
+      "point": "Plain-English explanation of the mechanism <=25 words. Use a kitchen analogy."
+    }},
+    {{
+      "type": "activity",
+      "id": "act_2",
+      "activity_type": "matching",
+      "prompt": "Match each cooking scenario to the science principle that explains it",
+      "pairs": [
+        {{"term": "Cooking scenario 1", "definition": "Science principle A (<=15 words)"}},
+        {{"term": "Cooking scenario 2", "definition": "Science principle B (<=15 words)"}},
+        {{"term": "Cooking scenario 3", "definition": "Science principle C (<=15 words)"}},
+        {{"term": "Cooking scenario 4", "definition": "Science principle D (<=15 words)"}}
+      ]
+    }},
+    {{
+      "type": "concept",
+      "point": "How this science shapes a real cooking decision <=25 words"
+    }},
+    {{
+      "type": "activity",
+      "id": "act_3",
+      "activity_type": "fill_blank",
+      "sentence": "A proper [process] requires ___ to occur.",
+      "options": ["technical term 1", "technical term 2", "technical term 3", "technical term 4"],
+      "correct_answer": "technical term 1",
+      "explanation": "1-2 sentences explaining the mechanism"
+    }},
+    {{
+      "type": "capstone",
+      "id": "act_4",
+      "activity_type": "multiple_choice",
+      "question": "Applying this science: which real cooking decision is correct?",
+      "options": ["Application A (<=15 words)", "Application B (<=15 words)", "Application C (<=15 words)"],
+      "correct_index": 0,
+      "explanation": "1-2 sentences connecting the science to the practical choice"
+    }}
+  ],
+  "sources_cited": [
+    {{"source_id": "source_id", "title": "Title", "author": "Author", "page_start": 42}}
+  ]
+}}
+
+Rules:
+- learn_points: arrays of objects with text + source_ids. Only include source_ids when directly grounded.
+- sources_cited must ONLY include sources actually referenced
+- activity IDs: act_1, act_2, act_3 for activities; act_4 for capstone
+- activity_type field carries the mini-game type
+- matching pairs: exactly 4 pairs, definitions <=15 words each
+- options (multiple_choice): exactly 3 items each <=15 words
+- options (fill_blank): exactly 4 short terms (1-3 words). One must match correct_answer exactly
+- No sequence, no image_id, no card1, no card3, no activities keys
+- Return ONLY the JSON object"""
+
+
+def build_flow_concept_prompt(
+    lesson_title: str,
+    chapter_title: str,
+    goal: str,
+    experience: int,
+    lesson_type: str | None = None,
+    completed_lesson_titles: list[str] | None = None,
+    chunks: list[dict] | None = None,
+) -> str:
+    """
+    Build a flow-format concept/minigame lesson.
+    Structure: hook → mc → concept → matching → concept → fill_blank → mc capstone
+    Used for concept, minigame, and unknown lesson types.
+    """
+    if not completed_lesson_titles:
+        completed_lesson_titles = []
+    if not chunks:
+        chunks = []
+    if not lesson_type:
+        lesson_type = "concept"
+
+    exp_label = (
+        "total beginner"
+        if experience <= 1
+        else "some experience" if experience <= 3
+        else "experienced"
+    )
+    completed_block = (
+        f"They've already completed: {', '.join(completed_lesson_titles)}."
+        if completed_lesson_titles
+        else "This is one of their first lessons."
+    )
+    rag_block = _build_rag_block(chunks)
+
+    type_guidance = (
+        "Fast and fun (~5 min). Pure skill drill — no kitchen required."
+        if lesson_type == "minigame"
+        else "Focused on ingredient, technique, or culinary concepts. Reflective and engaging."
+    )
+
+    return f"""{rag_block}Generate a {lesson_type} lesson for a learning app. Return ONLY valid JSON — no markdown, no explanation.
+
+Lesson context:
+- Lesson title: {lesson_title}
+- Chapter: {chapter_title}
+- Goal: {goal}
+- Experience: {experience}/5 ({exp_label})
+- {completed_block}
+
+{type_guidance}
+
+STRUCTURE: A single "flow" array with items in this exact order:
+1. hook — motivation + 2-3 learn_points
+2. activity (multiple_choice) — test core concept understanding
+3. concept — short teaching beat (<=25 words) that deepens the idea
+4. activity (matching) — pair related terms/concepts (4 pairs)
+5. concept — connect to a real-world cooking application (<=25 words)
+6. activity (fill_blank) — complete a sentence about the concept
+7. capstone (multiple_choice) — harder application or synthesis question
+
+WORD LIMITS (strictly enforced):
+- hook.motivation: 1 sentence, max 12 words, verb-first
+- hook.learn_points: 2-3 items, each <=12 words
+- concept.point: 1-2 sentences, <=25 words total
+
+Return JSON matching this exact schema:
+
+{{
+  "flow": [
+    {{
+      "type": "hook",
+      "motivation": "Verb-first sentence why THIS concept matters for THIS goal (<=12 words)",
+      "learn_points": [
+        {{"text": "Concept point <=12 words", "source_ids": ["source_id_if_grounded"]}},
+        {{"text": "Point 2 <=12 words", "source_ids": []}},
+        {{"text": "Point 3 <=12 words", "source_ids": []}}
+      ]
+    }},
+    {{
+      "type": "activity",
+      "id": "act_1",
+      "activity_type": "multiple_choice",
+      "question": "Which statement is correct about [concept]?",
+      "options": ["Option A (<=15 words)", "Option B (<=15 words)", "Option C (<=15 words)"],
+      "correct_index": 0,
+      "explanation": "1-2 sentences explaining why"
+    }},
+    {{
+      "type": "concept",
+      "point": "Teaching beat <=25 words that deepens understanding of the concept"
+    }},
+    {{
+      "type": "activity",
+      "id": "act_2",
+      "activity_type": "matching",
+      "prompt": "Match each term to its definition",
+      "pairs": [
+        {{"term": "Term 1", "definition": "Definition A (<=15 words)"}},
+        {{"term": "Term 2", "definition": "Definition B (<=15 words)"}},
+        {{"term": "Term 3", "definition": "Definition C (<=15 words)"}},
+        {{"term": "Term 4", "definition": "Definition D (<=15 words)"}}
+      ]
+    }},
+    {{
+      "type": "concept",
+      "point": "Real-world cooking application <=25 words"
+    }},
+    {{
+      "type": "activity",
+      "id": "act_3",
+      "activity_type": "fill_blank",
+      "sentence": "When [condition], the result is always ___.",
+      "options": ["answer 1", "answer 2", "answer 3", "answer 4"],
+      "correct_answer": "answer 1",
+      "explanation": "1-2 sentences explaining the principle"
+    }},
+    {{
+      "type": "capstone",
+      "id": "act_4",
+      "activity_type": "multiple_choice",
+      "question": "Applying what you learned: which is correct?",
+      "options": ["Application A (<=15 words)", "Application B (<=15 words)", "Application C (<=15 words)"],
+      "correct_index": 0,
+      "explanation": "1-2 sentences explaining the correct application"
+    }}
+  ],
+  "sources_cited": [
+    {{"source_id": "source_id", "title": "Title", "author": "Author", "page_start": 42}}
+  ]
+}}
+
+Rules:
+- learn_points: arrays of objects with text + source_ids. Only include source_ids when directly grounded.
+- sources_cited must ONLY include sources actually referenced
+- activity IDs: act_1, act_2, act_3; capstone ID: act_4
+- activity_type field carries the mini-game type
+- matching pairs: exactly 4 pairs, definitions <=15 words each
+- options (multiple_choice): exactly 3 items each <=15 words
+- options (fill_blank): exactly 4 short terms (1-3 words). One must match correct_answer exactly
+- Do NOT include card1, card3, or activities keys
+- Return ONLY the JSON object"""

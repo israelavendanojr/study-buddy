@@ -43,6 +43,37 @@ interface Activity {
   correct_order?: number[]
 }
 
+// ── Flow lesson types (interleaved content + activities) ──────────────────────
+
+interface FlowHook {
+  type: 'hook'
+  motivation: string
+  learn_points: (string | AnnotatedPoint)[]
+}
+
+interface FlowConcept {
+  type: 'concept'
+  point: string
+}
+
+interface FlowActivityItem {
+  type: 'activity' | 'capstone'
+  id: string
+  activity_type: 'multiple_choice' | 'image_id' | 'matching' | 'fill_blank' | 'sequence'
+  question?: string
+  prompt?: string
+  options?: string[]
+  correct_index?: number | null
+  explanation?: string
+  pairs?: MatchingPair[]
+  sentence?: string
+  correct_answer?: string
+  steps?: string[]
+  correct_order?: number[]
+}
+
+type FlowItem = FlowHook | FlowConcept | FlowActivityItem
+
 interface LessonParams {
   lessonKey: string
   lessonTitle: string
@@ -79,12 +110,18 @@ interface ImageItem { url: string; caption?: string }
 interface LessonContent {
   lesson_type?: 'technique' | 'recipe' | 'concept' | 'food_science' | 'minigame'
   lesson_key?: string
-  card1: { motivation: string; learn_points: (string | AnnotatedPoint)[]; images?: ImageItem[] | null }
-  card3: { headline: string; points: (string | AnnotatedPoint)[]; tell_me_more: string; images?: ImageItem[] | null }
+  // Flow format (technique/food_science/concept/minigame)
+  flow?: FlowItem[]
+  // Legacy format fields (kept for recipe lessons and backward compat)
+  card1?: { motivation: string; learn_points: (string | AnnotatedPoint)[]; images?: ImageItem[] | null }
+  card3?: { headline: string; points: (string | AnnotatedPoint)[]; tell_me_more: string; images?: ImageItem[] | null }
   missions?: any[]
   activities?: Activity[]
   sources_cited?: SourceCited[]
   last_reflection_feedback?: string | null
+  // Recipe-specific
+  ingredient_list?: any[]
+  steps?: any[]
 }
 
 interface MissionProgress {
@@ -466,14 +503,17 @@ export default function LessonScreen() {
   // fill_blank: array of placed words per slot (slot index → word | null)
   const [fibSlots, setFibSlots] = useState<Record<string, (string | null)[]>>({})
 
-  // Shuffled options for fill_blank
+  // Shuffled options for fill_blank (handles both flow and legacy formats)
   const shuffledOptionsMap = useMemo(() => {
     const map: Record<string, string[]> = {}
-    if (lessonContent?.activities) {
-      for (const act of lessonContent.activities) {
-        if (act.type === 'fill_blank' && act.options) {
-          map[act.id] = [...act.options].sort(() => Math.random() - 0.5)
-        }
+    const lessonFlow = lessonContent?.flow
+    const items: any[] = lessonFlow?.length
+      ? lessonFlow.filter((f: any) => f.type === 'activity' || f.type === 'capstone')
+      : (lessonContent?.activities ?? [])
+    for (const act of items) {
+      const actType = act.activity_type ?? act.type
+      if (actType === 'fill_blank' && act.options) {
+        map[act.id] = [...act.options].sort(() => Math.random() - 0.5)
       }
     }
     return map
@@ -484,17 +524,41 @@ export default function LessonScreen() {
   const hasInitializedCard = useRef(false)
 
   // ── Dynamic card indices ────────────────────────────────────────────────────
-  const activities = lessonContent?.activities ?? []
+  const isFlow = !!lessonContent?.flow?.length
+  const flowItems: FlowItem[] = lessonContent?.flow ?? []
+  // Activities = only interactive items (for completion tracking + accuracy)
+  const activities: Activity[] = isFlow
+    ? (flowItems.filter(f => f.type === 'activity' || f.type === 'capstone') as FlowActivityItem[]).map(f => ({
+        id: f.id,
+        type: f.activity_type,
+        question: f.question,
+        prompt: f.prompt,
+        options: f.options,
+        correct_index: f.correct_index,
+        explanation: f.explanation,
+        pairs: f.pairs,
+        sentence: f.sentence,
+        correct_answer: f.correct_answer,
+        steps: f.steps,
+        correct_order: f.correct_order,
+      }))
+    : (lessonContent?.activities ?? [])
   const activityCount = activities.length
-  const TOTAL_CARDS = 2 + activityCount + 1
+  const TOTAL_CARDS = isFlow ? flowItems.length + 1 : 2 + activityCount + 1
   const CARD_HOOK = 0
   const CARD_DEEP_DIVE = 1
   const CARD_FIRST_ACTIVITY = 2
-  const CARD_COMPLETION = 2 + activityCount
+  const CARD_COMPLETION = isFlow ? flowItems.length : 2 + activityCount
 
   // ── Swipe nav ──────────────────────────────────────────────────────────────
   const canSwipeRef = useRef({ forward: false, back: false, index: 0 })
-  const canSwipeForward = cardIndex < 2 && (cardIndex > 0 || (!loading && !!lessonContent))
+  // Flow: allow forward swipe on non-activity cards (hook + concept)
+  // Legacy: allow swipe only on cards 0-1
+  const isFlowActivityCard = isFlow && cardIndex < CARD_COMPLETION &&
+    (flowItems[cardIndex]?.type === 'activity' || flowItems[cardIndex]?.type === 'capstone')
+  const canSwipeForward = isFlow
+    ? (cardIndex < CARD_COMPLETION && !isFlowActivityCard && (!loading && !!lessonContent))
+    : (cardIndex < 2 && (cardIndex > 0 || (!loading && !!lessonContent)))
   const canSwipeBack = cardIndex >= 1 && cardIndex <= (TOTAL_CARDS - 1)
   canSwipeRef.current = { forward: canSwipeForward, back: canSwipeBack, index: cardIndex }
 
@@ -687,15 +751,21 @@ export default function LessonScreen() {
     setPendingActivity(null)
 
     if (passed) {
-      // Advance to next
-      const currentActivityIndex = activities.findIndex(a => a.id === activity.id)
-      setTimeout(() => {
-        if (currentActivityIndex + 1 < activities.length) {
-          advanceCard(CARD_FIRST_ACTIVITY + currentActivityIndex + 1)
-        } else {
-          advanceCard(CARD_COMPLETION)
-        }
-      }, 350)
+      if (isFlow) {
+        // Flow: always advance by 1 (next flow item or completion)
+        const next = cardIndex + 1
+        setTimeout(() => advanceCard(next <= CARD_COMPLETION ? next : CARD_COMPLETION), 350)
+      } else {
+        // Legacy: find next activity card
+        const currentActivityIndex = activities.findIndex(a => a.id === activity.id)
+        setTimeout(() => {
+          if (currentActivityIndex + 1 < activities.length) {
+            advanceCard(CARD_FIRST_ACTIVITY + currentActivityIndex + 1)
+          } else {
+            advanceCard(CARD_COMPLETION)
+          }
+        }, 350)
+      }
     }
     // Wrong: stay on same card (user retries)
   }
@@ -757,6 +827,114 @@ export default function LessonScreen() {
     </ScrollView>
   )
 
+  // ── Flow card dispatcher ───────────────────────────────────────────────────
+  const renderFlowCard = (item: FlowItem, index: number): React.ReactNode => {
+    switch (item.type) {
+      case 'hook':    return renderFlowHook(item as FlowHook)
+      case 'concept': return renderFlowConcept(item as FlowConcept, index)
+      case 'activity':
+      case 'capstone': return renderFlowActivity(item as FlowActivityItem)
+      default: return null
+    }
+  }
+
+  // ── Flow: Hook card ────────────────────────────────────────────────────────
+  const renderFlowHook = (item: FlowHook) => (
+    <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.companionCenter}>
+        <MonkeyMascot size={100} mood="happy" />
+      </View>
+      <View style={styles.speechBubble}>
+        <Text style={styles.hookSectionLabel}>Motivation</Text>
+        <Text style={styles.hookMotivation}>{item.motivation}</Text>
+        <View style={styles.hookDivider} />
+        <Text style={styles.hookSectionLabel}>In this lesson you'll learn how to…</Text>
+        {item.learn_points.map((point, i) => {
+          const p = toAnnotatedPoint(point)
+          return (
+            <AnnotatedText
+              key={i}
+              text={p.text}
+              source_ids={p.source_ids}
+              sourceMap={sourceMap}
+              textStyle={styles.hookBulletText}
+              bulletDotStyle={styles.hookBulletDot}
+              quote={p.quote}
+              quote_author={p.quote_author}
+              quote_book={p.quote_book}
+              quote_page={p.quote_page}
+            />
+          )
+        })}
+      </View>
+      <View style={styles.spacer} />
+      <Pressable onPress={() => advanceCard(cardIndex + 1)} style={styles.primaryBtn}>
+        <Text style={styles.primaryBtnText}>Let's go →</Text>
+      </Pressable>
+    </ScrollView>
+  )
+
+  // ── Flow: Concept card ─────────────────────────────────────────────────────
+  const renderFlowConcept = (item: FlowConcept, index: number) => {
+    // Count how many concept cards came before this one
+    const conceptNumber = flowItems.slice(0, index).filter(f => f.type === 'concept').length + 1
+    return (
+      <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.conceptBadgeRow}>
+          <View style={styles.conceptBadge}>
+            <Text style={styles.conceptBadgeText}>KEY CONCEPT {conceptNumber}</Text>
+          </View>
+        </View>
+        <View style={styles.conceptCard}>
+          <Text style={styles.conceptPoint}>{item.point}</Text>
+        </View>
+        <View style={styles.spacer} />
+        <Pressable onPress={() => advanceCard(cardIndex + 1)} style={styles.primaryBtn}>
+          <Text style={styles.primaryBtnText}>Got it →</Text>
+        </Pressable>
+      </ScrollView>
+    )
+  }
+
+  // ── Flow: Activity/Capstone card ───────────────────────────────────────────
+  const renderFlowActivity = (item: FlowActivityItem) => {
+    // Bridge to Activity shape so existing render functions work unchanged
+    const asActivity: Activity = {
+      id: item.id,
+      type: item.activity_type,
+      question: item.question,
+      prompt: item.prompt,
+      options: item.options,
+      correct_index: item.correct_index,
+      explanation: item.explanation,
+      pairs: item.pairs,
+      sentence: item.sentence,
+      correct_answer: item.correct_answer,
+      steps: item.steps,
+      correct_order: item.correct_order,
+    }
+    const isAnswered = feedbackVisible && pendingActivity?.activity.id === item.id
+    return (
+      <ScrollView
+        contentContainerStyle={[styles.cardContent, { paddingBottom: 120 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {item.type === 'capstone' && (
+          <View style={styles.capstoneBadgeRow}>
+            <View style={styles.capstoneBadge}>
+              <Text style={styles.capstoneBadgeText}>FINAL CHALLENGE</Text>
+            </View>
+          </View>
+        )}
+        {item.activity_type === 'multiple_choice' && renderMultipleChoice(asActivity, isAnswered)}
+        {item.activity_type === 'image_id' && renderImageId(asActivity, isAnswered)}
+        {item.activity_type === 'fill_blank' && renderFillBlank(asActivity, isAnswered)}
+        {item.activity_type === 'matching' && renderMatching(asActivity, isAnswered)}
+        {item.activity_type === 'sequence' && renderSequence(asActivity, isAnswered)}
+      </ScrollView>
+    )
+  }
+
   // ── Card 0: Hook ───────────────────────────────────────────────────────────
   const renderCard0 = () => {
     const isReady = !loading && !!lessonContent
@@ -769,10 +947,10 @@ export default function LessonScreen() {
           {isReady ? (
             <>
               <Text style={styles.hookSectionLabel}>Motivation</Text>
-              <Text style={styles.hookMotivation}>{lessonContent!.card1.motivation}</Text>
+              <Text style={styles.hookMotivation}>{lessonContent!.card1?.motivation}</Text>
               <View style={styles.hookDivider} />
               <Text style={styles.hookSectionLabel}>In this lesson you'll learn how to…</Text>
-              {lessonContent!.card1.learn_points.map((point, i) => {
+              {(lessonContent!.card1?.learn_points ?? []).map((point, i) => {
                 const p = toAnnotatedPoint(point)
                 return (
                   <AnnotatedText
@@ -811,7 +989,7 @@ export default function LessonScreen() {
 
   // ── Card 1: Deep Dive ──────────────────────────────────────────────────────
   const renderCard1 = () => {
-    if (!lessonContent) return null
+    if (!lessonContent?.card3) return null
     const { card3 } = lessonContent
     return (
       <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
@@ -1178,16 +1356,41 @@ export default function LessonScreen() {
   }
 
   // ── Card dispatch ───────────────────────────────────────────────────────────
-  const cards = [
-    renderCard0,
-    renderCard1,
-    ...activities.map((_, i) => () => renderActivityCard(i)),
-    renderCompletionCard,
-  ]
+  const cards = isFlow
+    ? [
+        ...flowItems.map((item, i) => () => renderFlowCard(item, i)),
+        renderCompletionCard,
+      ]
+    : [
+        renderCard0,
+        renderCard1,
+        ...activities.map((_, i) => () => renderActivityCard(i)),
+        renderCompletionCard,
+      ]
 
   // ── Current activity (for CTA) ─────────────────────────────────────────────
-  const isActivityCard = cardIndex >= CARD_FIRST_ACTIVITY && cardIndex < CARD_COMPLETION
-  const currentActivity = isActivityCard ? activities[cardIndex - CARD_FIRST_ACTIVITY] : null
+  const isActivityCard = isFlow ? isFlowActivityCard : (cardIndex >= CARD_FIRST_ACTIVITY && cardIndex < CARD_COMPLETION)
+  const currentActivity: Activity | null = (() => {
+    if (!isActivityCard) return null
+    if (isFlow) {
+      const flowItem = flowItems[cardIndex] as FlowActivityItem
+      return flowItem ? {
+        id: flowItem.id,
+        type: flowItem.activity_type,
+        question: flowItem.question,
+        prompt: flowItem.prompt,
+        options: flowItem.options,
+        correct_index: flowItem.correct_index,
+        explanation: flowItem.explanation,
+        pairs: flowItem.pairs,
+        sentence: flowItem.sentence,
+        correct_answer: flowItem.correct_answer,
+        steps: flowItem.steps,
+        correct_order: flowItem.correct_order,
+      } : null
+    }
+    return activities[cardIndex - CARD_FIRST_ACTIVITY] ?? null
+  })()
 
   // Check button logic
   const handleCheck = () => {
@@ -1277,6 +1480,52 @@ const styles = StyleSheet.create({
 
   cardContent: { flexGrow: 1, paddingBottom: 32 },
   spacer: { flex: 1, minHeight: 24 },
+
+  // Flow: Concept card
+  conceptBadgeRow: { alignItems: 'flex-start', marginBottom: 16 },
+  conceptBadge: {
+    backgroundColor: colors.accent,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  conceptBadgeText: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 11,
+    color: '#fff',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  conceptCard: {
+    backgroundColor: colors.panel,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.accent,
+    borderRadius: 10,
+    padding: 20,
+    marginBottom: 20,
+  },
+  conceptPoint: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 24,
+    color: colors.ink,
+    lineHeight: 32,
+  },
+
+  // Flow: Capstone badge
+  capstoneBadgeRow: { alignItems: 'flex-start', marginBottom: 12 },
+  capstoneBadge: {
+    backgroundColor: '#854836',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  capstoneBadgeText: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 11,
+    color: '#fff',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
 
   // Hook card
   companionCenter: { alignItems: 'center', marginBottom: 20 },
