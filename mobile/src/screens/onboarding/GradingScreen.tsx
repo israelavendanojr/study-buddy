@@ -11,7 +11,7 @@ import { useNavigation, useRoute } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RouteProp } from '@react-navigation/native'
 import Svg, { Path } from 'react-native-svg'
-import Companion from '../../components/Companion'
+import MonkeyMascot from '../../components/MonkeyMascot'
 import { colors, radius, shadows } from '../../theme'
 
 // ── Back icon ─────────────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ export default function GradingScreen() {
 
         {/* Companion centered */}
         <View style={styles.companionWrap}>
-          <Companion size={80} mood="idle" />
+          <MonkeyMascot size={80} mood="idle" />
         </View>
 
         <Text style={styles.headline}>How should Garlic grade your work?</Text>
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   headline: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 24,
     color: colors.foreground,
     textAlign: 'center',
@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   continueBtnText: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 18,
     color: colors.foreground,
   },

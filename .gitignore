@@ -21,3 +21,6 @@ Thumbs.db
 demo/
 backend/uploads/*
 backend/app/rag_resources
+
+garlicmonkey/
+GarlicMonkey.png

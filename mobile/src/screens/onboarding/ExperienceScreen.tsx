@@ -11,7 +11,7 @@ import { useNavigation, useRoute } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RouteProp } from '@react-navigation/native'
 import Svg, { Path } from 'react-native-svg'
-import Companion from '../../components/Companion'
+import MonkeyMascot from '../../components/MonkeyMascot'
 import { colors, radius, shadows } from '../../theme'
 
 // ── Back icon ─────────────────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ export default function ExperienceScreen() {
             <Text style={styles.backText}>Back</Text>
           </Pressable>
           <View style={styles.companionTopRight}>
-            <Companion size={70} mood="thinking" />
+            <MonkeyMascot size={70} mood="thinking" />
           </View>
         </View>
 
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     marginTop: -8,
   },
   headline: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 24,
     color: colors.foreground,
     marginBottom: 24,
@@ -221,30 +221,30 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   optionCard: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.panel,
     borderRadius: radius.md,
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    borderWidth: 3.5,
+    borderColor: colors.ink,
   },
   optionCardSelected: {
-    borderColor: colors.mint,
+    backgroundColor: colors.accent,
   },
   circle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 3,
+    borderColor: colors.ink,
     backgroundColor: 'transparent',
     flexShrink: 0,
   },
   circleSelected: {
-    backgroundColor: colors.mint,
-    borderColor: colors.mint,
+    backgroundColor: colors.ink,
+    borderColor: colors.ink,
   },
   optionText: {
     flex: 1,
@@ -265,13 +265,15 @@ const styles = StyleSheet.create({
     marginTop: 28,
   },
   continueBtn: {
-    backgroundColor: colors.mint,
-    borderRadius: radius.lg,
-    paddingVertical: 16,
+    backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
+    paddingVertical: 18,
     alignItems: 'center',
   },
   continueBtnText: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 18,
     color: colors.foreground,
   },

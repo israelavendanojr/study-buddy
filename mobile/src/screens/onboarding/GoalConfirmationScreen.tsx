@@ -13,7 +13,7 @@ import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RouteProp } from '@react-navigation/native'
 import { useUser } from '@clerk/clerk-expo'
 import Svg, { Path } from 'react-native-svg'
-import Companion from '../../components/Companion'
+import MonkeyMascot from '../../components/MonkeyMascot'
 import { colors, radius, shadows } from '../../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
@@ -278,7 +278,7 @@ export default function GoalConfirmationScreen() {
             <Animated.View style={[styles.arc, { transform: [{ rotate: arcRotate }] }]} />
             <View style={styles.companionInArc}>
               <Animated.View style={{ transform: [{ rotate: companionRotate }] }}>
-                <Companion size={72} mood="excited" />
+                <MonkeyMascot size={72} mood="excited" />
               </Animated.View>
             </View>
           </View>
@@ -306,7 +306,7 @@ export default function GoalConfirmationScreen() {
 
         {/* Companion */}
         <View style={styles.companionWrap}>
-          <Companion size={100} mood="excited" />
+          <MonkeyMascot size={100} mood="excited" />
         </View>
 
         {/* Summary card */}
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   confirmBtnText: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 18,
     color: colors.foreground,
   },
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loadingLabel: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 22,
     color: colors.foreground,
     textAlign: 'center',

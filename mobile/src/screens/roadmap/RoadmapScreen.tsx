@@ -13,7 +13,8 @@ import { useRoute, useNavigation } from '@react-navigation/native'
 import type { RouteProp } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { useUser } from '@clerk/clerk-expo'
-import Companion from '../../components/Companion'
+import Svg, { Path, Ellipse, Circle } from 'react-native-svg'
+import MonkeyMascot from '../../components/MonkeyMascot'
 import PathTrail from '../../components/PathTrail'
 import PathNode from '../../components/PathNode'
 import TabBar from '../../components/TabBar'
@@ -43,15 +44,51 @@ interface RoadmapParams {
 }
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
-
 const { width: SW, height: SH } = Dimensions.get('window')
+
+// ── HUD Icons ─────────────────────────────────────────────────────────────────
+
+function BananaIcon() {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24">
+      <Path
+        d="M 12 4 Q 18 3 20 8 Q 22 13 18 17 Q 14 21 8 20 Q 4 17 5 12 Q 6 7 12 4 Z"
+        fill="none"
+        stroke="#854836"
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M 12 4 Q 11 6 10 9"
+        stroke="#854836"
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        fill="none"
+      />
+    </Svg>
+  )
+}
+
+function FlameIcon() {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24">
+      <Path
+        d="M 12 2 Q 14 6 13 9 Q 16 6 16 10 Q 20 8 18 14 Q 17 19 12 21 Q 7 19 6 14 Q 4 8 8 10 Q 8 6 12 2 Z"
+        fill="none"
+        stroke="#854836"
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
 
 // ── Confetti ──────────────────────────────────────────────────────────────────
 
-const CONFETTI_COLORS = [
-  colors.mint, colors.peach, colors.golden, colors.sky, colors.lavender, '#FF8FAB',
-]
-const CONFETTI_COUNT = 50
+const CONFETTI_COLORS = [colors.accent, '#ff8c42', '#ffcf77', '#c9b8af', '#854836', '#f5d9a8']
+const CONFETTI_COUNT = 40
 
 interface ConfettiPiece {
   x: number
@@ -89,28 +126,13 @@ function ConfettiOverlay({ triggerRef }: { triggerRef: React.MutableRefObject<((
         p.y.setValue(-30)
         p.opacity.setValue(1)
         p.rot.setValue(0)
-
         Animated.parallel([
-          Animated.timing(p.y, {
-            toValue: SH + 40,
-            duration: 1400 + Math.random() * 800,
-            delay: p.delay,
-            useNativeDriver: true,
-          }),
+          Animated.timing(p.y, { toValue: SH + 40, duration: 1400 + Math.random() * 800, delay: p.delay, useNativeDriver: true }),
           Animated.sequence([
             Animated.delay(p.delay + 800),
-            Animated.timing(p.opacity, {
-              toValue: 0,
-              duration: 500,
-              useNativeDriver: true,
-            }),
+            Animated.timing(p.opacity, { toValue: 0, duration: 500, useNativeDriver: true }),
           ]),
-          Animated.timing(p.rot, {
-            toValue: p.maxRot,
-            duration: 2000 + Math.random() * 800,
-            delay: p.delay,
-            useNativeDriver: true,
-          }),
+          Animated.timing(p.rot, { toValue: p.maxRot, duration: 2000 + Math.random() * 800, delay: p.delay, useNativeDriver: true }),
         ]).start()
       })
     }
@@ -135,6 +157,8 @@ function ConfettiOverlay({ triggerRef }: { triggerRef: React.MutableRefObject<((
               height: p.h,
               backgroundColor: p.color,
               borderRadius: 2,
+              borderWidth: 1,
+              borderColor: colors.ink,
               transform: [{ translateY: p.y }, { rotate }],
               opacity: p.opacity,
             }}
@@ -144,6 +168,50 @@ function ConfettiOverlay({ triggerRef }: { triggerRef: React.MutableRefObject<((
     </View>
   )
 }
+
+// ── Chapter header block ───────────────────────────────────────────────────────
+
+function ChapterHeader({ chapter, y, chapterIndex }: { chapter: Chapter; y: number; chapterIndex: number }) {
+  return (
+    <View style={[chStyles.wrap, { top: y }]}>
+      <View style={chStyles.chip}>
+        <Text style={chStyles.chipText}>CHAPTER {chapterIndex + 1}</Text>
+      </View>
+      <Text style={chStyles.title}>{chapter.title}</Text>
+    </View>
+  )
+}
+
+const chStyles = StyleSheet.create({
+  wrap: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+  },
+  chip: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.accent,
+    borderWidth: 3,
+    borderColor: colors.ink,
+    borderRadius: 100,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginBottom: 6,
+  },
+  chipText: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 12,
+    color: colors.ink,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  title: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 30,
+    color: colors.ink,
+    letterSpacing: -0.5,
+  },
+})
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
@@ -155,8 +223,6 @@ export default function RoadmapScreen() {
 
   const [roadmap] = useState<Roadmap | undefined>(initialRoadmap)
 
-  // Guard: if roadmap is missing (e.g. stack reset after fast-refresh), send back to Loading
-  // so it can re-fetch from the API rather than crashing on .chapters
   useEffect(() => {
     if (!roadmap) navigation.replace('Loading')
   }, [roadmap])
@@ -179,6 +245,8 @@ export default function RoadmapScreen() {
   const confettiTriggerRef = useRef<((isMilestone: boolean) => void) | null>(null)
   const shakeAnim = useRef(new Animated.Value(0)).current
 
+  // Compute XP from completed lessons
+  const earnedXP = activeIndex * 30
 
   const saveProgress = async (newIndex: number) => {
     if (!user?.id) return
@@ -188,7 +256,7 @@ export default function RoadmapScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active_index: newIndex }),
       })
-    } catch { /* fire-and-forget — UI never blocks on this */ }
+    } catch { /* fire-and-forget */ }
   }
 
   const triggerShake = () => {
@@ -199,7 +267,6 @@ export default function RoadmapScreen() {
     ).start()
   }
 
-  // Build id→index map — rebuilds whenever lessons are appended
   const indexMap = useRef<Map<string, number>>(new Map())
   useEffect(() => {
     let i = 0
@@ -208,7 +275,6 @@ export default function RoadmapScreen() {
         indexMap.current.set(l.id, i++)
   }, [roadmap])
 
-  // Find chapter title for a given lesson id
   const getChapterForLesson = (lessonId: string): string => {
     for (const ch of roadmap?.chapters ?? []) {
       if (ch.lessons.find(l => l.id === lessonId)) return ch.title
@@ -216,10 +282,8 @@ export default function RoadmapScreen() {
     return ''
   }
 
-// Compute the winding path layout
   const layout = useMemo(() => computePathLayout(roadmap?.chapters ?? []), [roadmap?.chapters])
 
-  // Auto-scroll to active node
   useEffect(() => {
     if (layout.nodePositions[activeIndex]) {
       scrollRef.current?.scrollTo({
@@ -229,7 +293,6 @@ export default function RoadmapScreen() {
     }
   }, [activeIndex])
 
-  // All hooks are above this line — safe to early-return for the undefined guard
   if (!roadmap) return null
 
   const handleNodePress = (lesson: Lesson) => {
@@ -272,8 +335,6 @@ export default function RoadmapScreen() {
     })
   }
 
-  // ── Progress path length ────────────────────────────────────────────────
-
   const progressLength = layout.cumulativeLengths[activeIndex] ?? 0
   const totalLength = layout.cumulativeLengths[layout.cumulativeLengths.length - 1] ?? 1
 
@@ -281,20 +342,24 @@ export default function RoadmapScreen() {
 
   const renderModal = () => {
     if (!selectedLesson) return null
-    const typeColor = selectedLesson.type === 'milestone' ? colors.golden
-      : selectedLesson.type === 'practice' ? colors.peach : colors.mint
     return (
       <Modal visible={modalOpen} transparent animationType="slide" onRequestClose={() => setModalOpen(false)}>
         <Pressable style={styles.overlay} onPress={() => setModalOpen(false)} />
         <View style={styles.sheet}>
+          {/* Drag indicator */}
+          <View style={styles.sheetHandle} />
           <Text style={styles.sheetTitle}>{selectedLesson.title}</Text>
           <View style={styles.sheetMeta}>
-            <View style={[styles.typePill, { backgroundColor: typeColor + '33' }]}>
-              <Text style={styles.typePillText}>{selectedLesson.type}</Text>
+            <View style={styles.typePill}>
+              <Text style={styles.typePillText}>
+                {selectedLesson.type === 'milestone' ? 'MILESTONE'
+                  : selectedLesson.type === 'practice' ? 'PRACTICE'
+                  : 'LESSON'}
+              </Text>
             </View>
             <Text style={styles.sheetMins}>⏱ {selectedLesson.estimatedMinutes} min</Text>
           </View>
-          <Pressable onPress={handleStart} style={[styles.startBtn, shadows.mint]}>
+          <Pressable onPress={handleStart} style={styles.startBtn}>
             <Text style={styles.startBtnText}>Start Lesson →</Text>
           </Pressable>
           <Pressable onPress={() => setModalOpen(false)} style={styles.notNow}>
@@ -305,33 +370,45 @@ export default function RoadmapScreen() {
     )
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────
-
-  const progressPct = totalLessons > 0 ? activeIndex / totalLessons : 0
+  // Current chapter index for HUD
+  let currentChapterIndex = 0
+  let count = 0
+  for (let ci = 0; ci < (roadmap.chapters.length); ci++) {
+    count += roadmap.chapters[ci].lessons.length
+    if (activeIndex < count) {
+      currentChapterIndex = ci
+      break
+    }
+    currentChapterIndex = ci
+  }
 
   return (
     <Animated.View style={[styles.container, { transform: [{ translateX: shakeAnim }] }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Roadmap</Text>
-        <View style={styles.progressBg}>
-          <View style={[styles.progressFill, { width: `${progressPct * 100}%` }]} />
+
+      {/* ── HUD Header ── */}
+      <View style={styles.hud}>
+        <Text style={styles.hudUnitTitle}>UNIT {currentChapterIndex + 1}</Text>
+        <View style={styles.hudStats}>
+          <View style={styles.statPill}>
+            <BananaIcon />
+            <Text style={styles.statNum}>{earnedXP.toLocaleString()}</Text>
+          </View>
+          <View style={styles.statPill}>
+            <FlameIcon />
+            <Text style={styles.statNum}>0</Text>
+          </View>
         </View>
-        <Text style={styles.progressLabel}>{activeIndex} / {totalLessons} lessons</Text>
       </View>
 
       {isCompleted ? (
         <View style={styles.completionContent}>
-          <Companion size={80} mood="excited" />
-          <Text style={styles.completionTitle}>You did it! 🎉</Text>
+          <MonkeyMascot size={100} mood="excited" />
+          <Text style={styles.completionTitle}>You did it!</Text>
           <Text style={styles.completionGoal}>{goal}</Text>
           <Text style={styles.completionStats}>
             {totalLessons} lessons · {roadmap.chapters.length} chapters
           </Text>
-          <Pressable
-            onPress={() => navigation.replace('Onboarding')}
-            style={[styles.newGoalBtn, shadows.mint]}
-          >
+          <Pressable onPress={() => navigation.replace('GoalSelection')} style={styles.newGoalBtn}>
             <Text style={styles.newGoalBtnText}>Start a new goal →</Text>
           </Pressable>
         </View>
@@ -339,7 +416,7 @@ export default function RoadmapScreen() {
         <ScrollView
           ref={scrollRef}
           style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { height: layout.totalHeight + 80 }]}
+          contentContainerStyle={[styles.scrollContent, { height: layout.totalHeight + 120 }]}
           showsVerticalScrollIndicator={false}
         >
           {/* SVG winding path */}
@@ -351,17 +428,9 @@ export default function RoadmapScreen() {
           />
 
           {/* Chapter headers */}
-          {layout.chapterHeaderPositions.map(({ y, chapter }) => {
-            const isLocked = chapter.lessons.length === 0
-            return (
-              <View key={chapter.id} style={[styles.chapterHeader, { top: y }]}>
-                <Text style={[styles.chapterTitle, isLocked && { color: colors.muted }]}>
-                  {isLocked ? '' : ''}{chapter.title}
-                </Text>
-                <View style={[styles.chapterUnderline, isLocked && { backgroundColor: colors.border }]} />
-              </View>
-            )
-          })}
+          {layout.chapterHeaderPositions.map(({ y, chapter }, ci) => (
+            <ChapterHeader key={chapter.id} chapter={chapter} y={y} chapterIndex={ci} />
+          ))}
 
           {/* Nodes along the path */}
           {layout.nodePositions.map(({ x, y, lesson, globalIndex, labelSide }) => {
@@ -386,7 +455,6 @@ export default function RoadmapScreen() {
       )}
 
       <TabBar activeTab="roadmap" />
-
       <ConfettiOverlay triggerRef={confettiTriggerRef} />
       {renderModal()}
     </Animated.View>
@@ -397,131 +465,165 @@ export default function RoadmapScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  // Header
-  header: {
+
+  // HUD
+  hud: {
     paddingTop: 56,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingBottom: 14,
     backgroundColor: colors.background,
+    borderBottomWidth: 3.5,
+    borderBottomColor: colors.ink,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  headerTitle: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 24,
-    color: colors.foreground,
-    textAlign: 'center',
-    marginBottom: 10,
+  hudUnitTitle: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 18,
+    color: colors.ink,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
-  progressBg: {
-    height: 7,
-    backgroundColor: colors.border,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 6,
+  hudStats: {
+    flexDirection: 'row',
+    gap: 10,
   },
-  progressFill: {
-    height: 7,
-    backgroundColor: colors.mint,
-    borderRadius: 4,
+  statPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 3,
+    borderColor: colors.ink,
+    borderRadius: 100,
+    backgroundColor: colors.panel,
   },
-  progressLabel: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 12,
-    color: colors.muted,
-    textAlign: 'right',
+  statNum: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 15,
+    color: colors.ink,
   },
+
   // Scroll
   scroll: { flex: 1 },
   scrollContent: { paddingTop: 16 },
-  // Chapter headers (absolutely positioned)
-  chapterHeader: {
-    position: 'absolute',
-    left: 24,
-    right: 24,
-  },
-  chapterTitle: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 18,
-    color: colors.foreground,
-    marginBottom: 6,
-  },
-  chapterUnderline: {
-    height: 2,
-    width: 120,
-    backgroundColor: colors.mint,
-    borderRadius: 2,
-  },
-  // Modal
+
+  // Modal overlay + sheet
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.25)' },
   sheet: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.panel,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
+    borderTopWidth: 3.5,
+    borderLeftWidth: 3.5,
+    borderRightWidth: 3.5,
+    borderColor: colors.ink,
     paddingHorizontal: 28,
-    paddingTop: 28,
-    paddingBottom: 40,
+    paddingTop: 16,
+    paddingBottom: 48,
     alignItems: 'center',
   },
+  sheetHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: colors.locked,
+    borderRadius: 3,
+    marginBottom: 20,
+  },
   sheetTitle: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 21,
-    color: colors.foreground,
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 24,
+    color: colors.ink,
     textAlign: 'center',
     marginBottom: 12,
   },
-  sheetMeta: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 },
-  typePill: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 4 },
-  typePillText: { fontFamily: 'Nunito_600SemiBold', fontSize: 13, color: colors.foreground },
-  sheetMins: { fontFamily: 'Nunito_400Regular', fontSize: 14, color: colors.muted },
+  sheetMeta: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 28 },
+  typePill: {
+    borderRadius: 100,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: colors.accent,
+    borderWidth: 2.5,
+    borderColor: colors.ink,
+  },
+  typePillText: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 12,
+    color: colors.ink,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  sheetMins: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 14,
+    color: colors.inkSoft,
+  },
   startBtn: {
     width: '100%',
-    backgroundColor: colors.mint,
-    borderRadius: radius.lg,
-    paddingVertical: 16,
+    backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
+    paddingVertical: 18,
     alignItems: 'center',
     marginBottom: 12,
   },
-  startBtnText: { fontFamily: 'FredokaOne_400Regular', fontSize: 18, color: colors.foreground },
+  startBtnText: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 20,
+    color: colors.ink,
+  },
   notNow: { paddingVertical: 8 },
-  notNowText: { fontFamily: 'Nunito_400Regular', fontSize: 16, color: colors.muted },
-  // Completion state (replaces scroll content)
+  notNowText: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 16,
+    color: colors.inkSoft,
+  },
+
+  // Completion state
   completionContent: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
+    backgroundColor: colors.background,
   },
   completionTitle: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 28,
-    color: colors.foreground,
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 36,
+    color: colors.ink,
     marginTop: 16,
     marginBottom: 8,
     textAlign: 'center',
   },
   completionGoal: {
-    fontFamily: 'Nunito_600SemiBold',
+    fontFamily: 'Nunito_700Bold',
     fontSize: 15,
-    color: colors.muted,
+    color: colors.inkSoft,
     textAlign: 'center',
     marginBottom: 6,
     lineHeight: 20,
   },
   completionStats: {
-    fontFamily: 'Nunito_400Regular',
+    fontFamily: 'Nunito_700Bold',
     fontSize: 13,
-    color: colors.muted,
+    color: colors.inkSoft,
     marginBottom: 32,
   },
   newGoalBtn: {
     width: '100%',
-    backgroundColor: colors.mint,
-    borderRadius: radius.lg,
-    paddingVertical: 16,
+    backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
+    paddingVertical: 18,
     alignItems: 'center',
   },
   newGoalBtnText: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 17,
-    color: colors.foreground,
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 18,
+    color: colors.ink,
   },
 })

@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: 6 },
   headerTitle: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 20,
     color: colors.foreground,
   },
@@ -279,12 +279,12 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   initials: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 32,
     color: colors.muted,
   },
   displayName: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 22,
     color: colors.foreground,
   },
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
     maxHeight: '85%',
   },
   sheetTitle: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 22,
     color: colors.foreground,
     marginBottom: 20,
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   submitBtnText: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 17,
     color: colors.foreground,
   },
@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   doneBtnText: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 17,
     color: colors.foreground,
   },

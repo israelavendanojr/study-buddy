@@ -11,7 +11,7 @@ import { useNavigation, useRoute } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RouteProp } from '@react-navigation/native'
 import Svg, { Path } from 'react-native-svg'
-import Companion from '../../components/Companion'
+import MonkeyMascot from '../../components/MonkeyMascot'
 import { colors, radius, shadows } from '../../theme'
 
 // ── Back icon ─────────────────────────────────────────────────────────────────
@@ -422,7 +422,7 @@ export default function CoachingScreen() {
         {/* Companion + speech bubble */}
         <View style={styles.conversationRow}>
           <View style={styles.companionLeft}>
-            <Companion size={60} mood={companionMood} />
+            <MonkeyMascot size={60} mood={companionMood} />
           </View>
           <View style={styles.speechBubbleWrap}>
             <View style={styles.speechBubbleTail} />
@@ -653,7 +653,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   continueBtnText: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 18,
     color: colors.foreground,
   },

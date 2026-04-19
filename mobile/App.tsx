@@ -1,4 +1,5 @@
 import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one'
+import { Fredoka_400Regular, Fredoka_600SemiBold } from '@expo-google-fonts/fredoka'
 import {
   Nunito_400Regular,
   Nunito_600SemiBold,
@@ -87,6 +88,8 @@ return <View style={{ flex: 1, backgroundColor: colors.background }} />
 export default function App() {
   const [fontsLoaded] = useFonts({
     FredokaOne_400Regular,
+    Fredoka_400Regular,
+    Fredoka_600SemiBold,
     Nunito_400Regular,
     Nunito_600SemiBold,
     Nunito_700Bold,

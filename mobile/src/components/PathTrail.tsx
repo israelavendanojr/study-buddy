@@ -22,21 +22,21 @@ function PathTrailInner({ pathD, totalHeight, progressLength, totalLength }: Pat
       style={StyleSheet.absoluteFill}
       pointerEvents="none"
     >
-      {/* Background trail (dotted) */}
+      {/* Background trail (dashed gray) */}
       <Path
         d={pathD}
-        stroke={colors.border}
-        strokeWidth={6}
+        stroke={colors.locked}
+        strokeWidth={5}
         fill="none"
         strokeLinecap="round"
-        strokeDasharray="1 16"
+        strokeDasharray="4 14"
       />
-      {/* Progress trail (solid mint overlay, up to active node) */}
+      {/* Progress trail (solid amber, up to active node) */}
       {progressLength > 0 && (
         <Path
           d={pathD}
-          stroke={colors.mint}
-          strokeWidth={4}
+          stroke={colors.accent}
+          strokeWidth={5}
           fill="none"
           strokeLinecap="round"
           strokeDasharray={`${progressLength} ${totalLength}`}

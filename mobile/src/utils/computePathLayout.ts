@@ -39,14 +39,15 @@ export interface PathLayout {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const { width: SW } = Dimensions.get('window')
-const PADDING_H = 60
 const CENTER_X = SW / 2
-const AMPLITUDE = (SW / 2) - PADDING_H
-const VERTICAL_SPACING = 110
-const CHAPTER_HEADER_HEIGHT = 70
+const VERTICAL_SPACING = 120
+const CHAPTER_HEADER_HEIGHT = 80
 const CHAPTER_GAP = 24
 const TOP_PADDING = 20
-const FREQUENCY = (2 * Math.PI) / 5 // one full wave every ~5 nodes
+
+// GarlicMonkey zigzag: 8-step offset cycle (in pixels from center)
+// Creates the winding S-curve path from the design
+const ZIGZAG_OFFSETS = [0, 55, 90, 55, 0, -55, -90, -55]
 
 // ── Position computation ─────────────────────────────────────────────────────
 
@@ -62,8 +63,9 @@ export function computePathLayout(chapters: Chapter[]): PathLayout {
 
     for (let i = 0; i < chapter.lessons.length; i++) {
       const lesson = chapter.lessons[i]
-      const x = CENTER_X + AMPLITUDE * Math.sin(FREQUENCY * globalIndex)
-      const labelSide: 'left' | 'right' = x < CENTER_X ? 'right' : 'left'
+      const offset = ZIGZAG_OFFSETS[globalIndex % ZIGZAG_OFFSETS.length]
+      const x = CENTER_X + offset
+      const labelSide: 'left' | 'right' = offset >= 0 ? 'left' : 'right'
 
       nodePositions.push({ x, y: currentY, lesson, globalIndex, labelSide })
       currentY += VERTICAL_SPACING

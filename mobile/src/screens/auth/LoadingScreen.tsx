@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { useUser } from '@clerk/clerk-expo'
-import Companion from '../../components/Companion'
+import MonkeyMascot from '../../components/MonkeyMascot'
 import { colors, radius } from '../../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
@@ -53,7 +53,7 @@ export default function LoadingScreen() {
 
   return (
     <View style={styles.container}>
-      <Companion size={120} mood={error ? 'sad' : 'idle'} />
+      <MonkeyMascot size={120} mood={error ? 'sad' : 'idle'} />
       {error ? (
         <>
           <Text style={styles.errorText}>{error}</Text>
@@ -89,10 +89,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   retryButton: {
-    backgroundColor: colors.mint,
+    backgroundColor: colors.accent,
     paddingHorizontal: 32,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: radius.md,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
   },
   retryLabel: {
     fontFamily: 'Nunito_700Bold',

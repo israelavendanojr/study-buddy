@@ -12,7 +12,7 @@ import {
 import { useSignUp } from '@clerk/clerk-expo'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
-import Companion from '../../components/Companion'
+import MonkeyMascot from '../../components/MonkeyMascot'
 import { colors, radius, shadows } from '../../theme'
 
 export default function SignUpScreen() {
@@ -66,7 +66,7 @@ export default function SignUpScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.inner}>
-        <Companion size={80} mood="excited" />
+        <MonkeyMascot size={80} mood="excited" />
 
         {!pendingVerification ? (
           <>
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heading: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 32,
     color: colors.foreground,
     marginTop: 16,
@@ -178,23 +178,25 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular',
     fontSize: 16,
     color: colors.foreground,
-    backgroundColor: colors.background,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    backgroundColor: colors.panel,
+    borderWidth: 3,
+    borderColor: colors.ink,
     borderRadius: radius.sm,
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
   button: {
     width: '100%',
-    backgroundColor: colors.peach,
-    borderRadius: radius.lg,
+    backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
     paddingVertical: 18,
     alignItems: 'center',
     marginTop: 4,
   },
   buttonText: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 20,
     color: colors.foreground,
   },

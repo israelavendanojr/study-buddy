@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { View, Text, StyleSheet, ScrollView, Pressable, SafeAreaView } from 'react-native'
 import { useUser } from '@clerk/clerk-expo'
 import { useAuth } from '@clerk/clerk-expo'
-import { colors } from '../../theme'
+import { colors, radius } from '../../theme'
 import TabBar from '../../components/TabBar'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     fontSize: 40,
   },
   name: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 22,
     color: colors.foreground,
     marginBottom: 8,
@@ -160,17 +160,17 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 12,
+    backgroundColor: colors.panel,
+    borderRadius: radius.md,
     padding: 16,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
   },
   statValue: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 24,
-    color: colors.mint,
+    color: colors.accent,
     marginBottom: 8,
   },
   statLabel: {
@@ -184,23 +184,23 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   button: {
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 16,
+    borderRadius: radius.md,
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: 3.5,
   },
   primaryButton: {
-    backgroundColor: colors.mint,
-    borderColor: colors.mint,
+    backgroundColor: colors.accent,
+    borderColor: colors.ink,
   },
   primaryButtonText: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 16,
-    color: colors.background,
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 18,
+    color: colors.ink,
   },
   secondaryButton: {
     backgroundColor: 'transparent',
-    borderColor: colors.border,
+    borderColor: colors.ink,
   },
   secondaryButtonText: {
     fontFamily: 'Nunito_700Bold',

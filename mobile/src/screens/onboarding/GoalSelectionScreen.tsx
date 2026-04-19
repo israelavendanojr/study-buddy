@@ -10,7 +10,7 @@ import {
 import Svg, { Path, Circle, Rect, Line } from 'react-native-svg'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
-import Companion from '../../components/Companion'
+import MonkeyMascot from '../../components/MonkeyMascot'
 import { colors, radius } from '../../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
@@ -280,7 +280,7 @@ export default function GoalSelectionScreen() {
         style={[styles.inner, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
       >
         <View style={styles.companionWrap}>
-          <Companion size={80} mood="happy" />
+          <MonkeyMascot size={80} mood="happy" />
         </View>
         <Text style={styles.headline}>What would you like to accomplish?</Text>
         <Text style={styles.subheading}>Pick the one that fits best right now.</Text>
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   headline: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 26,
     color: colors.foreground,
     textAlign: 'center',
@@ -373,8 +373,10 @@ const styles = StyleSheet.create({
     width: '47.5%',
   },
   card: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.panel,
     borderRadius: radius.md,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
     padding: 20,
     minHeight: 130,
   },

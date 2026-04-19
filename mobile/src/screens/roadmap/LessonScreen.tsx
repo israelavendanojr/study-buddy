@@ -10,59 +10,23 @@ import {
   Image,
   Animated,
   PanResponder,
-  TextInput,
+  Dimensions,
 } from 'react-native'
 import { useRoute, useNavigation } from '@react-navigation/native'
 import type { RouteProp } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import * as ImagePicker from 'expo-image-picker'
-import Companion from '../../components/Companion'
+import Svg, { Path, Circle } from 'react-native-svg'
+import MonkeyMascot, { MonkeyCelebrate } from '../../components/MonkeyMascot'
 import AnnotatedText from '../../components/AnnotatedText'
-import { colors, radius, shadows } from '../../theme'
+import { colors, radius } from '../../theme'
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000'
+const { height: SH } = Dimensions.get('window')
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface QuizQuestion {
-  question_text: string
-  options: string[]
-  correct_index: number
-  explanation: string
-}
-
-interface MatchingPair {
-  term: string
-  definition: string
-}
-
-interface Mission {
-  id: string
-  mission_type: 'photo_submission' | 'reflection_journal' | 'pop_quiz' | 'minigame_matching' | 'minigame_image_id' | 'minigame_fill_blank' | 'minigame_sequencing'
-  title: string
-  description: string
-  why_it_matters: string
-  is_required: boolean
-  duration_minutes: number
-  // photo_submission
-  prompt?: string
-  reflection_choices?: string[]
-  // reflection_journal
-  min_words?: number
-  // pop_quiz
-  questions?: QuizQuestion[]
-  // minigame_matching
-  pairs?: MatchingPair[]
-  // minigame_image_id
-  images?: string[] // 4 text descriptions
-  correct_image_index?: number
-  // minigame_sequencing
-  steps?: string[] // scrambled order
-  correct_order?: number[]
-  // minigame_fill_blank
-  fill_blank_sentence?: string
-  fill_blank_answer?: string
-}
+interface MatchingPair { term: string; definition: string }
 
 interface Activity {
   id: string
@@ -110,30 +74,15 @@ interface SourceCited {
   page_start?: number
 }
 
-interface ImageItem {
-  url: string
-  caption?: string
-}
-
-interface QuizCheckpointData {
-  question: string
-  options: string[]
-  correct_index: number
-  explanation: string
-}
-
-interface ReflectionCheckpointData {
-  prompt: string
-  min_words?: number
-}
+interface ImageItem { url: string; caption?: string }
 
 interface LessonContent {
   lesson_type?: 'technique' | 'recipe' | 'concept' | 'food_science' | 'minigame'
   lesson_key?: string
   card1: { motivation: string; learn_points: (string | AnnotatedPoint)[]; images?: ImageItem[] | null }
-  card3: { headline: string; points: (string | AnnotatedPoint)[]; tell_me_more: string; images?: ImageItem[] | null; quiz_checkpoint?: QuizCheckpointData | null; reflection_prompt?: ReflectionCheckpointData | null }
-  missions?: Mission[] // deprecated, for backward compat
-  activities?: Activity[] // new: sequential activities
+  card3: { headline: string; points: (string | AnnotatedPoint)[]; tell_me_more: string; images?: ImageItem[] | null }
+  missions?: any[]
+  activities?: Activity[]
   sources_cited?: SourceCited[]
   last_reflection_feedback?: string | null
 }
@@ -144,92 +93,339 @@ interface MissionProgress {
   is_fully_complete: boolean
 }
 
-interface ScoreCriterion {
-  label: string
-  stars: number
-}
-
-interface ValidationResult {
-  is_relevant?: boolean
-  criteria?: ScoreCriterion[]
-  note?: string
-  rejection_message?: string
-  feedback?: string
-  is_valid: boolean
-  xp_earned: number
-  mission_completed: boolean
-  lesson_now_required_complete: boolean
-  lesson_now_fully_complete: boolean
-  companion?: Record<string, unknown>
-}
-
-interface QuizAnswerResult {
-  question_index: number
-  selected: number
-  correct_index: number
-  is_correct: boolean
-  explanation: string
-}
-
-interface QuizResult {
-  results: QuizAnswerResult[]
-  score: number
-  total: number
-  passed: boolean
-  mission_completed: boolean
-  lesson_now_required_complete: boolean
-  lesson_now_fully_complete: boolean
-  xp_earned: number
-  companion?: Record<string, unknown>
-}
-
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function toAnnotatedPoint(p: string | AnnotatedPoint): AnnotatedPoint {
   return typeof p === 'string' ? { text: p, source_ids: [] } : p
 }
 
-// ── Progress Indicator ─────────────────────────────────────────────────────────
+// ── Icons ─────────────────────────────────────────────────────────────────────
 
-function ProgressIndicator({ current, progressAnim, totalCards, onExit }: { current: number; progressAnim: Animated.Value; totalCards: number; onExit: () => void }) {
+function HeartIcon({ filled = true }: { filled?: boolean }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24">
+      <Path
+        d="M 12 21 Q 2 14 2 7 Q 2 3 6 3 Q 9 3 12 7 Q 15 3 18 3 Q 22 3 22 7 Q 22 14 12 21 Z"
+        fill={filled ? '#854836' : 'none'}
+        stroke="#854836"
+        strokeWidth={2.5}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
+function XIcon() {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24">
+      <Path d="M 6 6 L 18 18 M 18 6 L 6 18" stroke="#854836" strokeWidth={3} strokeLinecap="round" />
+    </Svg>
+  )
+}
+
+// ── GM Lesson Header ──────────────────────────────────────────────────────────
+
+function GMLessonHeader({
+  progressAnim, totalCards, hearts, onExit,
+}: {
+  progressAnim: Animated.Value
+  totalCards: number
+  hearts: number
+  onExit: () => void
+}) {
   const barWidth = progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
   return (
-    <View style={piStyles.wrapper}>
-      <View style={piStyles.topRow}>
-        <Pressable onPress={onExit} hitSlop={12} style={piStyles.exitBtn}>
-          <Text style={piStyles.exitBtnText}>×</Text>
-        </Pressable>
-        <View style={piStyles.dotsRow}>
-          {Array.from({ length: totalCards }).map((_, i) => (
-            <View
-              key={i}
-              style={[
-                piStyles.dot,
-                i < current && piStyles.dotDone,
-                i === current && piStyles.dotActive,
-              ]}
-            />
-          ))}
-        </View>
+    <View style={hdrStyles.wrap}>
+      <Pressable onPress={onExit} hitSlop={12} style={hdrStyles.exitBtn}>
+        <XIcon />
+      </Pressable>
+      <View style={hdrStyles.barBg}>
+        <Animated.View style={[hdrStyles.barFill, { width: barWidth }]}>
+          <View style={hdrStyles.barGlow} />
+        </Animated.View>
       </View>
-      <View style={piStyles.barBg}>
-        <Animated.View style={[piStyles.barFill, { width: barWidth }]} />
+      <View style={hdrStyles.hearts}>
+        <HeartIcon filled={hearts > 0} />
+        <Text style={hdrStyles.heartNum}>{hearts}</Text>
       </View>
     </View>
   )
 }
 
-const piStyles = StyleSheet.create({
-  wrapper: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 12 },
-  topRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  exitBtn: { marginRight: 12, padding: 4 },
-  exitBtnText: { fontSize: 24, color: colors.muted, fontFamily: 'Nunito_400Regular', lineHeight: 26 },
-  dotsRow: { flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center' },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border },
-  dotDone: { backgroundColor: colors.mint, opacity: 0.4 },
-  dotActive: { backgroundColor: colors.mint, opacity: 1 },
-  barBg: { height: 3, backgroundColor: colors.border, borderRadius: 2, overflow: 'hidden' },
-  barFill: { height: 3, backgroundColor: colors.mint, borderRadius: 2 },
+const hdrStyles = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 10,
+  },
+  exitBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
+    backgroundColor: colors.panel,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  barBg: {
+    flex: 1,
+    height: 20,
+    backgroundColor: colors.panel,
+    borderWidth: 3,
+    borderColor: colors.ink,
+    borderRadius: 100,
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    backgroundColor: colors.accent,
+    borderRadius: 100,
+    position: 'relative',
+  },
+  barGlow: {
+    position: 'absolute',
+    top: 3,
+    left: 8,
+    height: 5,
+    width: '40%',
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderRadius: 100,
+  },
+  hearts: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  heartNum: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 18,
+    color: colors.ink,
+  },
+})
+
+// ── Slide-up Feedback Panel ───────────────────────────────────────────────────
+
+interface FeedbackPanelProps {
+  visible: boolean
+  isCorrect: boolean
+  title: string
+  explanation: string
+  onContinue: () => void
+  onTryAgain?: () => void
+}
+
+function FeedbackPanel({ visible, isCorrect, title, explanation, onContinue, onTryAgain }: FeedbackPanelProps) {
+  const slideAnim = useRef(new Animated.Value(300)).current
+
+  useEffect(() => {
+    Animated.timing(slideAnim, {
+      toValue: visible ? 0 : 300,
+      duration: 320,
+      useNativeDriver: true,
+    }).start()
+  }, [visible])
+
+  return (
+    <Animated.View
+      style={[
+        fbStyles.panel,
+        isCorrect ? fbStyles.panelCorrect : fbStyles.panelWrong,
+        { transform: [{ translateY: slideAnim }] },
+      ]}
+      pointerEvents={visible ? 'auto' : 'none'}
+    >
+      <View style={fbStyles.inner}>
+        <MonkeyMascot size={68} mood={isCorrect ? 'happy' : 'sad'} />
+        <View style={fbStyles.text}>
+          <Text style={fbStyles.title}>{title}</Text>
+          {!!explanation && <Text style={fbStyles.explanation}>{explanation}</Text>}
+        </View>
+      </View>
+      <View style={fbStyles.actions}>
+        {!isCorrect && !!onTryAgain && (
+          <Pressable onPress={onTryAgain} style={[fbStyles.btn, fbStyles.btnGhost]}>
+            <Text style={fbStyles.btnText}>Try Again</Text>
+          </Pressable>
+        )}
+        <Pressable onPress={onContinue} style={[fbStyles.btn, fbStyles.btnPrimary, isCorrect && fbStyles.btnPrimaryCorrect]}>
+          <Text style={fbStyles.btnText}>Continue →</Text>
+        </Pressable>
+      </View>
+    </Animated.View>
+  )
+}
+
+const fbStyles = StyleSheet.create({
+  panel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 34,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    borderTopWidth: 3.5,
+    borderColor: colors.ink,
+    zIndex: 100,
+  },
+  panelCorrect: { backgroundColor: colors.accent },
+  panelWrong: { backgroundColor: colors.panel },
+  inner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 16,
+  },
+  text: { flex: 1 },
+  title: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 22,
+    color: colors.ink,
+    marginBottom: 2,
+  },
+  explanation: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 14,
+    color: colors.ink,
+    opacity: 0.8,
+    lineHeight: 20,
+  },
+  actions: { flexDirection: 'row', gap: 10 },
+  btn: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: radius.md,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
+    alignItems: 'center',
+  },
+  btnGhost: { backgroundColor: 'transparent' },
+  btnPrimary: { backgroundColor: colors.panel },
+  btnPrimaryCorrect: { backgroundColor: colors.panel },
+  btnText: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 18,
+    color: colors.ink,
+  },
+})
+
+// ── Bottom CTA (Check button) ─────────────────────────────────────────────────
+
+function BottomCTA({ label, disabled, onPress, hide }: {
+  label: string; disabled: boolean; onPress: () => void; hide: boolean
+}) {
+  const slideAnim = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    Animated.timing(slideAnim, {
+      toValue: hide ? 100 : 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start()
+  }, [hide])
+
+  return (
+    <Animated.View style={[ctaStyles.wrap, { transform: [{ translateY: slideAnim }] }]}>
+      <Pressable
+        onPress={onPress}
+        disabled={disabled}
+        style={[ctaStyles.btn, disabled && ctaStyles.btnDisabled]}
+      >
+        <Text style={ctaStyles.btnText}>{label}</Text>
+      </Pressable>
+    </Animated.View>
+  )
+}
+
+const ctaStyles = StyleSheet.create({
+  wrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 34,
+    backgroundColor: colors.background,
+    borderTopWidth: 3.5,
+    borderTopColor: colors.ink,
+  },
+  btn: {
+    backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
+    paddingVertical: 18,
+    alignItems: 'center',
+  },
+  btnDisabled: { opacity: 0.35 },
+  btnText: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 20,
+    color: colors.ink,
+  },
+})
+
+// ── Q-Sub label ───────────────────────────────────────────────────────────────
+
+function QSub({ label }: { label: string }) {
+  return <Text style={qStyles.sub}>{label.toUpperCase()}</Text>
+}
+
+function QPrompt({ text }: { text: string }) {
+  return <Text style={qStyles.prompt}>{text}</Text>
+}
+
+const qStyles = StyleSheet.create({
+  sub: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 13,
+    color: colors.inkSoft,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  prompt: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 26,
+    lineHeight: 32,
+    color: colors.ink,
+    letterSpacing: -0.3,
+    marginBottom: 20,
+  },
+})
+
+// ── XP Count-up ───────────────────────────────────────────────────────────────
+
+function XPCountUp({ target }: { target: number }) {
+  const [val, setVal] = useState(0)
+  useEffect(() => {
+    if (target === 0) return
+    const start = Date.now()
+    const dur = 1000
+    const tick = () => {
+      const elapsed = Date.now() - start
+      const prog = Math.min(elapsed / dur, 1)
+      const eased = 1 - Math.pow(1 - prog, 3)
+      setVal(Math.round(eased * target))
+      if (prog < 1) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  }, [target])
+  return <Text style={compStyles.rewardValue}>{val}</Text>
+}
+
+const compStyles = StyleSheet.create({
+  rewardValue: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 36,
+    color: colors.ink,
+  },
 })
 
 // ── Main Screen ────────────────────────────────────────────────────────────────
@@ -247,24 +443,30 @@ export default function LessonScreen() {
   const [error, setError] = useState<string | null>(null)
   const [missionProgress, setMissionProgress] = useState<MissionProgress | null>(null)
   const [progressFetched, setProgressFetched] = useState(false)
-  const [currentMissionId, setCurrentMissionId] = useState<string | null>(null)
 
-  // ─ Activity state (new) ────────────────────────────────────────────────────
+  // Activity state
   const [completedActivities, setCompletedActivities] = useState<Set<string>>(new Set())
   const [activityResults, setActivityResults] = useState<Record<string, { passed: boolean; explanation: string }>>({})
+  const [hearts, setHearts] = useState(5)
+  const [stumbles, setStumbles] = useState(0)
   const [lessonComplete, setLessonComplete] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  // Photo submission state (for photo_submission activities)
-  const [photoUri, setPhotoUri] = useState<string | null>(null)
-  const [photoMimeType, setPhotoMimeType] = useState<string>('image/jpeg')
+  // Feedback panel state
+  const [feedbackVisible, setFeedbackVisible] = useState(false)
+  const [feedbackCorrect, setFeedbackCorrect] = useState(false)
+  const [feedbackTitle, setFeedbackTitle] = useState('')
+  const [feedbackExplanation, setFeedbackExplanation] = useState('')
+  const [pendingActivity, setPendingActivity] = useState<{ activity: Activity; passed: boolean } | null>(null)
 
   // Per-activity selection state
   const [selectedOptions, setSelectedOptions] = useState<Record<string, number | null>>({})
   const [matchState, setMatchState] = useState<Record<string, { leftSelected: string | null; rightSelected: string | null; matched: Record<string, string> }>>({})
   const [userOrders, setUserOrders] = useState<Record<string, number[]>>({})
+  // fill_blank: array of placed words per slot (slot index → word | null)
+  const [fibSlots, setFibSlots] = useState<Record<string, (string | null)[]>>({})
 
-  // Shuffled options for fill_blank (keyed by activity ID)
+  // Shuffled options for fill_blank
   const shuffledOptionsMap = useMemo(() => {
     const map: Record<string, string[]> = {}
     if (lessonContent?.activities) {
@@ -277,23 +479,18 @@ export default function LessonScreen() {
     return map
   }, [lessonContent?.lesson_key])
 
-  // Shared
   const [tellMeMoreOpen, setTellMeMoreOpen] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
   const hasSignaledComplete = useRef(false)
   const hasInitializedCard = useRef(false)
 
   // ── Dynamic card indices ────────────────────────────────────────────────────
   const activities = lessonContent?.activities ?? []
   const activityCount = activities.length
-  const TOTAL_CARDS = 2 + activityCount + 1  // hook + deep_dive + N activities + completion
+  const TOTAL_CARDS = 2 + activityCount + 1
   const CARD_HOOK = 0
   const CARD_DEEP_DIVE = 1
   const CARD_FIRST_ACTIVITY = 2
   const CARD_COMPLETION = 2 + activityCount
-
-  // Backward compat: if lessons still have missions instead of activities
-  const hasMissionsOnly = !activityCount && !!(lessonContent?.missions?.length)
 
   // ── Swipe nav ──────────────────────────────────────────────────────────────
   const canSwipeRef = useRef({ forward: false, back: false, index: 0 })
@@ -307,13 +504,12 @@ export default function LessonScreen() {
   const progressAnim = useRef(new Animated.Value(0)).current
   const chevronRotate = useRef(new Animated.Value(0)).current
   const expandAnim = useRef(new Animated.Value(0)).current
-  const xpScale = useRef(new Animated.Value(0)).current
-  const feedbackOpacity = useRef(new Animated.Value(0)).current
-  const companionScale = useRef(new Animated.Value(1)).current
 
   // ── Swipe responder ────────────────────────────────────────────────────────
   const snapBack = () =>
     Animated.spring(cardTranslateX, { toValue: 0, useNativeDriver: true, tension: 120, friction: 10 }).start()
+
+  const advanceCardRef = useRef<(n: number) => void>(() => {})
 
   const swipeResponder = useRef(
     PanResponder.create({
@@ -331,9 +527,7 @@ export default function LessonScreen() {
         if (swipedLeft && forward) {
           advanceCardRef.current(index + 1)
         } else if (swipedRight && back) {
-          if (index === 4) { resetSubmissionRef.current(); advanceCardRef.current(2) }
-          else if (index === 3) advanceCardRef.current(2)
-          else advanceCardRef.current(index - 1)
+          advanceCardRef.current(index - 1)
         } else {
           snapBack()
         }
@@ -341,9 +535,6 @@ export default function LessonScreen() {
       onPanResponderTerminate: () => snapBack(),
     })
   ).current
-
-  const advanceCardRef = useRef<(n: number) => void>(() => {})
-  const resetSubmissionRef = useRef<() => void>(() => {})
 
   // ── Fetch lesson ───────────────────────────────────────────────────────────
   const fetchLesson = async () => {
@@ -368,12 +559,9 @@ export default function LessonScreen() {
       if (!res.ok) throw new Error(`Server error ${res.status}`)
       const data: LessonContent = await res.json()
       setLessonContent(data)
-      // Build sourceMap from sources_cited for O(1) lookup in AnnotatedText
       if (data.sources_cited?.length) {
         const map: Record<string, SourceCited> = {}
-        for (const s of data.sources_cited) {
-          map[s.source_id] = s
-        }
+        for (const s of data.sources_cited) map[s.source_id] = s
         setSourceMap(map)
       }
       return data
@@ -384,12 +572,8 @@ export default function LessonScreen() {
     }
   }
 
-  // ── Fetch progress ─────────────────────────────────────────────────────────
   const fetchProgress = async (canonicalKey?: string) => {
-    if (!params.userId) {
-      setProgressFetched(true)
-      return
-    }
+    if (!params.userId) { setProgressFetched(true); return }
     const lessonKey = canonicalKey ?? params.lessonKey
     try {
       const res = await fetch(`${API_BASE}/lesson/${lessonKey}/${params.userId}/progress`)
@@ -414,12 +598,10 @@ export default function LessonScreen() {
     init()
   }, [])
 
-  // ── Initialize card index on first load ────────────────────────────────────────
   useEffect(() => {
     const ready = params.userId ? progressFetched && !!lessonContent : !!lessonContent
     if (!ready || hasInitializedCard.current) return
     hasInitializedCard.current = true
-    // For activities, start at hook card (index 0)
     setCardIndex(0)
     progressAnim.setValue(0)
   }, [lessonContent, progressFetched])
@@ -453,67 +635,9 @@ export default function LessonScreen() {
     ]).start()
   }
 
-  // ── Completion animations ──────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!lessonComplete) return
-    Animated.sequence([
-      Animated.timing(companionScale, { toValue: 0.8, duration: 100, useNativeDriver: true }),
-      Animated.spring(companionScale, { toValue: 1, friction: 4, tension: 120, useNativeDriver: true }),
-    ]).start()
-    feedbackOpacity.setValue(0)
-    Animated.sequence([
-      Animated.delay(300),
-      Animated.timing(feedbackOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-    ]).start()
-    xpScale.setValue(0)
-    Animated.spring(xpScale, { toValue: 1, friction: 4, tension: 100, useNativeDriver: true }).start()
-  }, [lessonComplete])
-
-  // ── Photo picker ────────────────────────────────────────────────────────────
-  const pickPhoto = async (source: 'camera' | 'gallery') => {
-    if (source === 'camera') {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync()
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Camera access is required to take a photo.')
-        return
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.7,
-      })
-      if (!result.canceled && result.assets[0]) {
-        setPhotoUri(result.assets[0].uri)
-        setPhotoMimeType(result.assets[0].mimeType ?? 'image/jpeg')
-      }
-    } else {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Gallery access is required to pick a photo.')
-        return
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.7,
-      })
-      if (!result.canceled && result.assets[0]) {
-        setPhotoUri(result.assets[0].uri)
-        setPhotoMimeType(result.assets[0].mimeType ?? 'image/jpeg')
-      }
-    }
-  }
-
-  const handleAddPhoto = () => {
-    Alert.alert('Add Photo', 'Choose how to add your photo', [
-      { text: 'Take a Photo', onPress: () => pickPhoto('camera') },
-      { text: 'Choose from Gallery', onPress: () => pickPhoto('gallery') },
-      { text: 'Cancel', style: 'cancel' },
-    ])
-  }
-
   // ── Mark activity complete ────────────────────────────────────────────────
   const markActivityComplete = async (activity: Activity, passed: boolean) => {
     if (!lessonContent || !params.userId) return
-
     setSubmitting(true)
     try {
       const res = await fetch(`${API_BASE}/lesson/activity-complete`, {
@@ -527,11 +651,7 @@ export default function LessonScreen() {
         }),
       })
       if (!res.ok) throw new Error(`Server error ${res.status}`)
-
-      // Mark as completed
       setCompletedActivities(prev => new Set([...prev, activity.id]))
-
-      // Check if all activities are done
       if (completedActivities.size + 1 === activities.length) {
         setLessonComplete(true)
         if (!hasSignaledComplete.current) {
@@ -539,13 +659,58 @@ export default function LessonScreen() {
           params.onComplete(params.lessonId)
         }
       }
-    } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : 'Something went wrong')
-    } finally {
+    } catch { /* non-blocking */ } finally {
       setSubmitting(false)
     }
   }
 
+  // ── Show feedback ─────────────────────────────────────────────────────────
+  const showFeedback = async (activity: Activity, passed: boolean, explanation: string) => {
+    if (!passed) {
+      setHearts(prev => Math.max(0, prev - 1))
+      setStumbles(prev => prev + 1)
+    }
+    setFeedbackCorrect(passed)
+    setFeedbackTitle(passed ? 'Sizzling!' : 'Not quite.')
+    setFeedbackExplanation(explanation)
+    setFeedbackVisible(true)
+    setPendingActivity({ activity, passed })
+    // Fire API in background
+    markActivityComplete(activity, passed)
+  }
+
+  const handleFeedbackContinue = () => {
+    setFeedbackVisible(false)
+    if (!pendingActivity) return
+
+    const { activity, passed } = pendingActivity
+    setPendingActivity(null)
+
+    if (passed) {
+      // Advance to next
+      const currentActivityIndex = activities.findIndex(a => a.id === activity.id)
+      setTimeout(() => {
+        if (currentActivityIndex + 1 < activities.length) {
+          advanceCard(CARD_FIRST_ACTIVITY + currentActivityIndex + 1)
+        } else {
+          advanceCard(CARD_COMPLETION)
+        }
+      }, 350)
+    }
+    // Wrong: stay on same card (user retries)
+  }
+
+  const handleFeedbackTryAgain = () => {
+    if (!pendingActivity) return
+    const { activity } = pendingActivity
+    // Reset selection for this activity
+    setSelectedOptions(prev => ({ ...prev, [activity.id]: null }))
+    setFibSlots(prev => ({ ...prev, [activity.id]: [] }))
+    setMatchState(prev => ({ ...prev, [activity.id]: { leftSelected: null, rightSelected: null, matched: {} } }))
+    setUserOrders(prev => ({ ...prev, [activity.id]: [] }))
+    setPendingActivity(null)
+    setFeedbackVisible(false)
+  }
 
   // ── Exit lesson ─────────────────────────────────────────────────────────────
   const handleExit = () => {
@@ -556,13 +721,6 @@ export default function LessonScreen() {
     navigation.goBack()
   }
 
-  // ── Reset between missions ──────────────────────────────────────────────────
-  const resetSubmission = () => {
-    // No longer needed, but kept for swipe responder compatibility
-  }
-  resetSubmissionRef.current = resetSubmission
-
-  // ── Interpolations ──────────────────────────────────────────────────────────
   const chevronDeg = chevronRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] })
   const expandMaxHeight = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 300] })
 
@@ -571,10 +729,10 @@ export default function LessonScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorCard}>
-          <Companion size={80} mood="sad" />
+          <MonkeyMascot size={80} mood="sad" />
           <Text style={styles.errorTitle}>Couldn't load lesson</Text>
           <Text style={styles.errorMsg}>{error}</Text>
-          <Pressable onPress={fetchLesson} style={[styles.primaryBtn, shadows.mint]}>
+          <Pressable onPress={fetchLesson} style={styles.primaryBtn}>
             <Text style={styles.primaryBtnText}>Try again</Text>
           </Pressable>
         </View>
@@ -582,9 +740,7 @@ export default function LessonScreen() {
     )
   }
 
-  // ── Card renderers ──────────────────────────────────────────────────────────
-
-  // Image gallery helper (stateless)
+  // ── Image gallery helper ───────────────────────────────────────────────────
   const renderImageGallery = (images: ImageItem[]) => (
     <ScrollView
       horizontal
@@ -594,38 +750,21 @@ export default function LessonScreen() {
     >
       {images.map((img, i) => (
         <View key={i} style={styles.galleryItem}>
-          <Image
-            source={{ uri: img.url }}
-            style={styles.galleryImage}
-            resizeMode="cover"
-          />
-          {!!img.caption && (
-            <Text style={styles.galleryCaption}>{img.caption}</Text>
-          )}
+          <Image source={{ uri: img.url }} style={styles.galleryImage} resizeMode="cover" />
+          {!!img.caption && <Text style={styles.galleryCaption}>{img.caption}</Text>}
         </View>
       ))}
     </ScrollView>
   )
 
-  // Card 0: Hook
+  // ── Card 0: Hook ───────────────────────────────────────────────────────────
   const renderCard0 = () => {
     const isReady = !loading && !!lessonContent
-    const priorFeedback = lessonContent?.last_reflection_feedback
-
     return (
       <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
-        {/* Prior session feedback banner */}
-        {isReady && !!priorFeedback && (
-          <View style={styles.priorFeedbackCard}>
-            <Text style={styles.priorFeedbackLabel}>From last session</Text>
-            <Text style={styles.priorFeedbackText}>{priorFeedback}</Text>
-          </View>
-        )}
-
         <View style={styles.companionCenter}>
-          <Companion size={100} mood={isReady ? 'happy' : 'thinking'} />
+          <MonkeyMascot size={100} mood={isReady ? 'happy' : 'idle'} />
         </View>
-        <View style={styles.speechBubbleTail} />
         <View style={styles.speechBubble}>
           {isReady ? (
             <>
@@ -653,9 +792,8 @@ export default function LessonScreen() {
             </>
           ) : (
             <>
-              <Text style={styles.hookSectionLabel}>Motivation</Text>
-              <Text style={styles.hookMotivation}>Garlic is getting ready...</Text>
-              <View style={styles.hookDivider} />
+              <Text style={styles.hookSectionLabel}>Getting ready...</Text>
+              <Text style={styles.hookMotivation}>Preparing your lesson</Text>
             </>
           )}
         </View>
@@ -663,7 +801,7 @@ export default function LessonScreen() {
         <View style={styles.spacer} />
         <Pressable
           onPress={() => isReady && advanceCard(CARD_DEEP_DIVE)}
-          style={[styles.primaryBtn, shadows.mint, !isReady && styles.btnDisabled]}
+          style={[styles.primaryBtn, !isReady && styles.btnDisabled]}
         >
           <Text style={styles.primaryBtnText}>Let's go →</Text>
         </Pressable>
@@ -671,16 +809,14 @@ export default function LessonScreen() {
     )
   }
 
-
-  // Card 1: Deep Dive
-  const renderCard2 = () => {
+  // ── Card 1: Deep Dive ──────────────────────────────────────────────────────
+  const renderCard1 = () => {
     if (!lessonContent) return null
     const { card3 } = lessonContent
-
     return (
       <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
         <View style={styles.companionRow}>
-          <Companion size={60} mood="idle" />
+          <MonkeyMascot size={60} mood="idle" />
         </View>
         <Text style={styles.card3Headline}>{card3.headline}</Text>
         {card3.images?.length ? renderImageGallery(card3.images) : null}
@@ -704,329 +840,236 @@ export default function LessonScreen() {
           })}
         </View>
         <Pressable onPress={toggleTellMeMore} style={styles.tellMeMoreToggle}>
-          <Animated.Text style={[styles.chevron, { transform: [{ rotate: chevronDeg }] }]}>
-            ▾
-          </Animated.Text>
+          <Animated.Text style={[styles.chevron, { transform: [{ rotate: chevronDeg }] }]}>▾</Animated.Text>
           <Text style={styles.tellMeMoreLabel}>Tell me more</Text>
         </Pressable>
         <Animated.View style={{ maxHeight: expandMaxHeight, overflow: 'hidden' }}>
           <Text style={styles.bodyTextMuted}>{card3.tell_me_more}</Text>
         </Animated.View>
         <View style={styles.spacer} />
-        <Pressable onPress={() => advanceCard(CARD_FIRST_ACTIVITY)} style={[styles.primaryBtn, shadows.mint]}>
+        <Pressable onPress={() => advanceCard(CARD_FIRST_ACTIVITY)} style={styles.primaryBtn}>
           <Text style={styles.primaryBtnText}>Ready to practice? →</Text>
         </Pressable>
       </ScrollView>
     )
   }
 
-  // ── Activity renderers ────────────────────────────────────────────────────────
-
+  // ── Activity card shell ────────────────────────────────────────────────────
   const renderActivityCard = (activityIndex: number) => {
     const activity = activities[activityIndex]
     if (!activity) return null
-
-    const isAnswered = !!activityResults[activity.id]
-    const result = activityResults[activity.id]
-
-    const handleSubmit = async (passed: boolean) => {
-      await markActivityComplete(activity, passed)
-      if (passed) {
-        Animated.timing(cardOpacity, {
-          toValue: 0,
-          duration: 800,
-          useNativeDriver: true,
-        }).start(() => {
-          if (activityIndex + 1 < activities.length) {
-            advanceCard(CARD_FIRST_ACTIVITY + activityIndex + 1)
-          } else {
-            advanceCard(CARD_COMPLETION)
-          }
-        })
-      }
-    }
+    const isAnswered = feedbackVisible && pendingActivity?.activity.id === activity.id
 
     return (
-      <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.activityNumber}>
-          Activity {activityIndex + 1} of {activities.length}
-        </Text>
-
-        {activity.type === 'multiple_choice' && renderActivityMultipleChoice(activity, isAnswered, result, handleSubmit)}
-        {activity.type === 'image_id' && renderActivityImageId(activity, isAnswered, result, handleSubmit)}
-        {activity.type === 'fill_blank' && renderActivityFillBlank(activity, isAnswered, result, handleSubmit)}
-        {activity.type === 'matching' && renderActivityMatching(activity, isAnswered, result, handleSubmit)}
-        {activity.type === 'sequence' && renderActivitySequence(activity, isAnswered, result, handleSubmit)}
-
-        <View style={styles.spacer} />
+      <ScrollView
+        contentContainerStyle={[styles.cardContent, { paddingBottom: 120 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {activity.type === 'multiple_choice' && renderMultipleChoice(activity, isAnswered)}
+        {activity.type === 'image_id' && renderImageId(activity, isAnswered)}
+        {activity.type === 'fill_blank' && renderFillBlank(activity, isAnswered)}
+        {activity.type === 'matching' && renderMatching(activity, isAnswered)}
+        {activity.type === 'sequence' && renderSequence(activity, isAnswered)}
       </ScrollView>
     )
   }
 
-  const renderActivityMultipleChoice = (activity: Activity, isAnswered: boolean, result: any, onSubmit: (passed: boolean) => void) => {
-    const selected = selectedOptions[activity.id]
-    const isCorrect = selected === activity.correct_index
-
-    return (
-      <>
-        <Text style={styles.activityQuestion}>{activity.question || activity.prompt}</Text>
-        <View style={styles.optionsList}>
-          {(activity.options || []).map((option, i) => (
-            <Pressable
-              key={i}
-              onPress={() => !isAnswered && setSelectedOptions(prev => ({ ...prev, [activity.id]: i }))}
-              disabled={isAnswered}
-              style={[
-                styles.optionButton,
-                selected === i && styles.optionSelected,
-                isAnswered && selected === i && (isCorrect ? styles.optionCorrect : styles.optionWrong),
-              ]}
-            >
-              <Text style={[styles.optionText, selected === i && styles.optionTextSelected]}>
-                {option}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {isAnswered && (
-          <View style={[styles.feedbackPanel, isCorrect ? styles.feedbackCorrect : styles.feedbackWrong]}>
-            <Text style={styles.feedbackText}>
-              {isCorrect ? '✓ Correct!' : '✗ Not quite'}
-            </Text>
-            {activity.explanation && (
-              <Text style={styles.explanationText}>{activity.explanation}</Text>
-            )}
-            {!isCorrect && (
-              <Pressable
-                onPress={() => {
-                  setSelectedOptions(prev => ({ ...prev, [activity.id]: null }))
-                  setActivityResults(prev => {
-                    const next = { ...prev }
-                    delete next[activity.id]
-                    return next
-                  })
-                }}
-                style={styles.tryAgainBtn}
-              >
-                <Text style={styles.tryAgainText}>Try again</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-
-        {!isAnswered && selected !== null && (
-          <Pressable
-            onPress={() => onSubmit(isCorrect)}
-            style={[styles.primaryBtn, shadows.mint, { marginTop: 24 }]}
-          >
-            <Text style={styles.primaryBtnText}>Check answer →</Text>
-          </Pressable>
-        )}
-      </>
-    )
+  // ── Helper: determine if current activity can check ───────────────────────
+  const getActivityReadiness = (activity: Activity): boolean => {
+    if (activity.type === 'multiple_choice' || activity.type === 'image_id') {
+      return selectedOptions[activity.id] !== null && selectedOptions[activity.id] !== undefined
+    }
+    if (activity.type === 'fill_blank') {
+      const slots = fibSlots[activity.id] ?? []
+      return slots.some(s => s !== null)
+    }
+    if (activity.type === 'matching') {
+      const state = matchState[activity.id] ?? { leftSelected: null, rightSelected: null, matched: {} }
+      return Object.keys(state.matched).length === (activity.pairs?.length ?? 0)
+    }
+    if (activity.type === 'sequence') {
+      return (userOrders[activity.id] ?? []).length === (activity.steps?.length ?? 0)
+    }
+    return false
   }
 
-  const renderActivityImageId = (activity: Activity, isAnswered: boolean, result: any, onSubmit: (passed: boolean) => void) => {
-    const selected = selectedOptions[activity.id]
-    const isCorrect = selected === activity.correct_index
-
-    return (
-      <>
-        <Text style={styles.activityQuestion}>{activity.prompt}</Text>
-        <View style={styles.imageGrid2x2}>
-          {(activity.options || []).map((desc, i) => (
-            <Pressable
-              key={i}
-              onPress={() => !isAnswered && setSelectedOptions(prev => ({ ...prev, [activity.id]: i }))}
-              disabled={isAnswered}
-              style={[
-                styles.imageOptionCard,
-                selected === i && styles.imageOptionSelected,
-                isAnswered && selected === i && (isCorrect ? styles.imageOptionCorrect : styles.imageOptionWrong),
-              ]}
-            >
-              <Text style={styles.imageOptionText}>{desc}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {isAnswered && (
-          <View style={[styles.feedbackPanel, isCorrect ? styles.feedbackCorrect : styles.feedbackWrong]}>
-            <Text style={styles.feedbackText}>
-              {isCorrect ? '✓ Correct!' : '✗ Not quite'}
-            </Text>
-            {activity.explanation && (
-              <Text style={styles.explanationText}>{activity.explanation}</Text>
-            )}
-            {!isCorrect && (
-              <Pressable
-                onPress={() => {
-                  setSelectedOptions(prev => ({ ...prev, [activity.id]: null }))
-                  setActivityResults(prev => {
-                    const next = { ...prev }
-                    delete next[activity.id]
-                    return next
-                  })
-                }}
-                style={styles.tryAgainBtn}
-              >
-                <Text style={styles.tryAgainText}>Try again</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-
-        {!isAnswered && selected !== null && (
-          <Pressable
-            onPress={() => onSubmit(isCorrect)}
-            style={[styles.primaryBtn, shadows.mint, { marginTop: 24 }]}
-          >
-            <Text style={styles.primaryBtnText}>Check answer →</Text>
-          </Pressable>
-        )}
-      </>
-    )
-  }
-
-  const renderActivityFillBlank = (activity: Activity, isAnswered: boolean, result: any, onSubmit: (passed: boolean) => void) => {
+  // ── Multiple Choice ────────────────────────────────────────────────────────
+  const renderMultipleChoice = (activity: Activity, isAnswered: boolean) => {
     const selected = selectedOptions[activity.id] ?? null
-    const shuffledOptions = shuffledOptionsMap[activity.id] ?? []
+    return (
+      <>
+        <QSub label="Choose the best answer" />
+        <QPrompt text={activity.question || activity.prompt || ''} />
+        <View style={styles.mcList}>
+          {(activity.options || []).map((option, i) => {
+            const isSelected = selected === i
+            return (
+              <Pressable
+                key={i}
+                onPress={() => !isAnswered && setSelectedOptions(prev => ({ ...prev, [activity.id]: i }))}
+                disabled={isAnswered}
+                style={[styles.mcOption, isSelected && styles.mcOptionSelected]}
+              >
+                <View style={[styles.mcRadio, isSelected && styles.mcRadioSelected]}>
+                  {isSelected && <View style={styles.mcRadioDot} />}
+                </View>
+                <Text style={[styles.mcOptionText, isSelected && styles.mcOptionTextSelected]}>{option}</Text>
+                <View style={styles.kbdBadge}>
+                  <Text style={styles.kbdText}>{i + 1}</Text>
+                </View>
+              </Pressable>
+            )
+          })}
+        </View>
+      </>
+    )
+  }
 
-    const handleSubmit = () => {
-      if (selected === null) return
-      const selectedOption = shuffledOptions[selected]
-      const isCorrect = selectedOption.trim().toLowerCase() === (activity.correct_answer?.trim().toLowerCase() ?? '')
-      setActivityResults(prev => ({
-        ...prev,
-        [activity.id]: { passed: isCorrect, explanation: activity.explanation || '' },
-      }))
-      onSubmit(isCorrect)
+  // ── Image ID ───────────────────────────────────────────────────────────────
+  const renderImageId = (activity: Activity, isAnswered: boolean) => {
+    const selected = selectedOptions[activity.id] ?? null
+    return (
+      <>
+        <QSub label="Select the correct image" />
+        <QPrompt text={activity.prompt || activity.question || ''} />
+        <View style={styles.imgGrid}>
+          {(activity.options || []).map((desc, i) => {
+            const isSelected = selected === i
+            return (
+              <Pressable
+                key={i}
+                onPress={() => !isAnswered && setSelectedOptions(prev => ({ ...prev, [activity.id]: i }))}
+                disabled={isAnswered}
+                style={[styles.imgCard, isSelected && styles.imgCardSelected]}
+              >
+                <View style={styles.imgCardIllus}>
+                  <Text style={styles.imgCardIllusText}>{desc.slice(0, 2).toUpperCase()}</Text>
+                </View>
+                <View style={[styles.imgCardCaption, isSelected && styles.imgCardCaptionSelected]}>
+                  <Text style={styles.imgCardCaptionText} numberOfLines={2}>{desc}</Text>
+                </View>
+              </Pressable>
+            )
+          })}
+        </View>
+      </>
+    )
+  }
+
+  // ── Fill in the Blank ──────────────────────────────────────────────────────
+  const renderFillBlank = (activity: Activity, isAnswered: boolean) => {
+    const shuffled = shuffledOptionsMap[activity.id] ?? []
+    const slots = fibSlots[activity.id] ?? []
+
+    // Parse sentence into parts + blank markers
+    const sentence = activity.sentence || ''
+    const parts = sentence.split('___')
+
+    const placeWord = (word: string) => {
+      if (isAnswered) return
+      const slotIdx = slots.findIndex(s => s === null) === -1
+        ? slots.length < parts.length - 1 ? slots.length : -1
+        : slots.findIndex(s => s === null)
+      if (slotIdx === -1) return
+      const newSlots = [...slots]
+      if (newSlots[slotIdx] !== undefined) {
+        newSlots[slotIdx] = word
+      } else {
+        while (newSlots.length <= slotIdx) newSlots.push(null)
+        newSlots[slotIdx] = word
+      }
+      setFibSlots(prev => ({ ...prev, [activity.id]: newSlots }))
+    }
+
+    const removeSlot = (idx: number) => {
+      if (isAnswered) return
+      const newSlots = [...slots]
+      newSlots[idx] = null
+      setFibSlots(prev => ({ ...prev, [activity.id]: newSlots }))
     }
 
     return (
       <>
-        <Text style={styles.activityQuestion}>{activity.prompt || 'Fill in the blank:'}</Text>
-        <View style={styles.fillBlankBox}>
-          <Text style={styles.fillBlankSentence}>{activity.sentence}</Text>
+        <QSub label="Fill in the blanks" />
+        <QPrompt text={activity.prompt || 'Complete the sentence'} />
+
+        {/* Sentence with inline slots */}
+        <View style={styles.fibSentenceWrap}>
+          <Text style={styles.fibSentence}>
+            {parts.map((part, i) => (
+              <React.Fragment key={i}>
+                <Text style={styles.fibSentenceText}>{part}</Text>
+                {i < parts.length - 1 && (
+                  <Pressable onPress={() => removeSlot(i)} style={styles.fibSlot}>
+                    <Text style={[styles.fibSlotText, slots[i] && styles.fibSlotFilled]}>
+                      {slots[i] || '          '}
+                    </Text>
+                  </Pressable>
+                )}
+              </React.Fragment>
+            ))}
+          </Text>
         </View>
 
-        <View style={styles.optionsList}>
-          {shuffledOptions.map((option: string, i: number) => (
-            <Pressable
-              key={i}
-              onPress={() => !isAnswered && setSelectedOptions(prev => ({ ...prev, [activity.id]: i }))}
-              disabled={isAnswered}
-              style={[
-                styles.optionButton,
-                selected === i && styles.optionSelected,
-                isAnswered && selected === i && (result?.passed ? styles.optionCorrect : styles.optionWrong),
-              ]}
-            >
-              <Text style={styles.optionText}>{option}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {isAnswered && (
-          <View style={[styles.feedbackPanel, result?.passed ? styles.feedbackCorrect : styles.feedbackWrong]}>
-            <Text style={styles.feedbackText}>
-              {result?.passed ? '✓ Correct!' : '✗ Not quite'}
-            </Text>
-            {result?.explanation && (
-              <Text style={styles.explanationText}>{result.explanation}</Text>
-            )}
-            {!result?.passed && (
+        {/* Word bank */}
+        <View style={styles.fibBank}>
+          {shuffled.map((word, i) => {
+            const isUsed = slots.includes(word)
+            return (
               <Pressable
-                onPress={() => {
-                  setSelectedOptions(prev => ({ ...prev, [activity.id]: null }))
-                  setActivityResults(prev => {
-                    const next = { ...prev }
-                    delete next[activity.id]
-                    return next
-                  })
-                }}
-                style={styles.tryAgainBtn}
+                key={i}
+                onPress={() => !isUsed && placeWord(word)}
+                disabled={isUsed || isAnswered}
+                style={[styles.fibChip, isUsed && styles.fibChipUsed]}
               >
-                <Text style={styles.tryAgainText}>Try again</Text>
+                <Text style={[styles.fibChipText, isUsed && styles.fibChipTextUsed]}>{word}</Text>
               </Pressable>
-            )}
-          </View>
-        )}
-
-        {!isAnswered && selected !== null && (
-          <Pressable
-            onPress={handleSubmit}
-            style={[styles.primaryBtn, shadows.mint, { marginTop: 24 }]}
-          >
-            <Text style={styles.primaryBtnText}>Check answer →</Text>
-          </Pressable>
-        )}
+            )
+          })}
+        </View>
       </>
     )
   }
 
-  const renderActivityMatching = (activity: Activity, isAnswered: boolean, result: any, onSubmit: (passed: boolean) => void) => {
+  // ── Matching ───────────────────────────────────────────────────────────────
+  const renderMatching = (activity: Activity, isAnswered: boolean) => {
     const state = matchState[activity.id] ?? { leftSelected: null, rightSelected: null, matched: {} }
     const pairs = activity.pairs ?? []
-
-    const handleSubmitMatching = () => {
-      // Verify all pairs are matched
-      if (Object.keys(state.matched).length !== pairs.length) return
-
-      // Check if all matches are correct
-      let allCorrect = true
-      for (const pair of pairs) {
-        if (state.matched[pair.term] !== pair.definition) {
-          allCorrect = false
-          break
-        }
-      }
-
-      setActivityResults(prev => ({
-        ...prev,
-        [activity.id]: { passed: allCorrect, explanation: allCorrect ? '✓ Perfect match!' : '✗ Some pairs don\'t match. Try again!' },
-      }))
-      onSubmit(allCorrect)
-    }
-
     return (
       <>
-        <Text style={styles.activityQuestion}>{activity.prompt || 'Match the pairs'}</Text>
-        <Text style={[styles.bodyTextMuted, { marginBottom: 16 }]}>
-          {Object.keys(state.matched).length} of {pairs.length} matched
-        </Text>
+        <QSub label="Match the pairs" />
+        <QPrompt text={activity.prompt || 'Match each term with its definition'} />
+        <Text style={styles.matchCount}>{Object.keys(state.matched).length} of {pairs.length} matched</Text>
         <View style={styles.matchingContainer}>
-          <View style={styles.matchingColumn}>
+          <View style={styles.matchingCol}>
             {pairs.map((pair, i) => (
               <Pressable
-                key={`left-${i}`}
+                key={i}
                 style={[
-                  styles.matchingTerm,
-                  state.leftSelected === pair.term && styles.matchingTermSelected,
-                  !!state.matched[pair.term] && styles.matchingTermMatched,
+                  styles.matchCard,
+                  state.leftSelected === pair.term && styles.matchCardSelected,
+                  !!state.matched[pair.term] && styles.matchCardMatched,
                 ]}
                 onPress={() => {
-                  if (!isAnswered) {
+                  if (!isAnswered)
                     setMatchState(prev => ({
                       ...prev,
                       [activity.id]: { ...state, leftSelected: state.leftSelected === pair.term ? null : pair.term },
                     }))
-                  }
                 }}
               >
-                <Text style={styles.matchingTermText}>{pair.term}</Text>
+                <Text style={styles.matchCardText}>{pair.term}</Text>
               </Pressable>
             ))}
           </View>
-          <View style={styles.matchingColumn}>
+          <View style={styles.matchingCol}>
             {pairs.map((pair, i) => (
               <Pressable
-                key={`right-${i}`}
+                key={i}
                 style={[
-                  styles.matchingDef,
-                  state.rightSelected === pair.definition && styles.matchingDefSelected,
-                  Object.values(state.matched).includes(pair.definition) && styles.matchingDefMatched,
+                  styles.matchCard,
+                  state.rightSelected === pair.definition && styles.matchCardSelected,
+                  Object.values(state.matched).includes(pair.definition) && styles.matchCardMatched,
                 ]}
                 onPress={() => {
                   if (!isAnswered && state.leftSelected) {
@@ -1038,176 +1081,97 @@ export default function LessonScreen() {
                   }
                 }}
               >
-                <Text style={styles.matchingDefText}>{pair.definition}</Text>
+                <Text style={styles.matchCardText}>{pair.definition}</Text>
               </Pressable>
             ))}
           </View>
         </View>
-
-        {isAnswered && (
-          <View style={[styles.feedbackPanel, result?.passed ? styles.feedbackCorrect : styles.feedbackWrong, { marginTop: 16 }]}>
-            <Text style={styles.feedbackText}>
-              {result?.passed ? '✓ Correct!' : '✗ Not quite'}
-            </Text>
-            {result?.explanation && (
-              <Text style={styles.explanationText}>{result.explanation}</Text>
-            )}
-            {!result?.passed && (
-              <Pressable
-                onPress={() => {
-                  setMatchState(prev => ({ ...prev, [activity.id]: { leftSelected: null, rightSelected: null, matched: {} } }))
-                  setActivityResults(prev => {
-                    const next = { ...prev }
-                    delete next[activity.id]
-                    return next
-                  })
-                }}
-                style={styles.tryAgainBtn}
-              >
-                <Text style={styles.tryAgainText}>Try again</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-
-        {Object.keys(state.matched).length === pairs.length && !isAnswered && (
-          <Pressable onPress={handleSubmitMatching} style={[styles.primaryBtn, shadows.mint, { marginTop: 24 }]}>
-            <Text style={styles.primaryBtnText}>Check matches →</Text>
-          </Pressable>
-        )}
       </>
     )
   }
 
-  const renderActivitySequence = (activity: Activity, isAnswered: boolean, result: any, onSubmit: (passed: boolean) => void) => {
+  // ── Sequence ───────────────────────────────────────────────────────────────
+  const renderSequence = (activity: Activity, isAnswered: boolean) => {
     const steps = activity.steps ?? []
     const userOrder = userOrders[activity.id] ?? []
     const placedIndices = new Set(userOrder)
 
-    const handleSequenceSubmit = () => {
-      const isCorrect = JSON.stringify(userOrder) === JSON.stringify(activity.correct_order ?? [])
-      setActivityResults(prev => ({
-        ...prev,
-        [activity.id]: { passed: isCorrect, explanation: isCorrect ? '✓ Perfect!' : '✗ Some steps are out of order' },
-      }))
-      onSubmit(isCorrect)
-    }
-
-    const handleAddStep = (stepIdx: number) => {
-      if (!isAnswered && !placedIndices.has(stepIdx)) {
-        setUserOrders(prev => ({
-          ...prev,
-          [activity.id]: [...(prev[activity.id] ?? []), stepIdx],
-        }))
-      }
-    }
-
-    const handleRemoveStep = (position: number) => {
-      if (!isAnswered) {
-        setUserOrders(prev => ({
-          ...prev,
-          [activity.id]: userOrder.filter((_, i) => i !== position),
-        }))
-      }
-    }
-
     return (
       <>
-        <Text style={styles.activityQuestion}>{activity.prompt || 'Put these in order'}</Text>
+        <QSub label="Put in order" />
+        <QPrompt text={activity.prompt || 'Put these in the correct order'} />
 
-        {/* Display ordered steps at top */}
         {userOrder.length > 0 && (
-          <View style={[styles.orderedSteps, { marginBottom: 20 }]}>
+          <View style={styles.seqPlaced}>
             {userOrder.map((stepIdx, pos) => (
               <Pressable
                 key={pos}
-                style={styles.orderedStepItem}
-                onPress={() => handleRemoveStep(pos)}
+                style={styles.seqPlacedItem}
+                onPress={() => !isAnswered && setUserOrders(prev => ({
+                  ...prev,
+                  [activity.id]: userOrder.filter((_, i) => i !== pos),
+                }))}
               >
-                <Text style={styles.orderedStepNumber}>{pos + 1}</Text>
-                <Text style={styles.orderedStepText}>{steps[stepIdx]}</Text>
+                <View style={styles.seqNum}>
+                  <Text style={styles.seqNumText}>{pos + 1}</Text>
+                </View>
+                <Text style={styles.seqItemText}>{steps[stepIdx]}</Text>
               </Pressable>
             ))}
           </View>
         )}
 
-        {/* Display available steps to choose from */}
-        <Text style={[styles.bodyTextMuted, { marginBottom: 12 }]}>
-          {userOrder.length === 0 ? 'Tap steps to order them' : `${steps.length - userOrder.length} remaining`}
+        <Text style={styles.seqHint}>
+          {userOrder.length === 0 ? 'Tap to add steps in order' : `${steps.length - userOrder.length} remaining`}
         </Text>
-        <View style={styles.stepsList}>
+        <View style={styles.seqBank}>
           {steps.map((step, i) => (
             <Pressable
               key={i}
               disabled={placedIndices.has(i) || isAnswered}
-              style={[
-                styles.stepItem,
-                placedIndices.has(i) && { opacity: 0.5 },
-              ]}
-              onPress={() => handleAddStep(i)}
+              style={[styles.seqBankItem, placedIndices.has(i) && styles.seqBankItemUsed]}
+              onPress={() => !isAnswered && !placedIndices.has(i) && setUserOrders(prev => ({
+                ...prev,
+                [activity.id]: [...(prev[activity.id] ?? []), i],
+              }))}
             >
-              <Text style={styles.stepNumber}>{i + 1}</Text>
-              <Text style={styles.stepText}>{step}</Text>
+              <Text style={[styles.seqItemText, placedIndices.has(i) && { opacity: 0.3 }]}>{step}</Text>
             </Pressable>
           ))}
         </View>
-
-        {isAnswered && (
-          <View style={[styles.feedbackPanel, result?.passed ? styles.feedbackCorrect : styles.feedbackWrong]}>
-            <Text style={styles.feedbackText}>
-              {result?.passed ? '✓ Correct!' : '✗ Not quite'}
-            </Text>
-            {result?.explanation && (
-              <Text style={styles.explanationText}>{result.explanation}</Text>
-            )}
-            {!result?.passed && (
-              <Pressable
-                onPress={() => {
-                  setUserOrders(prev => ({ ...prev, [activity.id]: [] }))
-                  setActivityResults(prev => {
-                    const next = { ...prev }
-                    delete next[activity.id]
-                    return next
-                  })
-                }}
-                style={styles.tryAgainBtn}
-              >
-                <Text style={styles.tryAgainText}>Try again</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-
-        {userOrder.length === steps.length && !isAnswered && (
-          <Pressable onPress={handleSequenceSubmit} style={[styles.primaryBtn, shadows.mint, { marginTop: 24 }]}>
-            <Text style={styles.primaryBtnText}>Check order →</Text>
-          </Pressable>
-        )}
       </>
     )
   }
 
-  // ── Completion card ────────────────────────────────────────────────────────────
+  // ── Completion card ────────────────────────────────────────────────────────
   const renderCompletionCard = () => {
+    const xpEarned = Math.max(1, completedActivities.size) * 10
+    const accuracy = activities.length > 0
+      ? Math.round(((activities.length - stumbles) / activities.length) * 100)
+      : 100
     return (
-      <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.companionCenter}>
-          <Animated.View style={{ transform: [{ scale: companionScale }] }}>
-            <Companion size={100} mood="excited" />
-          </Animated.View>
-        </View>
-        <Text style={[styles.sectionHeading, { marginTop: 24, textAlign: 'center' }]}>Lesson complete! 🎉</Text>
-        <Text style={[styles.bodyText, { marginTop: 16, textAlign: 'center' }]}>
-          +{Math.max(1, completedActivities.size) * 20} XP
+      <ScrollView contentContainerStyle={styles.completionContent} showsVerticalScrollIndicator={false}>
+        <MonkeyCelebrate size={160} />
+        <Text style={styles.completionTitle}>Lesson complete!</Text>
+        <Text style={styles.completionSub}>
+          {stumbles === 0
+            ? 'Perfect score!'
+            : `${stumbles} stumble${stumbles > 1 ? 's' : ''}. You got them.`}
         </Text>
 
-        <View style={styles.spacer} />
+        <View style={styles.rewardRow}>
+          <View style={[styles.rewardCard, styles.rewardCardAccent]}>
+            <Text style={styles.rewardLabel}>XP EARNED</Text>
+            <XPCountUp target={xpEarned} />
+          </View>
+          <View style={styles.rewardCard}>
+            <Text style={styles.rewardLabel}>ACCURACY</Text>
+            <Text style={compStyles.rewardValue}>{accuracy}%</Text>
+          </View>
+        </View>
 
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={[styles.primaryBtn, shadows.mint]}
-        >
-          <Text style={styles.primaryBtnText}>Back to your path →</Text>
+        <Pressable onPress={() => navigation.goBack()} style={styles.primaryBtn}>
+          <Text style={styles.primaryBtnText}>Back to Roadmap</Text>
         </Pressable>
       </ScrollView>
     )
@@ -1216,14 +1180,55 @@ export default function LessonScreen() {
   // ── Card dispatch ───────────────────────────────────────────────────────────
   const cards = [
     renderCard0,
-    renderCard2,
+    renderCard1,
     ...activities.map((_, i) => () => renderActivityCard(i)),
     renderCompletionCard,
   ]
 
+  // ── Current activity (for CTA) ─────────────────────────────────────────────
+  const isActivityCard = cardIndex >= CARD_FIRST_ACTIVITY && cardIndex < CARD_COMPLETION
+  const currentActivity = isActivityCard ? activities[cardIndex - CARD_FIRST_ACTIVITY] : null
+
+  // Check button logic
+  const handleCheck = () => {
+    if (!currentActivity) return
+    const passed = (() => {
+      if (currentActivity.type === 'multiple_choice' || currentActivity.type === 'image_id') {
+        return selectedOptions[currentActivity.id] === currentActivity.correct_index
+      }
+      if (currentActivity.type === 'fill_blank') {
+        const slots = fibSlots[currentActivity.id] ?? []
+        const placed = slots.filter(Boolean).join(' ').trim().toLowerCase()
+        return placed === (currentActivity.correct_answer?.trim().toLowerCase() ?? '')
+      }
+      if (currentActivity.type === 'matching') {
+        const state = matchState[currentActivity.id]
+        if (!state) return false
+        return (currentActivity.pairs ?? []).every(p => state.matched[p.term] === p.definition)
+      }
+      if (currentActivity.type === 'sequence') {
+        return JSON.stringify(userOrders[currentActivity.id] ?? []) ===
+          JSON.stringify(currentActivity.correct_order ?? [])
+      }
+      return false
+    })()
+
+    showFeedback(currentActivity, passed, currentActivity.explanation || (passed ? 'Great work!' : `Answer: ${currentActivity.correct_answer || 'See above'}`))
+  }
+
+  const checkReady = currentActivity ? getActivityReadiness(currentActivity) : false
+  const showCTA = isActivityCard && !feedbackVisible
+  const showCompletionCTA = cardIndex === CARD_COMPLETION
+
   return (
     <SafeAreaView style={styles.container}>
-      <ProgressIndicator current={cardIndex} progressAnim={progressAnim} totalCards={TOTAL_CARDS} onExit={handleExit} />
+      <GMLessonHeader
+        progressAnim={progressAnim}
+        totalCards={TOTAL_CARDS}
+        hearts={hearts}
+        onExit={handleExit}
+      />
+
       <Animated.View
         style={[
           styles.cardWrapper,
@@ -1233,6 +1238,28 @@ export default function LessonScreen() {
       >
         {cards[cardIndex]?.()}
       </Animated.View>
+
+      {/* Bottom CTA (Check button) for activity cards */}
+      {showCTA && (
+        <BottomCTA
+          label="Check"
+          disabled={!checkReady || submitting}
+          onPress={handleCheck}
+          hide={feedbackVisible}
+        />
+      )}
+
+      {/* Slide-up feedback panel */}
+      {isActivityCard && (
+        <FeedbackPanel
+          visible={feedbackVisible}
+          isCorrect={feedbackCorrect}
+          title={feedbackTitle}
+          explanation={feedbackExplanation}
+          onContinue={handleFeedbackContinue}
+          onTryAgain={!feedbackCorrect ? handleFeedbackTryAgain : undefined}
+        />
+      )}
     </SafeAreaView>
   )
 }
@@ -1240,80 +1267,80 @@ export default function LessonScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+
   cardWrapper: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 32,
   },
 
-  cardContent: { flexGrow: 1 },
+  cardContent: { flexGrow: 1, paddingBottom: 32 },
   spacer: { flex: 1, minHeight: 24 },
 
-  companionCenter: { alignItems: 'center', marginBottom: 24 },
+  // Hook card
+  companionCenter: { alignItems: 'center', marginBottom: 20 },
   companionRow: { alignItems: 'flex-start', marginBottom: 16 },
-
-  messageCard: {
-    backgroundColor: colors.card,
+  speechBubble: {
+    backgroundColor: colors.panel,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
     borderRadius: radius.md,
     padding: 20,
-    marginBottom: 24,
+    marginBottom: 20,
   },
-
-  bodyText: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 16,
+  hookSectionLabel: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 12,
+    color: colors.inkSoft,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  hookMotivation: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 20,
+    color: colors.ink,
     lineHeight: 26,
-    color: colors.foreground,
     marginBottom: 16,
   },
-  bodyTextMuted: {
-    fontFamily: 'Nunito_400Regular',
+  hookDivider: { height: 1.5, backgroundColor: colors.border, opacity: 0.4, marginBottom: 16 },
+  hookBulletText: {
+    fontFamily: 'Nunito_700Bold',
     fontSize: 15,
-    lineHeight: 24,
-    color: colors.muted,
-    paddingTop: 12,
-    paddingBottom: 4,
+    color: colors.ink,
+    lineHeight: 22,
   },
-  sectionHeading: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 22,
-    color: colors.foreground,
-    marginBottom: 12,
-  },
-
-  primaryBtn: {
-    backgroundColor: colors.mint,
-    borderRadius: radius.lg,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  btnDisabled: { opacity: 0.4 },
-  primaryBtnText: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 18,
-    color: colors.foreground,
-  },
-  exitBtnMuted: { backgroundColor: colors.card },
-  exitBtn: { paddingVertical: 14, alignItems: 'center', marginTop: 4 },
-  exitBtnText: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 16,
-    color: colors.muted,
-  },
-  backLink: { paddingVertical: 4, paddingBottom: 12 },
-  backLinkText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 14,
-    color: colors.muted,
+  hookBulletDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+    marginTop: 7,
   },
 
-  // Tell me more
+  // Deep dive card
+  card3Headline: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 28,
+    color: colors.ink,
+    letterSpacing: -0.3,
+    marginBottom: 16,
+  },
+  bulletList: { marginBottom: 8 },
+  bulletText: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 15,
+    color: colors.ink,
+    lineHeight: 22,
+  },
+  bulletDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+    marginTop: 7,
+  },
   tellMeMoreToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1321,415 +1348,320 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginBottom: 4,
   },
-  chevron: {
+  chevron: { fontFamily: 'Nunito_700Bold', fontSize: 18, color: colors.inkSoft, lineHeight: 22 },
+  tellMeMoreLabel: { fontFamily: 'Nunito_700Bold', fontSize: 14, color: colors.inkSoft },
+  bodyTextMuted: {
     fontFamily: 'Nunito_700Bold',
-    fontSize: 18,
-    color: colors.muted,
-    lineHeight: 22,
-  },
-  tellMeMoreLabel: {
-    fontFamily: 'Nunito_600SemiBold',
     fontSize: 14,
-    color: colors.muted,
+    color: colors.inkSoft,
+    lineHeight: 22,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
 
-  // Missions list
-  missionsHeader: {
+  // Multiple choice
+  mcList: { gap: 12, marginTop: 4 },
+  mcOption: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    marginBottom: 20,
-  },
-  missionsHeaderText: { flex: 1 },
-  completeBadge: {
-    backgroundColor: colors.mint + '33',
-    borderRadius: radius.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
-    marginTop: -4,
-  },
-  completeBadgeText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 12,
-    color: colors.foreground,
-  },
-  missionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    backgroundColor: colors.panel,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
     borderRadius: radius.md,
-    padding: 16,
-    marginBottom: 10,
   },
-  missionItemOptional: {
+  mcOptionSelected: { backgroundColor: colors.accent },
+  mcRadio: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 3,
+    borderColor: colors.ink,
     backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  missionItemDone: { opacity: 0.6 },
-  missionItemBody: { flex: 1 },
-  missionItemTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  requiredBadge: {
-    backgroundColor: colors.sky + '55',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    alignSelf: 'flex-start',
-  },
-  requiredBadgeText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 11,
-    color: colors.foreground,
-  },
-  missionTypeIcon: { fontSize: 14 },
-  missionTitle: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 15,
-    color: colors.foreground,
-    marginBottom: 2,
-  },
-  missionTitleDone: { textDecorationLine: 'line-through', color: colors.muted },
-  missionMeta: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 12,
-    color: colors.muted,
-  },
-  missionDoneCheck: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 16,
-    color: colors.mint,
-  },
-  missionArrow: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 18,
-    color: colors.muted,
-    marginLeft: 8,
-  },
-  optionalHeading: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 13,
-    color: colors.muted,
-    marginTop: 8,
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  reviewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 16,
-    marginBottom: 4,
-  },
-  reviewLabel: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 13,
-    color: colors.muted,
-  },
-  reviewBtn: {
-    backgroundColor: colors.card,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  reviewBtnText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 12,
-    color: colors.muted,
-  },
-
-  // Mission submission
-  missionBanner: { marginBottom: 8 },
-  focusCallout: {
-    backgroundColor: colors.golden + '33',
-    borderLeftWidth: 3,
-    borderLeftColor: colors.golden,
-    borderRadius: radius.sm,
-    padding: 14,
-    marginBottom: 16,
-  },
-  focusCalloutText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 14,
-    color: colors.foreground,
-    lineHeight: 22,
-  },
-  missionWhyText: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 13,
-    color: colors.muted,
-    marginTop: 4,
-  },
-  descriptionCallout: {
-    borderLeftWidth: 3,
-    borderLeftColor: colors.peach,
-    paddingLeft: 14,
-    marginBottom: 16,
-  },
-
-  // Photo picker
-  photoPlaceholder: {
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 160,
-    marginBottom: 20,
-    gap: 8,
+    flexShrink: 0,
   },
-  photoIcon: { fontSize: 32 },
-  photoPlaceholderText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 14,
-    color: colors.muted,
+  mcRadioSelected: { backgroundColor: colors.ink },
+  mcRadioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accent },
+  mcOptionText: {
+    flex: 1,
+    fontFamily: 'Fredoka_400Regular',
+    fontSize: 18,
+    color: colors.ink,
   },
-  photoContainer: { marginBottom: 20, position: 'relative' },
-  photoPreview: { width: '100%', height: 200, borderRadius: radius.md },
-  changePhotoBtn: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 12,
+  mcOptionTextSelected: { fontFamily: 'Fredoka_600SemiBold' },
+  kbdBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
+    borderWidth: 2.5,
+    borderColor: colors.ink,
+    borderRadius: 10,
+    backgroundColor: colors.background,
+    flexShrink: 0,
   },
-  changePhotoText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 12,
-    color: '#fff',
+  kbdText: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 14,
+    color: colors.inkSoft,
   },
 
-  // Reflection pills
-  reflectionGrid: {
+  // Image ID
+  imgGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 24,
-  },
-  reflectionPill: {
-    backgroundColor: colors.card,
-    borderRadius: radius.sm,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  reflectionPillSelected: { backgroundColor: colors.mint },
-  reflectionPillText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 14,
-    color: colors.foreground,
-  },
-  reflectionPillTextSelected: { color: colors.foreground },
-
-  // Photo submission reflection note
-  reflectionContainer: { marginBottom: 24 },
-  reflectionLabel: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 13,
-    color: colors.muted,
-    marginBottom: 8,
-  },
-  reflectionInput: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 14,
-    color: colors.foreground,
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-
-  // Journal input
-  journalInput: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 16,
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 15,
-    color: colors.foreground,
-    lineHeight: 24,
-    minHeight: 140,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  wordCount: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 12,
-    color: colors.muted,
-    textAlign: 'right',
-    marginBottom: 16,
-  },
-  wordCountMet: { color: colors.mint },
-
-  // Pop quiz
-  quizProgress: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 12,
-    color: colors.muted,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  quizQuestion: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 20,
-    color: colors.foreground,
-    lineHeight: 26,
-    marginBottom: 20,
-  },
-  quizOptions: { gap: 10, marginBottom: 8 },
-  quizOption: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  } as any,
-  quizOptionSelected: { borderColor: colors.mint, backgroundColor: colors.mint + '22' },
-  quizOptionCorrect: { backgroundColor: colors.mint + '44', borderColor: colors.mint },
-  quizOptionWrong: { backgroundColor: colors.peach + '44', borderColor: colors.peach },
-  quizOptionText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 15,
-    color: colors.foreground,
-    lineHeight: 22,
-  },
-  quizExplanation: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 14,
-    marginTop: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.sky,
-  },
-  quizExplanationText: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 14,
-    color: colors.foreground,
-    lineHeight: 22,
-  },
-  quizScoreCard: {
-    backgroundColor: colors.mint + '33',
-    borderRadius: radius.md,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  quizScoreText: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 32,
-    color: colors.foreground,
-  },
-  quizPassLabel: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 14,
-    color: colors.foreground,
+    gap: 14,
     marginTop: 4,
   },
-  quizResultRow: {
-    borderRadius: radius.sm,
-    padding: 12,
-    marginBottom: 8,
+  imgCard: {
+    width: '47%',
+    aspectRatio: 1 / 1.08,
+    backgroundColor: colors.panel,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    flexDirection: 'column',
   },
-  quizResultCorrect: { backgroundColor: colors.mint + '22' },
-  quizResultWrong: { backgroundColor: colors.peach + '22' },
-  quizResultQ: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 13,
-    color: colors.foreground,
-    marginBottom: 4,
-  },
-  quizResultExplanation: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 13,
-    color: colors.muted,
-    lineHeight: 20,
-  },
-
-  // Feedback loading
-  feedbackLoading: {
+  imgCardSelected: { backgroundColor: colors.accent, transform: [{ translateY: -3 }] },
+  imgCardIllus: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
+    padding: 18,
+    backgroundColor: 'transparent',
   },
-  loadingText: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 16,
-    color: colors.muted,
+  imgCardIllusText: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 36,
+    color: colors.ink,
+    opacity: 0.4,
   },
-  dotsRow: { flexDirection: 'row', gap: 8 },
-  loadingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.mint,
-  },
-
-  // XP badge
-  xpRow: { alignItems: 'center', marginTop: 8, marginBottom: 16 },
-  xpBadge: {
-    backgroundColor: colors.golden + '33',
-    borderRadius: radius.sm,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    ...shadows.golden,
-  },
-  xpBadgeText: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 22,
-    color: colors.foreground,
-  },
-
-  // Required complete banner
-  requiredCompleteCard: {
-    backgroundColor: colors.mint + '33',
-    borderRadius: radius.md,
-    padding: 14,
-    marginBottom: 12,
+  imgCardCaption: {
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderTopWidth: 3.5,
+    borderTopColor: colors.ink,
+    backgroundColor: colors.background,
     alignItems: 'center',
   },
-  requiredCompleteText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 14,
-    color: colors.foreground,
+  imgCardCaptionSelected: { backgroundColor: colors.accent },
+  imgCardCaptionText: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 15,
+    color: colors.ink,
     textAlign: 'center',
+  },
+
+  // Fill in blank
+  fibSentenceWrap: { marginTop: 4, marginBottom: 20 },
+  fibSentence: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 22,
+    color: colors.ink,
+    lineHeight: 44,
+  },
+  fibSentenceText: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 22,
+    color: colors.ink,
+  },
+  fibSlot: {
+    borderBottomWidth: 3.5,
+    borderBottomColor: colors.ink,
+    minWidth: 100,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginHorizontal: 4,
+    backgroundColor: 'transparent',
+  },
+  fibSlotText: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 20,
+    color: colors.inkSoft,
+  },
+  fibSlotFilled: {
+    color: colors.ink,
+    backgroundColor: colors.accent,
+    borderRadius: 8,
+    overflow: 'hidden',
+    paddingHorizontal: 6,
+  },
+  fibBank: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'center',
+    padding: 18,
+    borderWidth: 3,
+    borderStyle: 'dashed',
+    borderColor: colors.inkSoft,
+    borderRadius: radius.md,
+    minHeight: 80,
+  },
+  fibChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    backgroundColor: colors.panel,
+    borderWidth: 3,
+    borderColor: colors.ink,
+    borderRadius: 14,
+  },
+  fibChipUsed: {
+    opacity: 0.25,
+    borderStyle: 'dashed',
+    backgroundColor: colors.background,
+  },
+  fibChipText: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 18,
+    color: colors.ink,
+  },
+  fibChipTextUsed: { color: 'transparent' },
+
+  // Matching
+  matchCount: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 14,
+    color: colors.inkSoft,
+    marginBottom: 16,
+  },
+  matchingContainer: { flexDirection: 'row', gap: 12 },
+  matchingCol: { flex: 1, gap: 10 },
+  matchCard: {
+    padding: 14,
+    backgroundColor: colors.panel,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+  },
+  matchCardSelected: { backgroundColor: colors.accent },
+  matchCardMatched: { backgroundColor: colors.accent, opacity: 0.7 },
+  matchCardText: {
+    fontFamily: 'Fredoka_400Regular',
+    fontSize: 15,
+    color: colors.ink,
+    textAlign: 'center',
+  },
+
+  // Sequence
+  seqPlaced: { gap: 8, marginBottom: 16 },
+  seqPlacedItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    backgroundColor: colors.accent,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
+    borderRadius: radius.sm,
+  },
+  seqNum: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  seqNumText: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 14,
+    color: colors.panel,
+  },
+  seqHint: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 14,
+    color: colors.inkSoft,
+    marginBottom: 12,
+  },
+  seqBank: { gap: 10 },
+  seqBankItem: {
+    padding: 14,
+    backgroundColor: colors.panel,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
+    borderRadius: radius.sm,
+  },
+  seqBankItemUsed: { opacity: 0.3, borderStyle: 'dashed' },
+  seqItemText: {
+    fontFamily: 'Fredoka_400Regular',
+    fontSize: 16,
+    color: colors.ink,
     lineHeight: 22,
   },
 
-  // Prior session feedback
-  priorFeedbackCard: {
-    backgroundColor: colors.sky + '33',
-    borderRadius: radius.md,
-    padding: 14,
-    marginBottom: 20,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.sky,
+  // Completion
+  completionContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 32,
   },
-  priorFeedbackLabel: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 11,
-    color: colors.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  completionTitle: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 40,
+    color: colors.ink,
+    letterSpacing: -1,
+    marginTop: 20,
     marginBottom: 6,
+    textAlign: 'center',
   },
-  priorFeedbackText: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 14,
-    color: colors.foreground,
-    lineHeight: 22,
+  completionSub: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 16,
+    color: colors.inkSoft,
+    marginBottom: 32,
+    textAlign: 'center',
+  },
+  rewardRow: {
+    flexDirection: 'row',
+    gap: 14,
+    marginBottom: 40,
+    width: '100%',
+  },
+  rewardCard: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: colors.panel,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    gap: 6,
+  },
+  rewardCardAccent: { backgroundColor: colors.accent },
+  rewardLabel: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 11,
+    color: colors.ink,
+    opacity: 0.7,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+
+  // Primary button
+  primaryBtn: {
+    backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    borderWidth: 3.5,
+    borderColor: colors.ink,
+    paddingVertical: 18,
+    alignItems: 'center',
+    marginTop: 8,
+    width: '100%',
+  },
+  btnDisabled: { opacity: 0.35 },
+  primaryBtnText: {
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 20,
+    color: colors.ink,
   },
 
   // Error state
@@ -1737,522 +1669,30 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
+    padding: 32,
     gap: 16,
   },
   errorTitle: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 22,
-    color: colors.foreground,
+    color: colors.ink,
     textAlign: 'center',
   },
   errorMsg: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 14,
-    color: colors.muted,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-
-  // Deep Dive card
-  card3Headline: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 22,
-    color: colors.foreground,
-    lineHeight: 28,
-    marginBottom: 12,
-  },
-  bulletList: { gap: 10, marginBottom: 8 },
-  bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  bulletDot: { color: colors.mint, fontSize: 18, lineHeight: 24 },
-  bulletText: {
-    fontFamily: 'Nunito_600SemiBold',
+    fontFamily: 'Nunito_700Bold',
     fontSize: 15,
-    color: colors.foreground,
-    flex: 1,
-    lineHeight: 22,
+    color: colors.inkSoft,
+    textAlign: 'center',
   },
 
-  // Hook card speech bubble
-  speechBubbleTail: {
-    alignSelf: 'center',
-    width: 0,
-    height: 0,
-    borderLeftWidth: 10,
-    borderRightWidth: 10,
-    borderBottomWidth: 14,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: colors.card,
-    marginBottom: -1,
-  },
-  speechBubble: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 20,
-    marginBottom: 24,
-  },
-
-  // Gallery styles
-  galleryItem: {
-    width: 280,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    backgroundColor: colors.card,
-  },
-  galleryImage: {
-    width: 280,
-    height: 180,
-  },
+  // Image gallery
+  galleryItem: { borderRadius: radius.sm, overflow: 'hidden', maxWidth: 220 },
+  galleryImage: { width: 220, height: 140 },
   galleryCaption: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 12,
-    color: colors.muted,
-    padding: 8,
-    lineHeight: 18,
-  },
-
-  // Checkpoint styles
-  checkpointCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 16,
-    marginTop: 16,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.sky,
-  },
-  checkpointLabel: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 11,
-    color: colors.sky,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  checkpointQuestion: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 17,
-    color: colors.foreground,
-    lineHeight: 24,
-    marginBottom: 12,
-  },
-  reflectCheckpointCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 16,
-    marginTop: 12,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.peach,
-  },
-
-  // Hook card styles (new motivation + learn_points)
-  hookSectionLabel: {
     fontFamily: 'Nunito_700Bold',
     fontSize: 12,
-    color: colors.muted,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  hookMotivation: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 18,
-    color: colors.foreground,
-    lineHeight: 26,
-    marginBottom: 12,
-  },
-  hookDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: 12,
-  },
-  hookBulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
-  hookBulletDot: { color: colors.mint, fontSize: 14, lineHeight: 22 },
-  hookBulletText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 14,
-    color: colors.foreground,
-    flex: 1,
-    lineHeight: 22,
-  },
-
-  // Scoreboard card styles (new feedback format)
-  scoreboardCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 20,
-    marginBottom: 24,
-  },
-  criterionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  criterionLabel: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 15,
-    color: colors.foreground,
-    flex: 1,
-  },
-  criterionStars: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 18,
-    color: colors.golden,
-    letterSpacing: 1,
-  },
-  scoreboardDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: 12,
-  },
-  scoreboardNote: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 15,
-    color: colors.foreground,
-    lineHeight: 23,
-    fontStyle: 'italic',
-  },
-
-  // Minigame: Matching
-  matchingGrid: {
-    gap: 16,
-    marginBottom: 24,
-  },
-  matchingPair: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  matchingPill: {
-    flex: 1,
-    borderRadius: radius.sm,
-    padding: 12,
-    alignItems: 'center',
-  },
-  matchingPillText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 13,
-    color: colors.foreground,
+    color: colors.inkSoft,
+    paddingTop: 6,
     textAlign: 'center',
-  },
-  matchingConnector: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 16,
-    color: colors.muted,
-  },
-
-  // Minigame: Image ID
-  imageGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 24,
-  },
-  imageOption: {
-    width: '48%',
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 100,
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  imageOptionSelected: {
-    backgroundColor: colors.mint,
-    borderColor: colors.mint,
-  },
-  imageOptionText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 13,
-    color: colors.foreground,
-    textAlign: 'center',
-  },
-
-  // Minigame: Sequencing
-  sequenceList: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  sequenceItem: {
-    flexDirection: 'row',
-    gap: 12,
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 14,
-    alignItems: 'flex-start',
-  },
-  sequenceNumber: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 16,
-    color: colors.mint,
-    minWidth: 24,
-  },
-  sequenceText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 14,
-    color: colors.foreground,
-    flex: 1,
-  },
-
-  // Minigame: Fill Blank
-  fillBlankContainer: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 16,
-    marginBottom: 16,
-  },
-  fillBlankSentence: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 15,
-    color: colors.foreground,
-    lineHeight: 24,
-  },
-  fillBlankInput: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 14,
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 15,
-    color: colors.foreground,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 16,
-  },
-
-  // Activity cards
-  activityNumber: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 12,
-    color: colors.muted,
-    textTransform: 'uppercase',
-    marginBottom: 12,
-  },
-  activityQuestion: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 17,
-    color: colors.foreground,
-    marginBottom: 20,
-    lineHeight: 24,
-  },
-
-  // Multiple choice options
-  optionsList: { gap: 10, marginBottom: 16 },
-  optionButton: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  optionSelected: {
-    borderColor: colors.mint,
-    backgroundColor: colors.mint + '11',
-  },
-  optionCorrect: {
-    borderColor: colors.mint,
-    backgroundColor: colors.mint + '22',
-  },
-  optionWrong: {
-    borderColor: colors.peach,
-    backgroundColor: colors.peach + '22',
-  },
-  optionText: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 15,
-    color: colors.foreground,
-  },
-  optionTextSelected: {
-    fontFamily: 'Nunito_600SemiBold',
-  },
-
-  // Feedback panel
-  feedbackPanel: {
-    borderRadius: radius.md,
-    padding: 16,
-    marginTop: 16,
-    borderLeftWidth: 4,
-  },
-  feedbackCorrect: {
-    borderLeftColor: colors.mint,
-    backgroundColor: colors.mint + '11',
-  },
-  feedbackWrong: {
-    borderLeftColor: colors.peach,
-    backgroundColor: colors.peach + '11',
-  },
-  feedbackText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 15,
-    color: colors.foreground,
-    marginBottom: 8,
-  },
-  explanationText: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 14,
-    color: colors.muted,
-    lineHeight: 20,
-  },
-  tryAgainBtn: {
-    marginTop: 12,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  tryAgainText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 13,
-    color: colors.mint,
-  },
-
-  // Image grid
-  imageGrid2x2: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 16,
-  },
-  imageOptionCard: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 100,
-  },
-  imageOptionCorrect: {
-    borderColor: colors.mint,
-    backgroundColor: colors.mint + '22',
-  },
-  imageOptionWrong: {
-    borderColor: colors.peach,
-    backgroundColor: colors.peach + '22',
-  },
-
-  // Fill blank
-  fillBlankBox: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 16,
-    marginBottom: 16,
-  },
-  textInput: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    padding: 14,
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 15,
-    color: colors.foreground,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 16,
-  },
-
-  // Matching
-  matchingContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  matchingColumn: {
-    flex: 1,
-    gap: 8,
-  },
-  matchingTerm: {
-    backgroundColor: colors.card,
-    borderRadius: radius.sm,
-    padding: 12,
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  matchingTermSelected: {
-    borderColor: colors.sky,
-    backgroundColor: colors.sky + '22',
-  },
-  matchingTermMatched: {
-    borderColor: colors.mint,
-    backgroundColor: colors.mint + '22',
-  },
-  matchingTermText: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 14,
-    color: colors.foreground,
-  },
-  matchingDef: {
-    backgroundColor: colors.card,
-    borderRadius: radius.sm,
-    padding: 12,
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  matchingDefSelected: {
-    borderColor: colors.sky,
-    backgroundColor: colors.sky + '22',
-  },
-  matchingDefMatched: {
-    borderColor: colors.mint,
-    backgroundColor: colors.mint + '22',
-  },
-  matchingDefText: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 14,
-    color: colors.foreground,
-  },
-
-  // Sequence
-  stepsList: { gap: 10, marginBottom: 16 },
-  stepItem: {
-    backgroundColor: colors.card,
-    borderRadius: radius.sm,
-    padding: 14,
-    borderWidth: 2,
-    borderColor: colors.border,
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  stepNumber: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 18,
-    color: colors.mint,
-    minWidth: 24,
-  },
-  stepText: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 14,
-    color: colors.foreground,
-    flex: 1,
-  },
-  orderedSteps: { gap: 10, marginBottom: 16 },
-  orderedStepItem: {
-    backgroundColor: colors.mint + '22',
-    borderRadius: radius.sm,
-    padding: 14,
-    borderWidth: 2,
-    borderColor: colors.mint,
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  orderedStepNumber: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 18,
-    color: colors.mint,
-    minWidth: 24,
-  },
-  orderedStepText: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 14,
-    color: colors.foreground,
-    flex: 1,
   },
 })

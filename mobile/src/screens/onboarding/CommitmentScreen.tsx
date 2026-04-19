@@ -11,7 +11,7 @@ import { useNavigation, useRoute } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RouteProp } from '@react-navigation/native'
 import Svg, { Path, Circle } from 'react-native-svg'
-import Companion from '../../components/Companion'
+import MonkeyMascot from '../../components/MonkeyMascot'
 import { colors, radius, shadows } from '../../theme'
 
 // ── Icons ─────────────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ export default function CommitmentScreen() {
             <Text style={styles.backText}>Back</Text>
           </Pressable>
           <View style={styles.companionTopRight}>
-            <Companion size={70} mood="idle" />
+            <MonkeyMascot size={70} mood="idle" />
           </View>
         </View>
 
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
     marginTop: -8,
   },
   headline: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 24,
     color: colors.foreground,
     marginBottom: 8,
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   goalCardLabel: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 18,
     color: colors.foreground,
     textAlign: 'center',
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   continueBtnText: {
-    fontFamily: 'FredokaOne_400Regular',
+    fontFamily: 'Fredoka_600SemiBold',
     fontSize: 18,
     color: colors.foreground,
   },
