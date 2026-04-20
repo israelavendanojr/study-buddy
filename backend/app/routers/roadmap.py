@@ -191,6 +191,7 @@ Return ONLY valid JSON matching this exact schema — no markdown, no explanatio
           "id": "string (e.g. ch1-l1)",
           "title": "string",
           "type": "lesson | practice | milestone",
+          "lesson_type": "technique | food_science | recipe",
           "estimatedMinutes": number
         }}
       ]

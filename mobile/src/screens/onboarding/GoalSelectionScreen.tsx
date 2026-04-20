@@ -219,14 +219,14 @@ const GOALS = [
     title: 'Cook for others',
     description: 'Dinner parties, dates, cooking for people you care about',
     Icon: ClocheIcon,
-    comingSoon: false,
+    comingSoon: true,
   },
   {
     slug: 'understand_flavor',
     title: 'Understand flavor',
     description: 'Learn to season, balance, and taste like a cook',
     Icon: DropletIcon,
-    comingSoon: false,
+    comingSoon: true,
   },
   {
     slug: 'cuisine_focus',

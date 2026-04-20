@@ -335,7 +335,12 @@ function PathNodeInner({
         ]}
         numberOfLines={3}
       >
-        {lesson.title}
+        {lesson.lesson_type === 'technique' ? `Technique: ${lesson.title}`
+          : lesson.lesson_type === 'recipe' ? `Recipe: ${lesson.title}`
+          : lesson.lesson_type === 'food_science' ? `Science: ${lesson.title}`
+          : lesson.lesson_type === 'concept' ? `Concept: ${lesson.title}`
+          : lesson.lesson_type === 'minigame' ? `Minigame: ${lesson.title}`
+          : lesson.title}
       </Text>
     </View>
   )
