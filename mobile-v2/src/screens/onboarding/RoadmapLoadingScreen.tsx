@@ -14,6 +14,7 @@ interface Props {
     params: {
       goal: string
       experience: number
+      frequency: string
       grading_mode: string
       session_minutes: number
       success_vision: string
@@ -61,6 +62,7 @@ export default function RoadmapLoadingScreen({ navigation, route }: Props) {
           user_id: user.id,
           goal: params.goal ?? 'Cook better at home',
           experience: params.experience ?? 2,
+          frequency: params.frequency ?? 'sometimes',
           session_minutes: params.session_minutes ?? 10,
           weeks: 8,
           success_vision: params.success_vision ?? '',

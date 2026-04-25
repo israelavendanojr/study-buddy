@@ -35,6 +35,7 @@ export function generateRoadmap(body: {
   user_id: string
   goal: string
   experience: number
+  frequency: string
   session_minutes: number
   weeks: number
   success_vision: string
