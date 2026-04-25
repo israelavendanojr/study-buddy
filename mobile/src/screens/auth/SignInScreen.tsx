@@ -1,32 +1,35 @@
 import React, { useState } from 'react'
 import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native'
 import { useSignIn } from '@clerk/clerk-expo'
-import { useNavigation } from '@react-navigation/native'
-import type { StackNavigationProp } from '@react-navigation/stack'
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import GridBackground from '../../components/ui/GridBackground'
+import InkButton from '../../components/ui/InkButton'
 import MonkeyMascot from '../../components/MonkeyMascot'
-import { colors, radius, shadows } from '../../theme'
+import { colors, typography, spacing } from '../../theme'
 
-export default function SignInScreen() {
+interface Props {
+  navigation: NativeStackNavigationProp<any>
+}
+
+export default function SignInScreen({ navigation }: Props) {
   const { signIn, setActive, isLoaded } = useSignIn()
-  const navigation = useNavigation<StackNavigationProp<any>>()
-
+  const insets = useSafeAreaInsets()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [pendingSecondFactor, setPendingSecondFactor] = useState(false)
 
-  const handleSignIn = async () => {
+  async function handleSignIn() {
     if (!isLoaded) return
     setError('')
     setLoading(true)
@@ -34,194 +37,148 @@ export default function SignInScreen() {
       const result = await signIn.create({ identifier: email, password })
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId })
-      } else if (result.status === 'needs_second_factor') {
-        try {
-          console.log('Preparing 2FA email verification...')
-          const emailFactor = result.supportedSecondFactors?.find((f: any) => f.strategy === 'email_code')
-          if (emailFactor) {
-            await signIn.prepareSecondFactor({ strategy: 'email_code', emailAddressId: emailFactor.emailAddressId })
-            console.log('2FA email prep succeeded, showing code input')
-            setPendingSecondFactor(true)
-          } else {
-            setError('Email verification not available')
-          }
-        } catch (prepareErr: any) {
-          console.log('Prepare 2FA error:', JSON.stringify(prepareErr))
-          setError('Failed to send verification email: ' + (prepareErr.errors?.[0]?.message ?? prepareErr.message ?? 'Unknown error'))
-        }
-      } else {
-        setError('Sign in incomplete. Please try again.')
       }
-    } catch (err: any) {
-      setError(err.errors?.[0]?.message ?? 'Something went wrong.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleSecondFactorVerify = async () => {
-    if (!isLoaded) return
-    setError('')
-    setLoading(true)
-    try {
-      console.log('Attempting 2FA with code:', code)
-      const result = await signIn.attemptSecondFactor({ strategy: 'email_code', code })
-      console.log('2FA result:', JSON.stringify({ status: result.status }))
-      if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId })
-      } else {
-        setError(`Verification failed (${result.status}). Please try again.`)
-      }
-    } catch (err: any) {
-      console.log('2FA error:', JSON.stringify(err))
-      setError(err.errors?.[0]?.message ?? 'Invalid code.')
+    } catch (e: any) {
+      setError(e.errors?.[0]?.message ?? 'Sign in failed. Check your email and password.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={styles.inner}>
-        <MonkeyMascot size={80} mood="happy" />
+    <GridBackground>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }]}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Mascot */}
+          <View style={styles.mascotRow}>
+            <MonkeyMascot size={100} />
+          </View>
 
-        {!pendingSecondFactor ? (
-          <>
-            <Text style={styles.heading}>Welcome back!</Text>
-            <Text style={styles.subheading}>Sign in to continue learning.</Text>
+          {/* Headline */}
+          <Text style={styles.headline}>Welcome back.</Text>
+          <Text style={styles.subhead}>Sign in to continue cooking.</Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor={colors.muted + '80'}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor={colors.muted + '80'}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+          {/* Form */}
+          <View style={styles.form}>
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>EMAIL</Text>
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoComplete="email"
+                placeholder="you@example.com"
+                placeholderTextColor={colors.inkSoft}
+              />
+            </View>
 
-            {!!error && <Text style={styles.error}>{error}</Text>}
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>PASSWORD</Text>
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                autoComplete="password"
+                placeholder="••••••••"
+                placeholderTextColor={colors.inkSoft}
+              />
+            </View>
 
-            <Pressable
-              style={[styles.button, shadows.mint]}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+
+            <InkButton
+              label="Sign In →"
               onPress={handleSignIn}
-              disabled={loading || !email || !password}
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.foreground} />
-              ) : (
-                <Text style={styles.buttonText}>Sign In →</Text>
-              )}
-            </Pressable>
-
-            <Pressable onPress={() => navigation.navigate('SignUp')}>
-              <Text style={styles.link}>No account? Sign up</Text>
-            </Pressable>
-          </>
-        ) : (
-          <>
-            <Text style={styles.heading}>Check your email!</Text>
-            <Text style={styles.subheading}>Enter the code we sent you.</Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Verification code"
-              placeholderTextColor={colors.muted + '80'}
-              value={code}
-              onChangeText={setCode}
-              keyboardType="number-pad"
+              loading={loading}
+              disabled={!email || !password}
+              style={styles.btn}
             />
 
-            {!!error && <Text style={styles.error}>{error}</Text>}
-
-            <Pressable
-              style={[styles.button, shadows.mint]}
-              onPress={handleSecondFactorVerify}
-              disabled={loading || !code}
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.foreground} />
-              ) : (
-                <Text style={styles.buttonText}>Verify →</Text>
-              )}
-            </Pressable>
-          </>
-        )}
-      </View>
-    </KeyboardAvoidingView>
+            <TouchableOpacity onPress={() => navigation.navigate('SignUp')} style={styles.link}>
+              <Text style={styles.linkText}>
+                No account yet? <Text style={styles.linkBold}>Create one →</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </GridBackground>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  inner: {
-    flex: 1,
+  content: {
+    paddingHorizontal: spacing.xl,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    gap: 12,
   },
-  heading: {
-    fontFamily: 'Fredoka_600SemiBold',
+  mascotRow: {
+    marginBottom: spacing.xl,
+  },
+  headline: {
+    fontFamily: typography.headlineBold,
     fontSize: 32,
-    color: colors.foreground,
-    marginTop: 16,
+    color: colors.ink,
+    textAlign: 'center',
+    marginBottom: 6,
   },
-  subheading: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 16,
-    color: colors.muted,
-    marginBottom: 8,
+  subhead: {
+    fontFamily: typography.body,
+    fontSize: 15,
+    color: colors.inkSoft,
+    textAlign: 'center',
+    marginBottom: spacing.xxl,
+  },
+  form: {
+    width: '100%',
+    gap: spacing.lg,
+  },
+  field: {
+    gap: spacing.xs,
+  },
+  fieldLabel: {
+    fontFamily: typography.labelBold,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    color: colors.ink,
   },
   input: {
-    width: '100%',
-    fontFamily: 'Nunito_400Regular',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.ink,
+    paddingVertical: spacing.sm,
+    fontFamily: typography.body,
     fontSize: 16,
-    color: colors.foreground,
-    backgroundColor: colors.panel,
-    borderWidth: 3,
-    borderColor: colors.ink,
-    borderRadius: radius.sm,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  button: {
-    width: '100%',
-    backgroundColor: colors.accent,
-    borderRadius: radius.md,
-    borderWidth: 3.5,
-    borderColor: colors.ink,
-    paddingVertical: 18,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  buttonText: {
-    fontFamily: 'Fredoka_600SemiBold',
-    fontSize: 20,
-    color: colors.foreground,
-  },
-  link: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 15,
-    color: colors.muted,
-    marginTop: 4,
+    color: colors.ink,
+    backgroundColor: 'transparent',
   },
   error: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 14,
-    color: '#E05C5C',
+    fontFamily: typography.body,
+    fontSize: 13,
+    color: colors.error,
     textAlign: 'center',
+  },
+  btn: {
+    marginTop: spacing.sm,
+  },
+  link: {
+    alignItems: 'center',
+    paddingTop: spacing.sm,
+  },
+  linkText: {
+    fontFamily: typography.body,
+    fontSize: 14,
+    color: colors.inkSoft,
+  },
+  linkBold: {
+    fontFamily: typography.bodyBold,
+    color: colors.ink,
   },
 })

@@ -1,215 +1,198 @@
 import React, { useState } from 'react'
 import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native'
 import { useSignUp } from '@clerk/clerk-expo'
-import { useNavigation } from '@react-navigation/native'
-import type { StackNavigationProp } from '@react-navigation/stack'
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import GridBackground from '../../components/ui/GridBackground'
+import InkButton from '../../components/ui/InkButton'
 import MonkeyMascot from '../../components/MonkeyMascot'
-import { colors, radius, shadows } from '../../theme'
+import { colors, typography, spacing } from '../../theme'
 
-export default function SignUpScreen() {
+interface Props {
+  navigation: NativeStackNavigationProp<any>
+}
+
+export default function SignUpScreen({ navigation }: Props) {
   const { signUp, setActive, isLoaded } = useSignUp()
-  const navigation = useNavigation<StackNavigationProp<any>>()
-
+  const insets = useSafeAreaInsets()
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [code, setCode] = useState('')
-  const [pendingVerification, setPendingVerification] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSignUp = async () => {
+  async function handleSignUp() {
     if (!isLoaded) return
     setError('')
     setLoading(true)
     try {
-      await signUp.create({ emailAddress: email, password, username })
-      await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
-      setPendingVerification(true)
-    } catch (err: any) {
-      setError(err.errors?.[0]?.message ?? 'Something went wrong.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleVerify = async () => {
-    if (!isLoaded) return
-    setError('')
-    setLoading(true)
-    try {
-      const result = await signUp.attemptEmailAddressVerification({ code })
+      const result = await signUp.create({
+        firstName: name.split(' ')[0],
+        lastName: name.split(' ').slice(1).join(' ') || undefined,
+        emailAddress: email,
+        password,
+      })
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId })
-      } else {
-        setError('Verification incomplete. Please try again.')
       }
-    } catch (err: any) {
-      setError(err.errors?.[0]?.message ?? 'Invalid code.')
+    } catch (e: any) {
+      setError(e.errors?.[0]?.message ?? 'Sign up failed. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={styles.inner}>
-        <MonkeyMascot size={80} mood="excited" />
+    <GridBackground>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }]}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.mascotRow}>
+            <MonkeyMascot size={90} />
+          </View>
 
-        {!pendingVerification ? (
-          <>
-            <Text style={styles.heading}>Let's get started!</Text>
-            <Text style={styles.subheading}>Create your account.</Text>
+          <Text style={styles.headline}>Start cooking.</Text>
+          <Text style={styles.subhead}>Create your GarlicMonkey account.</Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor={colors.muted + '80'}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Username"
-              placeholderTextColor={colors.muted + '80'}
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor={colors.muted + '80'}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+          <View style={styles.form}>
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>YOUR NAME</Text>
+              <TextInput
+                style={styles.input}
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+                placeholder="Alex Rivera"
+                placeholderTextColor={colors.inkSoft}
+              />
+            </View>
 
-            {!!error && <Text style={styles.error}>{error}</Text>}
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>EMAIL</Text>
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoComplete="email"
+                placeholder="you@example.com"
+                placeholderTextColor={colors.inkSoft}
+              />
+            </View>
 
-            <Pressable
-              style={[styles.button, shadows.peach]}
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>PASSWORD</Text>
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                placeholder="8+ characters"
+                placeholderTextColor={colors.inkSoft}
+              />
+            </View>
+
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+
+            <InkButton
+              label="Create Account →"
               onPress={handleSignUp}
-              disabled={loading || !email || !username || !password}
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.foreground} />
-              ) : (
-                <Text style={styles.buttonText}>Sign Up →</Text>
-              )}
-            </Pressable>
-
-            <Pressable onPress={() => navigation.navigate('SignIn')}>
-              <Text style={styles.link}>Already have an account? Sign in</Text>
-            </Pressable>
-          </>
-        ) : (
-          <>
-            <Text style={styles.heading}>Check your email!</Text>
-            <Text style={styles.subheading}>Enter the code we sent you.</Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Verification code"
-              placeholderTextColor={colors.muted + '80'}
-              value={code}
-              onChangeText={setCode}
-              keyboardType="number-pad"
+              loading={loading}
+              disabled={!name || !email || !password}
+              style={styles.btn}
             />
 
-            {!!error && <Text style={styles.error}>{error}</Text>}
-
-            <Pressable
-              style={[styles.button, shadows.mint]}
-              onPress={handleVerify}
-              disabled={loading || !code}
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.foreground} />
-              ) : (
-                <Text style={styles.buttonText}>Verify →</Text>
-              )}
-            </Pressable>
-          </>
-        )}
-      </View>
-    </KeyboardAvoidingView>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.link}>
+              <Text style={styles.linkText}>
+                Already have an account? <Text style={styles.linkBold}>Sign in →</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </GridBackground>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  inner: {
-    flex: 1,
+  content: {
+    paddingHorizontal: spacing.xl,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    gap: 12,
   },
-  heading: {
-    fontFamily: 'Fredoka_600SemiBold',
+  mascotRow: {
+    marginBottom: spacing.xl,
+  },
+  headline: {
+    fontFamily: typography.headlineBold,
     fontSize: 32,
-    color: colors.foreground,
-    marginTop: 16,
+    color: colors.ink,
+    textAlign: 'center',
+    marginBottom: 6,
   },
-  subheading: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 16,
-    color: colors.muted,
-    marginBottom: 8,
+  subhead: {
+    fontFamily: typography.body,
+    fontSize: 15,
+    color: colors.inkSoft,
+    textAlign: 'center',
+    marginBottom: spacing.xxl,
+  },
+  form: {
+    width: '100%',
+    gap: spacing.lg,
+  },
+  field: {
+    gap: spacing.xs,
+  },
+  fieldLabel: {
+    fontFamily: typography.labelBold,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    color: colors.ink,
   },
   input: {
-    width: '100%',
-    fontFamily: 'Nunito_400Regular',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.ink,
+    paddingVertical: spacing.sm,
+    fontFamily: typography.body,
     fontSize: 16,
-    color: colors.foreground,
-    backgroundColor: colors.panel,
-    borderWidth: 3,
-    borderColor: colors.ink,
-    borderRadius: radius.sm,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  button: {
-    width: '100%',
-    backgroundColor: colors.accent,
-    borderRadius: radius.md,
-    borderWidth: 3.5,
-    borderColor: colors.ink,
-    paddingVertical: 18,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  buttonText: {
-    fontFamily: 'Fredoka_600SemiBold',
-    fontSize: 20,
-    color: colors.foreground,
-  },
-  link: {
-    fontFamily: 'Nunito_600SemiBold',
-    fontSize: 15,
-    color: colors.muted,
-    marginTop: 4,
+    color: colors.ink,
+    backgroundColor: 'transparent',
   },
   error: {
-    fontFamily: 'Nunito_400Regular',
-    fontSize: 14,
-    color: '#E05C5C',
+    fontFamily: typography.body,
+    fontSize: 13,
+    color: colors.error,
     textAlign: 'center',
+  },
+  btn: {
+    marginTop: spacing.sm,
+  },
+  link: {
+    alignItems: 'center',
+    paddingTop: spacing.sm,
+  },
+  linkText: {
+    fontFamily: typography.body,
+    fontSize: 14,
+    color: colors.inkSoft,
+  },
+  linkBold: {
+    fontFamily: typography.bodyBold,
+    color: colors.ink,
   },
 })
