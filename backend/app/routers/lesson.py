@@ -680,9 +680,10 @@ def _is_lesson_json_stale(lj: dict, lesson_type: str | None = None) -> bool:
 @router.post("/generate")
 async def generate_lesson(req: LessonRequest, db: Session = Depends(get_db)) -> dict:
     # ── 0. Load lesson_type from taxonomy if not provided ────────────────────
-    if not req.lesson_type:
+    VALID_LESSON_TYPES = {"technique", "food_science", "recipe", "minigame", "concept"}
+    if not req.lesson_type or req.lesson_type not in VALID_LESSON_TYPES:
         req.lesson_type = _get_lesson_type_from_taxonomy(req.lesson_key)
-    if not req.lesson_type:
+    if not req.lesson_type or req.lesson_type not in VALID_LESSON_TYPES:
         req.lesson_type = "technique"  # fallback
 
     # ── 1. DB cache check ────────────────────────────────────────────────────

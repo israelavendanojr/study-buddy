@@ -23,6 +23,7 @@ interface Lesson {
   id: string
   title: string
   type: string
+  lesson_type?: string
   estimatedMinutes: number
 }
 interface Chapter {
@@ -224,7 +225,7 @@ export default function TrailScreen({ navigation }: any) {
                     lessonKey: `${sheetLesson.id}_${sheetLesson.title.toLowerCase().replace(/\s+/g, '_')}`,
                     lessonTitle: sheetLesson.title,
                     chapterTitle: sheetLesson.chapterTitle,
-                    lessonType: sheetLesson.type,
+                    lessonType: sheetLesson.lesson_type ?? 'technique',
                     goal: meta.goal ?? '',
                     experience: meta.experience ?? 2,
                     globalIndex: sheetLesson.globalIndex,
