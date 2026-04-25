@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Lesson, UserLessonProgress, UserRoadmap, Recipe
+from ..models import Lesson, UserLessonProgress, UserRoadmap, UserMission, Recipe
 from ..services.lesson_prompt_builder import (
     build_type_aware_prompt,
     build_activity_prompt,
@@ -1287,6 +1287,56 @@ async def minigame_complete(req: MinigameCompleteRequest, db: Session = Depends(
     }
 
 
+def _auto_create_mission(user_id: str, lesson: "Lesson", db: Session) -> "UserMission | None":
+    """Create a UserMission when a lesson is fully completed, if one doesn't already exist."""
+    existing = db.query(UserMission).filter(
+        UserMission.clerk_user_id == user_id,
+        UserMission.lesson_key == lesson.lesson_key,
+    ).first()
+    if existing:
+        return existing
+
+    lesson_json = lesson.lesson_json
+
+    # Try to get mission_prompt from lesson JSON (flow format)
+    mission_prompt = lesson_json.get("mission_prompt") or {}
+    title = mission_prompt.get("title") or f"Practice: {lesson.title}"
+    description = mission_prompt.get("description") or (
+        f"Take what you learned in '{lesson.title}' into the kitchen and practice it for real."
+    )
+    tips = mission_prompt.get("tips") or []
+
+    mission = UserMission(
+        clerk_user_id=user_id,
+        lesson_key=lesson.lesson_key,
+        lesson_title=lesson.title,
+        title=title,
+        description=description,
+        tips=tips,
+        status="unlocked",
+    )
+    db.add(mission)
+    db.commit()
+    return mission
+
+
+def _update_streak(user_id: str, db: Session) -> int:
+    """Update streak_days and last_active_date on UserRoadmap."""
+    from datetime import date
+    roadmap = db.query(UserRoadmap).filter(UserRoadmap.clerk_user_id == user_id).first()
+    if not roadmap:
+        return 0
+    today = date.today()
+    last = roadmap.last_active_date
+    if last is None or (today - last).days > 1:
+        roadmap.streak_days = 1
+    elif (today - last).days == 1:
+        roadmap.streak_days = (roadmap.streak_days or 0) + 1
+    roadmap.last_active_date = today
+    db.commit()
+    return roadmap.streak_days
+
+
 @router.post("/activity-complete")
 async def activity_complete(req: ActivityCompleteRequest, db: Session = Depends(get_db)):
     """Record completion of a lesson activity (multiple_choice, image_id, matching, fill_blank, sequence)."""
@@ -1302,10 +1352,25 @@ async def activity_complete(req: ActivityCompleteRequest, db: Session = Depends(
     if not activities:
         raise HTTPException(status_code=400, detail="Lesson has no activities")
 
+    mission_created = None
     if req.passed:
         progress, lesson_now_required_complete, lesson_now_fully_complete = _mark_activity_complete(
             req.user_id, req.lesson_key, req.activity_id, activities, db
         )
+        # Award XP on progress record
+        if req.passed and progress:
+            progress.xp_earned = (progress.xp_earned or 0) + XP_PER_MISSION
+            db.commit()
+        # Auto-create kitchen mission when lesson fully completes
+        if lesson_now_fully_complete and req.user_id:
+            _update_streak(req.user_id, db)
+            new_mission = _auto_create_mission(req.user_id, lesson, db)
+            if new_mission:
+                mission_created = {
+                    "id": new_mission.id,
+                    "title": new_mission.title,
+                    "description": new_mission.description,
+                }
     else:
         progress = db.query(UserLessonProgress).filter(
             UserLessonProgress.clerk_user_id == req.user_id,
@@ -1319,6 +1384,7 @@ async def activity_complete(req: ActivityCompleteRequest, db: Session = Depends(
         "xp_earned": XP_PER_MISSION if req.passed else 0,
         "lesson_now_required_complete": lesson_now_required_complete,
         "lesson_now_fully_complete": lesson_now_fully_complete,
+        "mission_created": mission_created,
     }
 
 

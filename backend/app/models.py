@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime, date, timezone
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, Text
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from pgvector.sqlalchemy import Vector
@@ -67,7 +67,7 @@ class Lesson(Base):
     chapter_title: Mapped[str] = mapped_column(String, nullable=False)
     domain: Mapped[str] = mapped_column(String, nullable=False)
     lesson_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    lesson_type: Mapped[str | None] = mapped_column(String, nullable=True)  # technique|recipe|concept
+    lesson_type: Mapped[str | None] = mapped_column(String, nullable=True)  # technique|recipe|concept|food_science|minigame
     skill_tags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     sources_cited: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     # Recipe-specific columns (null for non-recipe lessons)
@@ -95,6 +95,7 @@ class UserLessonProgress(Base):
     completed_activities: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     is_required_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_fully_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    xp_earned: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -121,6 +122,8 @@ class UserRoadmap(Base):
     clerk_user_id: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
     roadmap_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
     active_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    streak_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_active_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -131,6 +134,29 @@ class UserRoadmap(Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+
+
+class UserMission(Base):
+    __tablename__ = "user_missions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    clerk_user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    lesson_key: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    lesson_title: Mapped[str] = mapped_column(String, nullable=False)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    tips: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="unlocked")  # unlocked|submitted|graded
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    feedback_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    xp_awarded: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    graded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Recipe(Base):
@@ -151,5 +177,3 @@ class Recipe(Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
-
-
