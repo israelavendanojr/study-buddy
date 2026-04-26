@@ -180,7 +180,7 @@ function GoalCard({
   );
 }
 
-export default function GoalSelectionScreen() {
+export default function GoalSelectionScreen({ onContinue, onBack }: { onContinue?: () => void; onBack?: () => void }) {
   const [selectedGoal, setSelectedGoal] = useState<GoalId>('home');
   const insets = useSafeAreaInsets();
 
@@ -190,7 +190,7 @@ export default function GoalSelectionScreen() {
 
       {/* Progress bar pinned below status bar */}
       <View style={[styles.progressBarContainer, { top: insets.top }]}>
-        <ProgressBar progress={0.15} onBack={() => {}} />
+        <ProgressBar progress={0.15} onBack={onBack ?? (() => {})} />
       </View>
 
       <ScrollView
@@ -227,7 +227,7 @@ export default function GoalSelectionScreen() {
 
       {/* Fixed footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <InkButton label="CONTINUE" textColor="#FBF6E6" onPress={() => {}} />
+        <InkButton label="CONTINUE" textColor="#FBF6E6" onPress={() => onContinue?.()} />
         <Text style={styles.footerCaption}>You can change your goal anytime in your profile.</Text>
       </View>
     </View>

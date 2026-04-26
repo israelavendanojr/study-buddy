@@ -14,12 +14,18 @@ import {
 } from '@expo-google-fonts/space-grotesk';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
+import { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import GoalSelectionScreen from './src/screens/onboarding/GoalSelectionScreen';
+import ExperienceLevelScreen from './src/screens/onboarding/ExperienceLevelScreen';
+import GradingModeScreen from './src/screens/onboarding/GradingModeScreen';
 import { colors, fonts } from './src/theme';
 
+type Screen = 'goal' | 'experience' | 'grading';
+
 export default function App() {
+  const [screen, setScreen] = useState<Screen>('goal');
   const [fontsLoaded] = useFonts({
     Newsreader_400Regular,
     Newsreader_400Regular_Italic,
@@ -42,7 +48,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      <GoalSelectionScreen />
+      {screen === 'goal' && <GoalSelectionScreen onContinue={() => setScreen('experience')} />}
+      {screen === 'experience' && <ExperienceLevelScreen onContinue={() => setScreen('grading')} onBack={() => setScreen('goal')} />}
+      {screen === 'grading' && <GradingModeScreen onContinue={() => {}} onBack={() => setScreen('experience')} />}
     </SafeAreaProvider>
   );
 }
