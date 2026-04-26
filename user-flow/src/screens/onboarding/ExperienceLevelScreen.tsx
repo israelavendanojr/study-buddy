@@ -15,6 +15,7 @@ import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import ProgressBar from '../../components/ProgressBar';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
+import { OnboardingScreenProps } from './types';
 
 type ExperienceId = 'beginner' | 'occasional' | 'home' | 'pro';
 
@@ -132,7 +133,7 @@ function ExperienceCard({
   );
 }
 
-export default function ExperienceLevelScreen({ onContinue, onBack }: { onContinue?: () => void; onBack?: () => void }) {
+export default function ExperienceLevelScreen({ onContinue, onBack, progress }: OnboardingScreenProps) {
   const [selected, setSelected] = useState<ExperienceId>('occasional');
   const insets = useSafeAreaInsets();
 
@@ -142,7 +143,7 @@ export default function ExperienceLevelScreen({ onContinue, onBack }: { onContin
 
       {/* Progress bar pinned below status bar */}
       <View style={[styles.progressBarContainer, { top: insets.top }]}>
-        <ProgressBar progress={0.3} onBack={onBack ?? (() => {})} />
+        <ProgressBar progress={progress} onBack={onBack ?? (() => {})} />
       </View>
 
       <ScrollView

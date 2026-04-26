@@ -14,7 +14,7 @@ import {
 } from '@expo-google-fonts/space-grotesk';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import GoalSelectionScreen from './src/screens/onboarding/GoalSelectionScreen';
@@ -23,12 +23,30 @@ import ExperienceLevelScreen from './src/screens/onboarding/ExperienceLevelScree
 import GradingModeScreen from './src/screens/onboarding/GradingModeScreen';
 import CommitmentScreen from './src/screens/onboarding/CommitmentScreen';
 import RoadmapLoadingScreen from './src/screens/onboarding/RoadmapLoadingScreen';
-import { colors, fonts } from './src/theme';
+import { OnboardingScreenProps } from './src/screens/onboarding/types';
+import { colors } from './src/theme';
 
-type Screen = 'goal' | 'cooking' | 'experience' | 'grading' | 'commitment' | 'loading';
+type ScreenEntry = {
+  key: string;
+  component: React.ComponentType<OnboardingScreenProps>;
+  showProgress?: boolean; // false for terminal/loading screens
+};
+
+// Reorder, add, or remove entries here to change the onboarding flow.
+// Progress bar value and back/forward wiring are derived automatically.
+const ONBOARDING_FLOW: ScreenEntry[] = [
+  { key: 'goal',       component: GoalSelectionScreen },
+  { key: 'cooking',    component: CookingFrequencyScreen },
+  { key: 'experience', component: ExperienceLevelScreen },
+  { key: 'grading',    component: GradingModeScreen },
+  { key: 'commitment', component: CommitmentScreen },
+  { key: 'loading',    component: RoadmapLoadingScreen, showProgress: false },
+];
+
+const PROGRESS_SCREENS = ONBOARDING_FLOW.filter(s => s.showProgress !== false);
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('goal');
+  const [screenIndex, setScreenIndex] = useState(0);
   const [fontsLoaded] = useFonts({
     Newsreader_400Regular,
     Newsreader_400Regular_Italic,
@@ -48,15 +66,23 @@ export default function App() {
     );
   }
 
+  const current = ONBOARDING_FLOW[screenIndex];
+  const CurrentScreen = current.component;
+
+  const progressScreenIndex = PROGRESS_SCREENS.findIndex(s => s.key === current.key);
+  const progress = progressScreenIndex >= 0
+    ? (progressScreenIndex + 1) / PROGRESS_SCREENS.length
+    : 1;
+
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      {screen === 'goal' && <GoalSelectionScreen onContinue={() => setScreen('cooking')} />}
-      {screen === 'cooking' && <CookingFrequencyScreen onContinue={() => setScreen('experience')} onBack={() => setScreen('goal')} />}
-      {screen === 'experience' && <ExperienceLevelScreen onContinue={() => setScreen('grading')} onBack={() => setScreen('cooking')} />}
-      {screen === 'grading' && <GradingModeScreen onContinue={() => setScreen('commitment')} onBack={() => setScreen('experience')} />}
-      {screen === 'commitment' && <CommitmentScreen onContinue={() => setScreen('loading')} onBack={() => setScreen('grading')} />}
-      {screen === 'loading' && <RoadmapLoadingScreen />}
+      <CurrentScreen
+        key={current.key}
+        progress={progress}
+        onContinue={screenIndex < ONBOARDING_FLOW.length - 1 ? () => setScreenIndex(i => i + 1) : undefined}
+        onBack={screenIndex > 0 ? () => setScreenIndex(i => i - 1) : undefined}
+      />
     </SafeAreaProvider>
   );
 }

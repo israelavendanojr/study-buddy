@@ -15,6 +15,7 @@ import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import ProgressBar from '../../components/ProgressBar';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
+import { OnboardingScreenProps } from './types';
 
 type CommitmentId = '5' | '10' | '20' | '30';
 
@@ -120,7 +121,7 @@ function CommitmentCard({
   );
 }
 
-export default function CommitmentScreen({ onContinue, onBack }: { onContinue?: () => void; onBack?: () => void }) {
+export default function CommitmentScreen({ onContinue, onBack, progress }: OnboardingScreenProps) {
   const [selected, setSelected] = useState<CommitmentId>('10');
   const insets = useSafeAreaInsets();
 
@@ -130,7 +131,7 @@ export default function CommitmentScreen({ onContinue, onBack }: { onContinue?: 
 
       {/* Progress bar pinned below status bar */}
       <View style={[styles.progressBarContainer, { top: insets.top }]}>
-        <ProgressBar progress={0.6} onBack={onBack ?? (() => {})} />
+        <ProgressBar progress={progress} onBack={onBack ?? (() => {})} />
       </View>
 
       <ScrollView

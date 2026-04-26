@@ -3,15 +3,12 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import GridBackground from '../../components/GridBackground';
 import MonkeyMascot from '../../components/MonkeyMascot';
 import { colors, fonts } from '../../theme';
+import { OnboardingScreenProps } from './types';
 
 const HEADLINE = 'Building your unique\nroadmap...';
 const KEYWORDS = ['goals', 'experience', 'time', 'grading mode', 'commitment'];
 
-interface Props {
-  onComplete?: () => void;
-}
-
-export default function RoadmapLoadingScreen({ onComplete }: Props) {
+export default function RoadmapLoadingScreen({ onContinue }: OnboardingScreenProps) {
   const [dotCount, setDotCount] = useState(3);
   const [displayedHeadline, setDisplayedHeadline] = useState('');
   const [displayedWord, setDisplayedWord] = useState('');

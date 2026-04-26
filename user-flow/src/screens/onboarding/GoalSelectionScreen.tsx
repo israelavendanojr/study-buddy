@@ -15,6 +15,7 @@ import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import ProgressBar from '../../components/ProgressBar';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
+import { OnboardingScreenProps } from './types';
 
 type GoalId = 'scratch' | 'home' | 'skill' | 'cuisine' | 'healthy' | 'allergy';
 
@@ -180,7 +181,7 @@ function GoalCard({
   );
 }
 
-export default function GoalSelectionScreen({ onContinue, onBack }: { onContinue?: () => void; onBack?: () => void }) {
+export default function GoalSelectionScreen({ onContinue, onBack, progress }: OnboardingScreenProps) {
   const [selectedGoal, setSelectedGoal] = useState<GoalId>('home');
   const insets = useSafeAreaInsets();
 
@@ -190,7 +191,7 @@ export default function GoalSelectionScreen({ onContinue, onBack }: { onContinue
 
       {/* Progress bar pinned below status bar */}
       <View style={[styles.progressBarContainer, { top: insets.top }]}>
-        <ProgressBar progress={0.15} onBack={onBack ?? (() => {})} />
+        <ProgressBar progress={progress} onBack={onBack ?? (() => {})} />
       </View>
 
       <ScrollView
