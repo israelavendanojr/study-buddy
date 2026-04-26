@@ -6,9 +6,11 @@ interface InkButtonProps {
   label: string;
   onPress?: () => void;
   disabled?: boolean;
+  backgroundColor?: string;
+  textColor?: string;
 }
 
-export default function InkButton({ label, onPress, disabled }: InkButtonProps) {
+export default function InkButton({ label, onPress, disabled, backgroundColor, textColor }: InkButtonProps) {
   const translateAnim = useRef(new Animated.Value(0)).current;
 
   const handlePressIn = () => {
@@ -51,6 +53,7 @@ export default function InkButton({ label, onPress, disabled }: InkButtonProps) 
       <Animated.View
         style={[
           styles.button,
+          backgroundColor ? { backgroundColor } : undefined,
           {
             transform: [
               {
@@ -69,7 +72,7 @@ export default function InkButton({ label, onPress, disabled }: InkButtonProps) 
           },
         ]}
       >
-        <Text style={styles.label}>{label}</Text>
+        <Text style={[styles.label, textColor ? { color: textColor } : undefined]}>{label}</Text>
       </Animated.View>
     </Pressable>
   );

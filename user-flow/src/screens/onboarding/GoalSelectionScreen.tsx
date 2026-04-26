@@ -227,7 +227,7 @@ export default function GoalSelectionScreen() {
 
       {/* Fixed footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <InkButton label="CONTINUE" onPress={() => {}} />
+        <InkButton label="CONTINUE" textColor="#FBF6E6" onPress={() => {}} />
         <Text style={styles.footerCaption}>You can change your goal anytime in your profile.</Text>
       </View>
     </View>
