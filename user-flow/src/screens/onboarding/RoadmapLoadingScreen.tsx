@@ -4,26 +4,107 @@ import GridBackground from '../../components/GridBackground';
 import MonkeyMascot from '../../components/MonkeyMascot';
 import { colors, fonts } from '../../theme';
 
+const HEADLINE = 'Building your unique\nroadmap...';
+const KEYWORDS = ['goals', 'experience', 'time', 'grading mode', 'commitment'];
+
 interface Props {
   onComplete?: () => void;
 }
 
 export default function RoadmapLoadingScreen({ onComplete }: Props) {
   const [dotCount, setDotCount] = useState(3);
+  const [displayedHeadline, setDisplayedHeadline] = useState('');
+  const [displayedWord, setDisplayedWord] = useState('');
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const flipAnim = useRef(new Animated.Value(1)).current;
+  const headlinePulse = useRef(new Animated.Value(1)).current;
+  const headlineRef = useRef('');
+  const wordIdxRef = useRef(0);
+  const isDeletingRef = useRef(false);
+  const displayedRef = useRef('');
 
   useEffect(() => {
+    // Screen fade-in
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 400,
       useNativeDriver: true,
     }).start();
 
-    const interval = setInterval(() => {
+    // Mascot flip loop: snap left/right every 2.2s
+    Animated.loop(
+      Animated.sequence([
+        Animated.delay(2200),
+        Animated.timing(flipAnim, { toValue: -1, duration: 150, useNativeDriver: true }),
+        Animated.delay(2200),
+        Animated.timing(flipAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
+      ])
+    ).start();
+
+    // Dots cycling
+    const dotsInterval = setInterval(() => {
       setDotCount((prev) => (prev % 3) + 1);
     }, 500);
 
-    return () => clearInterval(interval);
+    // Typewriter effects
+    let headlineTimeout: ReturnType<typeof setTimeout>;
+    let keywordTimeout: ReturnType<typeof setTimeout>;
+
+    const typeKeyword = () => {
+      const target = KEYWORDS[wordIdxRef.current];
+
+      if (!isDeletingRef.current) {
+        const next = target.slice(0, displayedRef.current.length + 1);
+        displayedRef.current = next;
+        setDisplayedWord(next);
+
+        if (next === target) {
+          isDeletingRef.current = true;
+          keywordTimeout = setTimeout(typeKeyword, 1600);
+        } else {
+          keywordTimeout = setTimeout(typeKeyword, 80);
+        }
+      } else {
+        const next = displayedRef.current.slice(0, -1);
+        displayedRef.current = next;
+        setDisplayedWord(next);
+
+        if (next === '') {
+          isDeletingRef.current = false;
+          wordIdxRef.current = (wordIdxRef.current + 1) % KEYWORDS.length;
+          keywordTimeout = setTimeout(typeKeyword, 150);
+        } else {
+          keywordTimeout = setTimeout(typeKeyword, 45);
+        }
+      }
+    };
+
+    const typeHeadline = () => {
+      const next = HEADLINE.slice(0, headlineRef.current.length + 1);
+      headlineRef.current = next;
+      setDisplayedHeadline(next);
+
+      if (next.length < HEADLINE.length) {
+        headlineTimeout = setTimeout(typeHeadline, 55);
+      } else {
+        // Headline done — start pulse then keyword typewriter
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headlinePulse, { toValue: 0.6, duration: 1500, useNativeDriver: true }),
+            Animated.timing(headlinePulse, { toValue: 1, duration: 1500, useNativeDriver: true }),
+          ])
+        ).start();
+        keywordTimeout = setTimeout(typeKeyword, 400);
+      }
+    };
+
+    headlineTimeout = setTimeout(typeHeadline, 500);
+
+    return () => {
+      clearInterval(dotsInterval);
+      clearTimeout(headlineTimeout);
+      clearTimeout(keywordTimeout);
+    };
   }, []);
 
   const dots = '.'.repeat(dotCount);
@@ -33,14 +114,18 @@ export default function RoadmapLoadingScreen({ onComplete }: Props) {
       <GridBackground />
       <View style={styles.amberStripe} />
       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-        <MonkeyMascot size={120} />
+        <Animated.View style={{ transform: [{ scaleX: flipAnim }] }}>
+          <MonkeyMascot size={120} />
+        </Animated.View>
         <View style={styles.spacerLg} />
         <Text style={styles.loadingLabel}>{`LOADING${dots}`}</Text>
         <View style={styles.spacerSm} />
-        <Text style={styles.headline}>Building your unique{'\n'}roadmap...</Text>
+        <Animated.Text style={[styles.headline, { opacity: headlinePulse }]}>{displayedHeadline}</Animated.Text>
         <View style={styles.spacerMd} />
         <Text style={styles.body}>
-          Curating lessons based on your goals,{'\n'}time, and grading mode.
+          {'Curating lessons based on your '}
+          <Text style={styles.bodyKeyword}>{displayedWord}</Text>
+          {'.'}
         </Text>
       </Animated.View>
     </View>
@@ -94,5 +179,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     opacity: 0.8,
+  },
+  bodyKeyword: {
+    fontFamily: fonts.label,
+    fontSize: 14,
+    color: colors.amber,
+    letterSpacing: 0.5,
   },
 });
