@@ -18,11 +18,14 @@ import { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import GoalSelectionScreen from './src/screens/onboarding/GoalSelectionScreen';
+import CookingFrequencyScreen from './src/screens/onboarding/CookingFrequencyScreen';
 import ExperienceLevelScreen from './src/screens/onboarding/ExperienceLevelScreen';
 import GradingModeScreen from './src/screens/onboarding/GradingModeScreen';
+import CommitmentScreen from './src/screens/onboarding/CommitmentScreen';
+import RoadmapLoadingScreen from './src/screens/onboarding/RoadmapLoadingScreen';
 import { colors, fonts } from './src/theme';
 
-type Screen = 'goal' | 'experience' | 'grading';
+type Screen = 'goal' | 'cooking' | 'experience' | 'grading' | 'commitment' | 'loading';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('goal');
@@ -48,9 +51,12 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      {screen === 'goal' && <GoalSelectionScreen onContinue={() => setScreen('experience')} />}
-      {screen === 'experience' && <ExperienceLevelScreen onContinue={() => setScreen('grading')} onBack={() => setScreen('goal')} />}
-      {screen === 'grading' && <GradingModeScreen onContinue={() => {}} onBack={() => setScreen('experience')} />}
+      {screen === 'goal' && <GoalSelectionScreen onContinue={() => setScreen('cooking')} />}
+      {screen === 'cooking' && <CookingFrequencyScreen onContinue={() => setScreen('experience')} onBack={() => setScreen('goal')} />}
+      {screen === 'experience' && <ExperienceLevelScreen onContinue={() => setScreen('grading')} onBack={() => setScreen('cooking')} />}
+      {screen === 'grading' && <GradingModeScreen onContinue={() => setScreen('commitment')} onBack={() => setScreen('experience')} />}
+      {screen === 'commitment' && <CommitmentScreen onContinue={() => setScreen('loading')} onBack={() => setScreen('grading')} />}
+      {screen === 'loading' && <RoadmapLoadingScreen />}
     </SafeAreaProvider>
   );
 }
