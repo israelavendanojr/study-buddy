@@ -52,6 +52,7 @@ const ONBOARDING_FLOW: ScreenEntry[] = [
 const PROGRESS_SCREENS = ONBOARDING_FLOW.filter(s => s.showProgress !== false);
 
 const screenWidth = Dimensions.get('window').width;
+const screenHeight = Dimensions.get('window').height;
 
 function progressOf(index: number) {
   const entry = ONBOARDING_FLOW[index];
@@ -68,12 +69,12 @@ function AppContent() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const slideAnim = useRef(new Animated.Value(0)).current;
-  const curtainY = useRef(new Animated.Value(screenWidth * 2)).current;
+  const curtainY = useRef(new Animated.Value(screenHeight)).current;
   const curtainOpacity = useRef(new Animated.Value(1)).current;
   const insets = useSafeAreaInsets();
 
   const handleStartLesson = () => {
-    curtainY.setValue(screenWidth * 2);
+    curtainY.setValue(screenHeight);
     curtainOpacity.setValue(1);
     Animated.timing(curtainY, {
       toValue: 0,
@@ -103,7 +104,7 @@ function AppContent() {
     }).start(() => {
       setIsInLesson(false);
       Animated.timing(curtainY, {
-        toValue: screenWidth * 2,
+        toValue: screenHeight,
         duration: 320,
         easing: Easing.inOut(Easing.ease),
         useNativeDriver: true,

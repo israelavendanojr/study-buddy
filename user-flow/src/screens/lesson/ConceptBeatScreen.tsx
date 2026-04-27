@@ -15,11 +15,18 @@ import ProgressBar from '../../components/ProgressBar';
 import { colors } from '../../theme';
 import MonkeyMascot from '../../components/MonkeyMascot';
 
+interface ConceptContent {
+  quote: { before: string; highlight: string; after: string };
+  whyItMatters: string;
+  proTip: string;
+}
+
 interface ConceptBeatScreenProps {
   currentCard: number;
   totalCards: number;
   onNext: () => void;
   onClose: () => void;
+  content?: ConceptContent;
 }
 
 const CONCEPT = {
@@ -38,9 +45,11 @@ export default function ConceptBeatScreen({
   totalCards,
   onNext,
   onClose,
+  content,
 }: ConceptBeatScreenProps) {
   const insets = useSafeAreaInsets();
   const progress = currentCard / totalCards;
+  const data = content ?? CONCEPT;
 
   return (
     <View style={styles.root}>
@@ -67,9 +76,9 @@ export default function ConceptBeatScreen({
         <View style={styles.cardShadow}>
           <View style={styles.card}>
             <Text style={styles.quoteText}>
-              <Text>{CONCEPT.quote.before}</Text>
-              <Text style={styles.quoteHighlight}>{CONCEPT.quote.highlight}</Text>
-              <Text>{CONCEPT.quote.after}</Text>
+              <Text>{data.quote.before}</Text>
+              <Text style={styles.quoteHighlight}>{data.quote.highlight}</Text>
+              <Text>{data.quote.after}</Text>
             </Text>
 
             <Svg width="100%" height={1}>
@@ -77,7 +86,7 @@ export default function ConceptBeatScreen({
             </Svg>
 
             <Text style={styles.whyLabel}>WHY THIS MATTERS</Text>
-            <Text style={styles.whyText}>{CONCEPT.whyItMatters}</Text>
+            <Text style={styles.whyText}>{data.whyItMatters}</Text>
           </View>
         </View>
 
@@ -88,7 +97,7 @@ export default function ConceptBeatScreen({
               <MaterialIcons name="lightbulb" size={16} color={colors.white} />
             </View>
             <Text style={styles.proTipText}>
-              * Pro Tip: {CONCEPT.proTip}
+              * Pro Tip: {data.proTip}
             </Text>
           </View>
         </View>
