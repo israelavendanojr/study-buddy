@@ -1,10 +1,11 @@
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { LayoutAnimation, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Line, Svg } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GridBackground from '../../components/GridBackground';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
+import MonkeyMascot from '../../components/MonkeyMascot';
 
 const HEADER_HEIGHT = 56;
 const BOTTOM_NAV_HEIGHT = 64;
@@ -17,12 +18,21 @@ interface LessonData {
   label: string;
   status: LessonStatus;
   icon: keyof typeof MaterialIcons.glyphMap;
+  hook?: string;
+  learnPoints?: string[];
 }
 
 const LESSONS: LessonData[] = [
   { id: 'knife-grip',    title: 'Knife Grip',         label: 'TECHNIQUE',        status: 'completed', icon: 'content-cut' },
   { id: 'bear-claw',     title: 'The Bear Claw',       label: 'TECHNIQUE',        status: 'completed', icon: 'pan-tool' },
-  { id: 'sear-chicken',  title: 'Searing Chicken',     label: 'TECHNIQUE',        status: 'active',    icon: 'local-fire-department' },
+  { id: 'sear-chicken',  title: 'Searing Chicken',     label: 'TECHNIQUE',        status: 'active',    icon: 'local-fire-department',
+    hook: "I hate when chicken sticks to the pan. Let's get a beautiful golden-brown crust, everytime.",
+    learnPoints: [
+      "Identifying the 'Leidenfrost point' for a perfect pan temp.",
+      "The 'No-Touch' rule for achieving Maillard browning.",
+      "Deglazing the fond to create a 30-second pan sauce.",
+    ],
+  },
   { id: 'pan-flip',      title: 'The Pan Flip',        label: 'TECHNIQUE',        status: 'locked',    icon: 'restaurant' },
   { id: 'seared-recipe', title: 'Pan-Seared Chicken',  label: 'RECIPE CHALLENGE', status: 'locked',    icon: 'dining' },
 ];
@@ -51,7 +61,17 @@ function Connector({ variant, opacity }: { variant: 'solid' | 'dashed'; opacity:
   );
 }
 
-function LessonCard({ lesson }: { lesson: LessonData }) {
+function LessonCard({
+  lesson,
+  isExpanded,
+  onPress,
+  onClose,
+}: {
+  lesson: LessonData;
+  isExpanded: boolean;
+  onPress: () => void;
+  onClose: () => void;
+}) {
   const isCompleted = lesson.status === 'completed';
   const isActive = lesson.status === 'active';
   const isLocked = lesson.status === 'locked';
@@ -83,7 +103,8 @@ function LessonCard({ lesson }: { lesson: LessonData }) {
       )}
 
       {/* Card face — in normal flow so cardOuter gets natural height */}
-      <View
+      <Pressable
+        onPress={isActive ? onPress : undefined}
         style={[
           styles.cardFace,
           isCompleted && styles.cardFaceCompleted,
@@ -91,46 +112,88 @@ function LessonCard({ lesson }: { lesson: LessonData }) {
           isLocked && styles.cardFaceLocked,
         ]}
       >
-        {/* Left amber accent strip — completed only */}
-        {isCompleted && <View style={styles.accentStrip} />}
+        {/* Header row */}
+        <View style={styles.cardHeaderRow}>
+          {/* Left amber accent strip — completed only */}
+          {isCompleted && <View style={styles.accentStrip} />}
 
-        {/* Icon box */}
-        <View style={[styles.iconBox, isLocked ? styles.iconBoxLocked : styles.iconBoxAmber]}>
-          {isLocked ? (
-            <MaterialIcons name="lock" size={24} color={colors.onSurfaceVariant} />
-          ) : (
-            <MaterialIcons name={lesson.icon} size={28} color="#FFFFFF" />
+          {/* Icon box */}
+          <View style={[styles.iconBox, isLocked ? styles.iconBoxLocked : styles.iconBoxAmber]}>
+            {isLocked ? (
+              <MaterialIcons name="lock" size={24} color={colors.onSurfaceVariant} />
+            ) : (
+              <MaterialIcons name={lesson.icon} size={28} color="#FFFFFF" />
+            )}
+          </View>
+
+          {/* Text column */}
+          <View style={styles.cardTextCol}>
+            <Text
+              style={[
+                styles.cardTypeLabel,
+                { color: isLocked ? colors.onSurfaceVariant : colors.amber },
+              ]}
+            >
+              {lesson.label}
+            </Text>
+            <Text style={styles.cardTitle}>{lesson.title}</Text>
+          </View>
+
+          {/* Right action icon */}
+          {isCompleted && (
+            <MaterialIcons name="chevron-right" size={24} color={colors.ink} style={styles.cardRightIcon} />
+          )}
+          {isActive && (
+            <MaterialIcons
+              name={isExpanded ? 'expand-less' : 'expand-more'}
+              size={24}
+              color={colors.amber}
+              style={styles.cardRightIcon}
+            />
+          )}
+
+          {/* Checkmark badge — completed only, overflows card top-right corner */}
+          {isCompleted && (
+            <View style={styles.checkBadge}>
+              <MaterialIcons name="check" size={14} color="#FFFFFF" />
+            </View>
           )}
         </View>
 
-        {/* Text column */}
-        <View style={styles.cardTextCol}>
-          <Text
-            style={[
-              styles.cardTypeLabel,
-              { color: isLocked ? colors.onSurfaceVariant : colors.amber },
-            ]}
-          >
-            {lesson.label}
-          </Text>
-          <Text style={styles.cardTitle}>{lesson.title}</Text>
-        </View>
+        {/* Expanded section */}
+        {isActive && isExpanded && (
+          <View style={styles.expandedSection}>
+            <View style={styles.expandedSeparator} />
 
-        {/* Right action icon */}
-        {isCompleted && (
-          <MaterialIcons name="chevron-right" size={24} color={colors.ink} style={styles.cardRightIcon} />
-        )}
-        {isActive && (
-          <MaterialIcons name="play-arrow" size={24} color={colors.amber} style={styles.cardRightIcon} />
-        )}
+            {/* Hook quote */}
+            <View style={styles.hookRow}>
+              <MonkeyMascot size={40} float={false} />
+              <Text style={styles.hookText}>"{lesson.hook}"</Text>
+            </View>
 
-        {/* Checkmark badge — completed only, overflows card top-right corner */}
-        {isCompleted && (
-          <View style={styles.checkBadge}>
-            <MaterialIcons name="check" size={14} color="#FFFFFF" />
+            <View style={styles.expandedSeparator} />
+
+            {/* Learn points */}
+            <Text style={styles.learnPointsLabel}>IN THIS LESSON</Text>
+            {lesson.learnPoints?.map((point, i) => (
+              <View key={i} style={styles.bulletRow}>
+                <Text style={styles.bulletDot}>•</Text>
+                <Text style={styles.bulletText}>{point}</Text>
+              </View>
+            ))}
+
+            {/* Buttons */}
+            <View style={styles.buttonRow}>
+              <Pressable style={styles.btnClose} onPress={onClose}>
+                <Text style={styles.btnCloseLabel}>CLOSE</Text>
+              </Pressable>
+              <Pressable style={styles.btnStart}>
+                <Text style={styles.btnStartLabel}>START LESSON -&gt;</Text>
+              </Pressable>
+            </View>
           </View>
         )}
-      </View>
+      </Pressable>
     </View>
   );
 }
@@ -167,6 +230,7 @@ function NavTab({
 
 export default function TrailScreen() {
   const insets = useSafeAreaInsets();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   return (
     <View style={styles.root}>
@@ -198,15 +262,26 @@ export default function TrailScreen() {
         </View>
 
         {/* Lesson cards with connectors */}
-        <LessonCard lesson={LESSONS[0]} />
+        <LessonCard lesson={LESSONS[0]} isExpanded={false} onPress={() => {}} onClose={() => {}} />
         <Connector variant="solid" opacity={1} />
-        <LessonCard lesson={LESSONS[1]} />
+        <LessonCard lesson={LESSONS[1]} isExpanded={false} onPress={() => {}} onClose={() => {}} />
         <Connector variant="solid" opacity={1} />
-        <LessonCard lesson={LESSONS[2]} />
+        <LessonCard
+          lesson={LESSONS[2]}
+          isExpanded={expandedId === LESSONS[2].id}
+          onPress={() => {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setExpandedId(expandedId === LESSONS[2].id ? null : LESSONS[2].id);
+          }}
+          onClose={() => {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setExpandedId(null);
+          }}
+        />
         <Connector variant="dashed" opacity={0.4} />
-        <LessonCard lesson={LESSONS[3]} />
+        <LessonCard lesson={LESSONS[3]} isExpanded={false} onPress={() => {}} onClose={() => {}} />
         <Connector variant="dashed" opacity={0.25} />
-        <LessonCard lesson={LESSONS[4]} />
+        <LessonCard lesson={LESSONS[4]} isExpanded={false} onPress={() => {}} onClose={() => {}} />
       </ScrollView>
 
       {/* Bottom nav */}
@@ -332,8 +407,7 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   cardFace: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
     backgroundColor: colors.surfaceContainer,
     minHeight: 80,
     overflow: 'visible',
@@ -392,6 +466,98 @@ const styles = StyleSheet.create({
   },
   cardRightIcon: {
     marginRight: spacing.md,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 80,
+  },
+
+  // Expanded section
+  expandedSection: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+  },
+  expandedSeparator: {
+    height: 1,
+    backgroundColor: colors.ink,
+    opacity: 0.15,
+    marginVertical: spacing.sm,
+  },
+  hookRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginVertical: spacing.sm,
+  },
+  hookText: {
+    flex: 1,
+    fontFamily: fonts.headlineItalic,
+    fontSize: 14,
+    lineHeight: 22,
+    color: colors.ink,
+  },
+  learnPointsLabel: {
+    fontFamily: fonts.label,
+    fontSize: 9,
+    letterSpacing: 2,
+    color: colors.amber,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+    marginBottom: 6,
+  },
+  bulletDot: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.amber,
+    lineHeight: 20,
+  },
+  bulletText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    lineHeight: 20,
+    color: colors.ink,
+    flex: 1,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  btnClose: {
+    flex: 1,
+    height: 44,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnCloseLabel: {
+    fontFamily: fonts.label,
+    fontSize: 12,
+    letterSpacing: 1.5,
+    color: colors.ink,
+  },
+  btnStart: {
+    flex: 2,
+    height: 44,
+    backgroundColor: colors.amber,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnStartLabel: {
+    fontFamily: fonts.label,
+    fontSize: 12,
+    letterSpacing: 1.5,
+    color: colors.white,
   },
   checkBadge: {
     position: 'absolute',

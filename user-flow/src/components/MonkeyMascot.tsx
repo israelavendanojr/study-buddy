@@ -38,21 +38,23 @@ const MONKEY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 816 920
 
 interface MonkeyMascotProps {
   size?: number;
+  float?: boolean;
 }
 
 // SVG viewBox is 816x920 — preserve aspect ratio
-export default function MonkeyMascot({ size = 80 }: MonkeyMascotProps) {
+export default function MonkeyMascot({ size = 80, float = true }: MonkeyMascotProps) {
   const height = Math.round(size * (920 / 816));
   const floatAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (!float) return;
     Animated.loop(
       Animated.sequence([
         Animated.timing(floatAnim, { toValue: -6, duration: 1500, useNativeDriver: true }),
         Animated.timing(floatAnim, { toValue: 0, duration: 1500, useNativeDriver: true }),
       ])
     ).start();
-  }, []);
+  }, [float]);
 
   return (
     <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
