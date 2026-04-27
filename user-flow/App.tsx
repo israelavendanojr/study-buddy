@@ -29,6 +29,7 @@ import { OnboardingScreenProps } from './src/screens/onboarding/types';
 import { colors } from './src/theme';
 import TrailScreen from './src/screens/trail/TrailScreen';
 import LessonFlowScreen from './src/screens/lesson/LessonFlowScreen';
+import GridBackground from './src/components/GridBackground';
 
 type ScreenEntry = {
   key: string;
@@ -67,7 +68,48 @@ function AppContent() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const curtainY = useRef(new Animated.Value(screenWidth * 2)).current;
+  const curtainOpacity = useRef(new Animated.Value(1)).current;
   const insets = useSafeAreaInsets();
+
+  const handleStartLesson = () => {
+    curtainY.setValue(screenWidth * 2);
+    curtainOpacity.setValue(1);
+    Animated.timing(curtainY, {
+      toValue: 0,
+      duration: 320,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      setIsInLesson(true);
+      setTimeout(() => {
+        Animated.timing(curtainOpacity, {
+          toValue: 0,
+          duration: 420,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }).start();
+      }, 180);
+    });
+  };
+
+  const handleCloseLesson = () => {
+    curtainY.setValue(0);
+    Animated.timing(curtainOpacity, {
+      toValue: 1,
+      duration: 200,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      setIsInLesson(false);
+      Animated.timing(curtainY, {
+        toValue: screenWidth * 2,
+        duration: 320,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }).start();
+    });
+  };
 
   const handleOnboardingComplete = () => {
     Animated.timing(fadeToTrail, {
@@ -129,11 +171,24 @@ function AppContent() {
       <StatusBar style="dark" />
 
       {!isOnboarding ? (
-        isInLesson ? (
-          <LessonFlowScreen onClose={() => setIsInLesson(false)} />
-        ) : (
-          <TrailScreen onStartLesson={() => setIsInLesson(true)} />
-        )
+        <>
+          {isInLesson ? (
+            <LessonFlowScreen onClose={handleCloseLesson} />
+          ) : (
+            <TrailScreen onStartLesson={handleStartLesson} />
+          )}
+          {/* Grid curtain overlay */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFillObject,
+              { transform: [{ translateY: curtainY }], opacity: curtainOpacity, zIndex: 100 },
+            ]}
+          >
+            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.canvas }]} />
+            <GridBackground />
+          </Animated.View>
+        </>
       ) : (
         <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: fadeToTrail }]}>
           {/* Outgoing screen — only visible during transition */}
