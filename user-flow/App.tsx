@@ -28,6 +28,7 @@ import WelcomeScreen from './src/screens/onboarding/WelcomeScreen';
 import { OnboardingScreenProps } from './src/screens/onboarding/types';
 import { colors } from './src/theme';
 import TrailScreen from './src/screens/trail/TrailScreen';
+import LessonFlowScreen from './src/screens/lesson/LessonFlowScreen';
 
 type ScreenEntry = {
   key: string;
@@ -59,6 +60,7 @@ function progressOf(index: number) {
 
 function AppContent() {
   const [isOnboarding, setIsOnboarding] = useState(true);
+  const [isInLesson, setIsInLesson] = useState(false);
   const fadeToTrail = useRef(new Animated.Value(1)).current;
   const [screenIndex, setScreenIndex] = useState(0);
   const [prevIndex, setPrevIndex] = useState<number | null>(null);
@@ -127,7 +129,11 @@ function AppContent() {
       <StatusBar style="dark" />
 
       {!isOnboarding ? (
-        <TrailScreen />
+        isInLesson ? (
+          <LessonFlowScreen onClose={() => setIsInLesson(false)} />
+        ) : (
+          <TrailScreen onStartLesson={() => setIsInLesson(true)} />
+        )
       ) : (
         <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: fadeToTrail }]}>
           {/* Outgoing screen — only visible during transition */}

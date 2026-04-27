@@ -66,11 +66,13 @@ function LessonCard({
   isExpanded,
   onPress,
   onClose,
+  onStartLesson,
 }: {
   lesson: LessonData;
   isExpanded: boolean;
   onPress: () => void;
   onClose: () => void;
+  onStartLesson?: () => void;
 }) {
   const isCompleted = lesson.status === 'completed';
   const isActive = lesson.status === 'active';
@@ -187,7 +189,7 @@ function LessonCard({
               <Pressable style={styles.btnClose} onPress={onClose}>
                 <Text style={styles.btnCloseLabel}>CLOSE</Text>
               </Pressable>
-              <Pressable style={styles.btnStart}>
+              <Pressable style={styles.btnStart} onPress={onStartLesson}>
                 <Text style={styles.btnStartLabel}>START LESSON -&gt;</Text>
               </Pressable>
             </View>
@@ -228,7 +230,7 @@ function NavTab({
   );
 }
 
-export default function TrailScreen() {
+export default function TrailScreen({ onStartLesson }: { onStartLesson?: () => void }) {
   const insets = useSafeAreaInsets();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -277,6 +279,7 @@ export default function TrailScreen() {
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
             setExpandedId(null);
           }}
+          onStartLesson={onStartLesson}
         />
         <Connector variant="dashed" opacity={0.4} />
         <LessonCard lesson={LESSONS[3]} isExpanded={false} onPress={() => {}} onClose={() => {}} />
