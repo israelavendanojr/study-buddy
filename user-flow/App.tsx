@@ -27,6 +27,7 @@ import RoadmapLoadingScreen from './src/screens/onboarding/RoadmapLoadingScreen'
 import WelcomeScreen from './src/screens/onboarding/WelcomeScreen';
 import { OnboardingScreenProps } from './src/screens/onboarding/types';
 import { colors } from './src/theme';
+import TrailScreen from './src/screens/trail/TrailScreen';
 
 type ScreenEntry = {
   key: string;
@@ -57,12 +58,23 @@ function progressOf(index: number) {
 }
 
 function AppContent() {
+  const [isOnboarding, setIsOnboarding] = useState(true);
+  const fadeToTrail = useRef(new Animated.Value(1)).current;
   const [screenIndex, setScreenIndex] = useState(0);
   const [prevIndex, setPrevIndex] = useState<number | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const slideAnim = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
+
+  const handleOnboardingComplete = () => {
+    Animated.timing(fadeToTrail, {
+      toValue: 0,
+      duration: 400,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => setIsOnboarding(false));
+  };
 
   const navigate = (nextIndex: number, dir: 'forward' | 'back') => {
     if (isTransitioning) return;
@@ -114,39 +126,45 @@ function AppContent() {
     <View style={styles.container}>
       <StatusBar style="dark" />
 
-      {/* Outgoing screen — only visible during transition */}
-      {isTransitioning && PrevScreen && prevIndex !== null && (
-        <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: outgoingOpacity, transform: [{ translateX: outgoingTranslate }] }]}>
-          <PrevScreen
-            key={prev!.key}
-            progress={progressOf(prevIndex)}
-            onContinue={undefined}
-            onBack={undefined}
-          />
+      {!isOnboarding ? (
+        <TrailScreen />
+      ) : (
+        <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: fadeToTrail }]}>
+          {/* Outgoing screen — only visible during transition */}
+          {isTransitioning && PrevScreen && prevIndex !== null && (
+            <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: outgoingOpacity, transform: [{ translateX: outgoingTranslate }] }]}>
+              <PrevScreen
+                key={prev!.key}
+                progress={progressOf(prevIndex)}
+                onContinue={undefined}
+                onBack={undefined}
+              />
+            </Animated.View>
+          )}
+
+          {/* Incoming / current screen */}
+          <Animated.View style={[
+            StyleSheet.absoluteFillObject,
+            isTransitioning && { opacity: incomingOpacity, transform: [{ translateX: incomingTranslate }] },
+          ]}>
+            <CurrentScreen
+              key={current.key}
+              progress={progress}
+              onContinue={screenIndex < ONBOARDING_FLOW.length - 1 ? () => navigate(screenIndex + 1, 'forward') : handleOnboardingComplete}
+              onBack={screenIndex > 0 ? () => navigate(screenIndex - 1, 'back') : undefined}
+            />
+          </Animated.View>
+
+          {/* Progress bar overlay — persists across transitions */}
+          {showProgress && (
+            <View style={[styles.progressOverlay, { top: insets.top }]}>
+              <ProgressBar
+                progress={progress}
+                onBack={screenIndex > 0 ? () => navigate(screenIndex - 1, 'back') : undefined}
+              />
+            </View>
+          )}
         </Animated.View>
-      )}
-
-      {/* Incoming / current screen */}
-      <Animated.View style={[
-        StyleSheet.absoluteFillObject,
-        isTransitioning && { opacity: incomingOpacity, transform: [{ translateX: incomingTranslate }] },
-      ]}>
-        <CurrentScreen
-          key={current.key}
-          progress={progress}
-          onContinue={screenIndex < ONBOARDING_FLOW.length - 1 ? () => navigate(screenIndex + 1, 'forward') : undefined}
-          onBack={screenIndex > 0 ? () => navigate(screenIndex - 1, 'back') : undefined}
-        />
-      </Animated.View>
-
-      {/* Progress bar overlay — persists across transitions */}
-      {showProgress && (
-        <View style={[styles.progressOverlay, { top: insets.top }]}>
-          <ProgressBar
-            progress={progress}
-            onBack={screenIndex > 0 ? () => navigate(screenIndex - 1, 'back') : undefined}
-          />
-        </View>
       )}
     </View>
   );

@@ -97,10 +97,15 @@ export default function RoadmapLoadingScreen({ onContinue }: OnboardingScreenPro
 
     headlineTimeout = setTimeout(typeHeadline, 500);
 
+    const advanceTimeout = setTimeout(() => {
+      onContinue?.();
+    }, 4500);
+
     return () => {
       clearInterval(dotsInterval);
       clearTimeout(headlineTimeout);
       clearTimeout(keywordTimeout);
+      clearTimeout(advanceTimeout);
     };
   }, []);
 

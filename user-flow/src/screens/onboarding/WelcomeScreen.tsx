@@ -53,7 +53,7 @@ export default function WelcomeScreen({ onContinue }: OnboardingScreenProps) {
 
           {/* Tagline */}
           <Text style={styles.tagline}>
-            Personalized lessons, real recipes, and active mentorship.
+            Personalized lessons, real recipes, and responsive mentorship.
           </Text>
         </View>
 
