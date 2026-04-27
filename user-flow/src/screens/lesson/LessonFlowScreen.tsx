@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import ConceptBeatScreen from './ConceptBeatScreen';
 import FillBlankScreen from './FillBlankScreen';
 import MultipleChoiceScreen from './MultipleChoiceScreen';
+import SequenceScreen from './SequenceScreen';
 
 interface LessonFlowScreenProps {
   onClose: () => void;
 }
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 const CONCEPT_2 = {
   quote: {
@@ -63,9 +64,21 @@ export default function LessonFlowScreen({ onClose }: LessonFlowScreenProps) {
     );
   }
 
+  if (step === 3) {
+    return (
+      <FillBlankScreen
+        currentStep={4}
+        totalSteps={TOTAL_STEPS}
+        onNext={handleNext}
+        onClose={onClose}
+        onSkip={handleNext}
+      />
+    );
+  }
+
   return (
-    <FillBlankScreen
-      currentStep={4}
+    <SequenceScreen
+      currentStep={5}
       totalSteps={TOTAL_STEPS}
       onNext={handleNext}
       onClose={onClose}
