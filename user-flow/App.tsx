@@ -14,9 +14,10 @@ import {
 } from '@expo-google-fonts/space-grotesk';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import React, { useRef, useState } from 'react';
+import { Animated, Dimensions, Easing, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import ProgressBar from './src/components/ProgressBar';
 import GoalSelectionScreen from './src/screens/onboarding/GoalSelectionScreen';
 import CookingFrequencyScreen from './src/screens/onboarding/CookingFrequencyScreen';
 import ExperienceLevelScreen from './src/screens/onboarding/ExperienceLevelScreen';
@@ -45,8 +46,110 @@ const ONBOARDING_FLOW: ScreenEntry[] = [
 
 const PROGRESS_SCREENS = ONBOARDING_FLOW.filter(s => s.showProgress !== false);
 
-export default function App() {
+const screenWidth = Dimensions.get('window').width;
+
+function progressOf(index: number) {
+  const entry = ONBOARDING_FLOW[index];
+  const pi = PROGRESS_SCREENS.findIndex(s => s.key === entry.key);
+  return pi >= 0 ? (pi + 1) / PROGRESS_SCREENS.length : 1;
+}
+
+function AppContent() {
   const [screenIndex, setScreenIndex] = useState(0);
+  const [prevIndex, setPrevIndex] = useState<number | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [direction, setDirection] = useState<'forward' | 'back'>('forward');
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
+
+  const navigate = (nextIndex: number, dir: 'forward' | 'back') => {
+    if (isTransitioning) return;
+    setPrevIndex(screenIndex);
+    setScreenIndex(nextIndex);
+    setDirection(dir);
+    setIsTransitioning(true);
+    slideAnim.setValue(0);
+    Animated.timing(slideAnim, {
+      toValue: 1,
+      duration: 1000,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      setIsTransitioning(false);
+      setPrevIndex(null);
+    });
+  };
+
+  const current = ONBOARDING_FLOW[screenIndex];
+  const CurrentScreen = current.component;
+  const prev = prevIndex !== null ? ONBOARDING_FLOW[prevIndex] : null;
+  const PrevScreen = prev?.component ?? null;
+
+  const progress = progressOf(screenIndex);
+  const showProgress = current.showProgress !== false;
+
+  const sign = direction === 'forward' ? 1 : -1;
+  const slideDistance = screenWidth * 0.1;
+  const incomingTranslate = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [sign * slideDistance, 0],
+  });
+  const outgoingTranslate = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -sign * slideDistance],
+  });
+  const incomingOpacity = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+  const outgoingOpacity = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
+  });
+
+  return (
+    <View style={styles.container}>
+      <StatusBar style="dark" />
+
+      {/* Outgoing screen — only visible during transition */}
+      {isTransitioning && PrevScreen && prevIndex !== null && (
+        <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: outgoingOpacity, transform: [{ translateX: outgoingTranslate }] }]}>
+          <PrevScreen
+            key={prev!.key}
+            progress={progressOf(prevIndex)}
+            onContinue={undefined}
+            onBack={undefined}
+          />
+        </Animated.View>
+      )}
+
+      {/* Incoming / current screen */}
+      <Animated.View style={[
+        StyleSheet.absoluteFillObject,
+        isTransitioning && { opacity: incomingOpacity, transform: [{ translateX: incomingTranslate }] },
+      ]}>
+        <CurrentScreen
+          key={current.key}
+          progress={progress}
+          onContinue={screenIndex < ONBOARDING_FLOW.length - 1 ? () => navigate(screenIndex + 1, 'forward') : undefined}
+          onBack={screenIndex > 0 ? () => navigate(screenIndex - 1, 'back') : undefined}
+        />
+      </Animated.View>
+
+      {/* Progress bar overlay — persists across transitions */}
+      {showProgress && (
+        <View style={[styles.progressOverlay, { top: insets.top }]}>
+          <ProgressBar
+            progress={progress}
+            onBack={screenIndex > 0 ? () => navigate(screenIndex - 1, 'back') : undefined}
+          />
+        </View>
+      )}
+    </View>
+  );
+}
+
+export default function App() {
   const [fontsLoaded] = useFonts({
     Newsreader_400Regular,
     Newsreader_400Regular_Italic,
@@ -66,32 +169,30 @@ export default function App() {
     );
   }
 
-  const current = ONBOARDING_FLOW[screenIndex];
-  const CurrentScreen = current.component;
-
-  const progressScreenIndex = PROGRESS_SCREENS.findIndex(s => s.key === current.key);
-  const progress = progressScreenIndex >= 0
-    ? (progressScreenIndex + 1) / PROGRESS_SCREENS.length
-    : 1;
-
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
-      <CurrentScreen
-        key={current.key}
-        progress={progress}
-        onContinue={screenIndex < ONBOARDING_FLOW.length - 1 ? () => setScreenIndex(i => i + 1) : undefined}
-        onBack={screenIndex > 0 ? () => setScreenIndex(i => i - 1) : undefined}
-      />
+      <AppContent />
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    overflow: 'hidden',
+    backgroundColor: colors.canvas,
+  },
   loading: {
     flex: 1,
     backgroundColor: colors.canvas,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  progressOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
 });

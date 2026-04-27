@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme';
 
 interface ProgressBarProps {
@@ -8,13 +8,29 @@ interface ProgressBarProps {
 }
 
 export default function ProgressBar({ progress, onBack }: ProgressBarProps) {
+  const animatedValue = useRef(new Animated.Value(progress * 100)).current;
+
+  useEffect(() => {
+    Animated.timing(animatedValue, {
+      toValue: Math.min(100, progress * 100),
+      duration: 400,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: false,
+    }).start();
+  }, [progress]);
+
+  const animatedWidth = animatedValue.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+  });
+
   return (
     <View style={styles.row}>
       <Pressable onPress={onBack} style={styles.backButton}>
         <Text style={styles.backArrow}>‹</Text>
       </Pressable>
       <View style={styles.track}>
-        <View style={[styles.fill, { width: `${Math.min(100, progress * 100)}%` }]} />
+        <Animated.View style={[styles.fill, { width: animatedWidth }]} />
       </View>
     </View>
   );

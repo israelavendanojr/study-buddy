@@ -13,7 +13,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
-import ProgressBar from '../../components/ProgressBar';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
 import { OnboardingScreenProps } from './types';
 
@@ -189,10 +188,6 @@ export default function GoalSelectionScreen({ onContinue, onBack, progress }: On
     <View style={styles.root}>
       <GridBackground />
 
-      {/* Progress bar pinned below status bar */}
-      <View style={[styles.progressBarContainer, { top: insets.top }]}>
-        <ProgressBar progress={progress} onBack={onBack ?? (() => {})} />
-      </View>
 
       <ScrollView
         style={styles.scroll}
@@ -239,13 +234,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.canvas,
-  },
-  progressBarContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
   },
   scroll: {
     flex: 1,
