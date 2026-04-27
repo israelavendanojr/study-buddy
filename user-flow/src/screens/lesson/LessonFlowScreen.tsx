@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ConceptBeatScreen from './ConceptBeatScreen';
 import FillBlankScreen from './FillBlankScreen';
 import ImageIDScreen from './ImageIDScreen';
+import LessonCompleteScreen from './LessonCompleteScreen';
 import MultipleChoiceScreen from './MultipleChoiceScreen';
 import SequenceScreen from './SequenceScreen';
 
@@ -25,9 +26,7 @@ export default function LessonFlowScreen({ onClose }: LessonFlowScreenProps) {
   const [step, setStep] = useState(0);
 
   const handleNext = () => {
-    if (step < TOTAL_STEPS - 1) {
-      setStep(s => s + 1);
-    }
+    setStep(s => s + 1);
   };
 
   if (step === 0) {
@@ -89,13 +88,17 @@ export default function LessonFlowScreen({ onClose }: LessonFlowScreenProps) {
     );
   }
 
-  return (
-    <SequenceScreen
-      currentStep={6}
-      totalSteps={TOTAL_STEPS}
-      onNext={handleNext}
-      onClose={onClose}
-      onSkip={handleNext}
-    />
-  );
+  if (step === 5) {
+    return (
+      <SequenceScreen
+        currentStep={6}
+        totalSteps={TOTAL_STEPS}
+        onNext={handleNext}
+        onClose={onClose}
+        onSkip={handleNext}
+      />
+    );
+  }
+
+  return <LessonCompleteScreen onContinue={onClose} />;
 }

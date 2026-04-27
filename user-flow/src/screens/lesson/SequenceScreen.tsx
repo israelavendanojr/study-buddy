@@ -169,6 +169,7 @@ function SkipButton({ onPress }: { onPress: () => void }) {
 export default function SequenceScreen({
   currentStep,
   totalSteps,
+  onNext,
   onClose,
   onSkip,
 }: SequenceScreenProps) {
@@ -371,7 +372,7 @@ export default function SequenceScreen({
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <SkipButton onPress={onSkip} />
         <View style={styles.checkButtonWrapper}>
-          <InkButton label="CHECK" onPress={() => {}} />
+          <InkButton label="CHECK" onPress={onNext} />
         </View>
       </View>
     </View>
