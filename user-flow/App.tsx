@@ -24,6 +24,7 @@ import ExperienceLevelScreen from './src/screens/onboarding/ExperienceLevelScree
 import GradingModeScreen from './src/screens/onboarding/GradingModeScreen';
 import CommitmentScreen from './src/screens/onboarding/CommitmentScreen';
 import RoadmapLoadingScreen from './src/screens/onboarding/RoadmapLoadingScreen';
+import WelcomeScreen from './src/screens/onboarding/WelcomeScreen';
 import { OnboardingScreenProps } from './src/screens/onboarding/types';
 import { colors } from './src/theme';
 
@@ -36,6 +37,7 @@ type ScreenEntry = {
 // Reorder, add, or remove entries here to change the onboarding flow.
 // Progress bar value and back/forward wiring are derived automatically.
 const ONBOARDING_FLOW: ScreenEntry[] = [
+  { key: 'welcome',    component: WelcomeScreen, showProgress: false },
   { key: 'goal',       component: GoalSelectionScreen },
   { key: 'cooking',    component: CookingFrequencyScreen },
   { key: 'experience', component: ExperienceLevelScreen },
@@ -71,7 +73,7 @@ function AppContent() {
     slideAnim.setValue(0);
     Animated.timing(slideAnim, {
       toValue: 1,
-      duration: 1000,
+      duration: 350,
       easing: Easing.inOut(Easing.ease),
       useNativeDriver: true,
     }).start(() => {
@@ -89,7 +91,8 @@ function AppContent() {
   const showProgress = current.showProgress !== false;
 
   const sign = direction === 'forward' ? 1 : -1;
-  const slideDistance = screenWidth * 0.1;
+  const slideDistance = screenWidth * 0.15
+  ;
   const incomingTranslate = slideAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [sign * slideDistance, 0],
