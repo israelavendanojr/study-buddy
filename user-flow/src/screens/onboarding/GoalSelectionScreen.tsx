@@ -203,7 +203,7 @@ export default function GoalSelectionScreen({ onContinue, onBack, progress }: On
           <MonkeyMascot size={90} />
           {/* Question card */}
           <View style={styles.questionCard}>
-            <Text style={styles.questionText}>Why are you wanting to improve your cooking?</Text>
+            <Text style={styles.questionText}>Whats your cooking goal?</Text>
           </View>
         </View>
 

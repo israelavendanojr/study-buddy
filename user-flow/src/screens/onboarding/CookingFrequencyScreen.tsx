@@ -28,22 +28,22 @@ const OPTIONS: FrequencyOption[] = [
   {
     id: 'rarely',
     title: 'Rarely',
-    description: 'I know how to boil water and toast bread. The rest is a mystery.',
+    description: 'I do not cook for myself or I eat out primarly.',
   },
   {
     id: 'sometimes',
     title: 'Sometimes',
-    description: "I follow recipes okay, but I don't really know why things work. I'm slow with a knife.",
+    description: 'I cook 1–2 times a week, usually when I have extra time.',
   },
   {
     id: 'often',
     title: 'Often',
-    description: "I cook most nights. I'm comfortable with heat and can improvise a little, but I want to polish my technique.",
+    description: 'I meal prep or cook 3–5 nights a week. It’s a regular part of my routine.',
   },
   {
     id: 'daily',
     title: 'Daily',
-    description: "I've worked in industry or have years of high-level hobbyist experience. Looking for fine-tuned refinement.",
+    description: 'I’m at the stove every day. Cooking is my primary way of fueling myself and/or others.',
   },
 ];
 
@@ -171,7 +171,7 @@ export default function CookingFrequencyScreen({ onContinue, onBack, progress }:
       {/* Fixed footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
         <InkButton label="CONTINUE" textColor="#FBF6E6" onPress={() => onContinue?.()} />
-        <Text style={styles.footerCaption}>This helps me decide which lessons to unlock first.</Text>
+        <Text style={styles.footerCaption}>This helps me decide how to structure lessons.</Text>
       </View>
     </View>
   );
