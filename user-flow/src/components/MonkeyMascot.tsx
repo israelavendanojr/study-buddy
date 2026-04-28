@@ -39,12 +39,14 @@ const MONKEY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 816 920
 interface MonkeyMascotProps {
   size?: number;
   float?: boolean;
+  flip?: boolean;
 }
 
 // SVG viewBox is 816x920 — preserve aspect ratio
-export default function MonkeyMascot({ size = 80, float = true }: MonkeyMascotProps) {
+export default function MonkeyMascot({ size = 80, float = true, flip = false }: MonkeyMascotProps) {
   const height = Math.round(size * (920 / 816));
   const floatAnim = useRef(new Animated.Value(0)).current;
+  const flipAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (!float) return;
@@ -56,9 +58,23 @@ export default function MonkeyMascot({ size = 80, float = true }: MonkeyMascotPr
     ).start();
   }, [float]);
 
+  useEffect(() => {
+    if (!flip) return;
+    Animated.loop(
+      Animated.sequence([
+        Animated.delay(2200),
+        Animated.timing(flipAnim, { toValue: -1, duration: 150, useNativeDriver: true }),
+        Animated.delay(2200),
+        Animated.timing(flipAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [flip]);
+
   return (
-    <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
-      <SvgXml xml={MONKEY_SVG} width={size} height={height} />
+    <Animated.View style={{ transform: [{ scaleX: flipAnim }] }}>
+      <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
+        <SvgXml xml={MONKEY_SVG} width={size} height={height} />
+      </Animated.View>
     </Animated.View>
   );
 }

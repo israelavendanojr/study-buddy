@@ -100,5 +100,7 @@ export default function LessonFlowScreen({ onClose }: LessonFlowScreenProps) {
     );
   }
 
-  return <LessonCompleteScreen onContinue={onClose} />;
+  if (step === 6) {
+    return <LessonCompleteScreen onContinue={onClose} />;
+  }
 }

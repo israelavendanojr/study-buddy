@@ -1,6 +1,8 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,6 +22,42 @@ interface LessonCompleteScreenProps {
 export default function LessonCompleteScreen({ onContinue }: LessonCompleteScreenProps) {
   const insets = useSafeAreaInsets();
 
+  const xpAnim = useRef(new Animated.Value(0)).current;
+  const timeAnim = useRef(new Animated.Value(0)).current;
+  const accuracyAnim = useRef(new Animated.Value(0)).current;
+  const streakAnim = useRef(new Animated.Value(0)).current;
+
+  const [xpDisplay, setXpDisplay] = useState('+0');
+  const [timeDisplay, setTimeDisplay] = useState('0:00');
+  const [accuracyDisplay, setAccuracyDisplay] = useState('0%');
+
+  useEffect(() => {
+    const xpId = xpAnim.addListener(({ value }) => {
+      setXpDisplay(`+${Math.round(value)}`);
+    });
+    const timeId = timeAnim.addListener(({ value }) => {
+      const s = Math.round(value);
+      setTimeDisplay(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
+    });
+    const accId = accuracyAnim.addListener(({ value }) => {
+      setAccuracyDisplay(`${Math.round(value)}%`);
+    });
+
+    const cfg = { duration: 1200, easing: Easing.out(Easing.quad), useNativeDriver: false };
+    Animated.sequence([
+      Animated.timing(xpAnim, { toValue: 120, ...cfg }),
+      Animated.timing(timeAnim, { toValue: 402, ...cfg }),
+      Animated.timing(accuracyAnim, { toValue: 85, ...cfg }),
+      Animated.timing(streakAnim, { toValue: 80, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+    ]).start();
+
+    return () => {
+      xpAnim.removeListener(xpId);
+      timeAnim.removeListener(timeId);
+      accuracyAnim.removeListener(accId);
+    };
+  }, []);
+
   return (
     <View style={styles.root}>
       <GridBackground />
@@ -32,7 +70,7 @@ export default function LessonCompleteScreen({ onContinue }: LessonCompleteScree
       >
         {/* Mascot */}
         <View style={styles.mascotContainer}>
-          <MonkeyMascot size={160} float />
+          <MonkeyMascot size={160} float/>
         </View>
 
         {/* Title */}
@@ -41,9 +79,9 @@ export default function LessonCompleteScreen({ onContinue }: LessonCompleteScree
 
         {/* Stat rows */}
         <View style={styles.statsContainer}>
-          <StatRow icon="stars" label="XP EARNED" value="+120" valueColor={colors.amber} />
-          <StatRow icon="schedule" label="TIME SPENT" value="6:42" />
-          <StatRow icon="adjust" label="ACCURACY" value="85%" />
+          <StatRow icon="stars" label="XP EARNED" value={xpDisplay} valueColor={colors.amber} />
+          <StatRow icon="schedule" label="TIME SPENT" value={timeDisplay} />
+          <StatRow icon="adjust" label="ACCURACY" value={accuracyDisplay} />
         </View>
 
         {/* Daily streak card */}
@@ -59,7 +97,7 @@ export default function LessonCompleteScreen({ onContinue }: LessonCompleteScree
             <Text style={styles.streakValue}>12 DAYS</Text>
           </View>
           <View style={styles.progressTrack}>
-            <View style={styles.progressFill} />
+            <Animated.View style={[styles.progressFill, { width: streakAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) }]} />
           </View>
           <Text style={styles.progressLabel}>15 DAYS FOR NEXT BADGE</Text>
         </View>
@@ -221,7 +259,6 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
   },
   progressFill: {
-    width: '80%',
     height: '100%',
     backgroundColor: colors.amber,
   },
