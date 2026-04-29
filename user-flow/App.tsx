@@ -7,6 +7,7 @@ import {
   Newsreader_400Regular,
   Newsreader_400Regular_Italic,
   Newsreader_700Bold,
+  Newsreader_700Bold_Italic,
 } from '@expo-google-fonts/newsreader';
 import {
   SpaceGrotesk_500Medium,
@@ -105,6 +106,7 @@ export default function App() {
     Newsreader_400Regular,
     Newsreader_400Regular_Italic,
     Newsreader_700Bold,
+    Newsreader_700Bold_Italic,
     BeVietnamPro_400Regular,
     BeVietnamPro_500Medium,
     BeVietnamPro_600SemiBold,

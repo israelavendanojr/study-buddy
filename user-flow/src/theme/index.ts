@@ -14,6 +14,7 @@ export const colors = {
 export const fonts = {
   headline: 'Newsreader_700Bold',
   headlineItalic: 'Newsreader_400Regular_Italic',
+  headlineBoldItalic: 'Newsreader_700Bold_Italic',
   body: 'BeVietnamPro_400Regular',
   bodyMedium: 'BeVietnamPro_500Medium',
   label: 'SpaceGrotesk_700Bold',

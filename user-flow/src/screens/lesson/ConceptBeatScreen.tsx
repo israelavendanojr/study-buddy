@@ -13,35 +13,19 @@ import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import { colors } from '../../theme';
 import MonkeyMascot from '../../components/MonkeyMascot';
-
-interface ConceptContent {
-  quote: { before: string; highlight: string; after: string };
-  whyItMatters: string;
-  proTip: string;
-}
+import { ConceptContent } from '../../types/lesson';
 
 interface ConceptBeatScreenProps {
   onNext: () => void;
-  content?: ConceptContent;
+  content: ConceptContent;
 }
-
-const CONCEPT = {
-  quote: {
-    before: '"The pan needs to be hot before the oil goes in. Not warm. ',
-    highlight: 'Hot.',
-    after: " You're looking for the oil to shimmer and just start smoking at the edges.\"",
-  },
-  whyItMatters:
-    'Cold pan = no crust. Protein sticks, tears, and steams instead of searing.',
-  proTip: 'Use oil with a high smoke point, like grapeseed or avocado oil!',
-};
 
 export default function ConceptBeatScreen({
   onNext,
   content,
 }: ConceptBeatScreenProps) {
   const insets = useSafeAreaInsets();
-  const data = content ?? CONCEPT;
+  const data = content;
 
   return (
     <View style={styles.root}>

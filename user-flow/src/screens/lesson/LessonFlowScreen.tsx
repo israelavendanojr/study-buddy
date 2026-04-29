@@ -3,6 +3,14 @@ import { Animated, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProgressBar from '../../components/ProgressBar';
 import { useScreenTransition } from '../../hooks/useScreenTransition';
+import {
+  ConceptContent,
+  FillBlankData,
+  ImageIDData,
+  LessonCompleteData,
+  MultipleChoiceData,
+  SequenceData,
+} from '../../types/lesson';
 import ConceptBeatScreen from './ConceptBeatScreen';
 import FillBlankScreen from './FillBlankScreen';
 import ImageIDScreen from './ImageIDScreen';
@@ -25,7 +33,19 @@ type LessonStep = {
   render: (h: LessonStepHandlers) => React.ReactElement;
 };
 
-const CONCEPT_2 = {
+// ─── Lesson content ───────────────────────────────────────────────────────────
+
+const CONCEPT_1: ConceptContent = {
+  quote: {
+    before: '"The pan needs to be hot before the oil goes in. Not warm. ',
+    highlight: 'Hot.',
+    after: " You're looking for the oil to shimmer and just start smoking at the edges.\"",
+  },
+  whyItMatters: 'Cold pan = no crust. Protein sticks, tears, and steams instead of searing.',
+  proTip: 'Use oil with a high smoke point, like grapeseed or avocado oil!',
+};
+
+const CONCEPT_2: ConceptContent = {
   quote: {
     before: '"Moisture is the enemy of a crust. The Maillard reaction only happens above 280°F — and water keeps your surface at ',
     highlight: '212°F',
@@ -35,16 +55,82 @@ const CONCEPT_2 = {
   proTip: 'Press your protein between paper towels for 30 seconds before hitting the pan.',
 };
 
+const MULTIPLE_CHOICE: MultipleChoiceData = {
+  text: 'You add chicken to a hot pan and hear a loud aggressive sizzle. What does this mean?',
+  options: [
+    { id: 'A', text: 'The pan is too hot' },
+    { id: 'B', text: 'The pan is at the right temperature' },
+    { id: 'C', text: 'You need more oil' },
+    { id: 'D', text: 'The chicken needs more time to dry' },
+  ],
+  correctId: 'B',
+};
+
+const FILL_BLANK: FillBlankData = {
+  prompt: 'Complete the sentence with the correct term.',
+  sentenceBefore: 'The Maillard reaction requires temperatures above',
+  sentenceAfter: ', which is why wet surfaces prevent browning.',
+  correctToken: '280°F',
+  tokens: ['280°F', '212°F', '350°F', '165°F'],
+};
+
+const IMAGE_ID: ImageIDData = {
+  text: 'Which image shows a proper sear in progress?',
+  options: [
+    {
+      id: 'A',
+      label: 'PALE, STEAMING SURFACE',
+      image: require('../../../assets/sear_images/steam.jpeg'),
+    },
+    {
+      id: 'B',
+      label: 'GOLDEN BROWN CRUST',
+      image: require('../../../assets/sear_images/Sear.jpg'),
+    },
+    {
+      id: 'C',
+      label: 'BURNT DARK EDGES',
+      image: require('../../../assets/sear_images/burnt.jpg'),
+    },
+  ],
+  correctId: 'B',
+};
+
+const SEQUENCE: SequenceData = {
+  steps: [
+    'Heat the pan',
+    'Add oil',
+    'Pat chicken dry',
+    'Add chicken to pan',
+    "Don't move it",
+    'Flip once',
+  ],
+};
+
+const LESSON_COMPLETE: LessonCompleteData = {
+  lessonTitle: 'Searing Chicken',
+  chapterLabel: 'Chapter 1',
+  xp: 120,
+  timeSeconds: 402,
+  accuracy: 85,
+  streakDays: 12,
+  streakNextBadgeDays: 15,
+  missionTitle: 'Mission Unlocked: Sear a piece of chicken',
+  missionDescription: 'Put your theory into practice in the real world.',
+};
+
+// ─── Lesson flow ──────────────────────────────────────────────────────────────
+
 // Reorder, add, or remove entries here to change the lesson flow.
 // Step numbers and total count are derived automatically.
 const LESSON_FLOW: LessonStep[] = [
   {
     key: 'concept-1',
-    render: ({ onNext }) => <ConceptBeatScreen onNext={onNext} />,
+    render: ({ onNext }) => <ConceptBeatScreen content={CONCEPT_1} onNext={onNext} />,
   },
   {
     key: 'multiple-choice',
-    render: ({ onNext }) => <MultipleChoiceScreen onNext={onNext} onSkip={onNext} />,
+    render: ({ onNext }) => <MultipleChoiceScreen question={MULTIPLE_CHOICE} onNext={onNext} onSkip={onNext} />,
   },
   {
     key: 'concept-2',
@@ -52,20 +138,20 @@ const LESSON_FLOW: LessonStep[] = [
   },
   {
     key: 'fill-blank',
-    render: ({ onNext }) => <FillBlankScreen onNext={onNext} onSkip={onNext} />,
+    render: ({ onNext }) => <FillBlankScreen activity={FILL_BLANK} onNext={onNext} onSkip={onNext} />,
   },
   {
     key: 'image-id',
-    render: ({ onNext }) => <ImageIDScreen onNext={onNext} onSkip={onNext} />,
+    render: ({ onNext }) => <ImageIDScreen question={IMAGE_ID} onNext={onNext} onSkip={onNext} />,
   },
   {
     key: 'sequence',
-    render: ({ onNext }) => <SequenceScreen onNext={onNext} onSkip={onNext} />,
+    render: ({ onNext }) => <SequenceScreen data={SEQUENCE} onNext={onNext} onSkip={onNext} />,
   },
   {
     key: 'complete',
     showProgress: false,
-    render: ({ onClose }) => <LessonCompleteScreen onContinue={onClose} />,
+    render: ({ onClose }) => <LessonCompleteScreen data={LESSON_COMPLETE} onContinue={onClose} />,
   },
 ];
 

@@ -3,7 +3,6 @@ import React, { useRef, useState } from 'react';
 import {
   Animated,
   Image,
-  ImageSourcePropType,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,46 +14,20 @@ import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import MonkeyMascot from '../../components/MonkeyMascot';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
+import { ImageIDData, ImageIDOption } from '../../types/lesson';
 
 interface ImageIDScreenProps {
   onNext: () => void;
   onSkip: () => void;
+  question: ImageIDData;
 }
-
-interface ImageOption {
-  id: string;
-  label: string;
-  image: ImageSourcePropType;
-}
-
-const QUESTION = {
-  text: 'Which image shows a proper sear in progress?',
-  options: [
-    {
-      id: 'A',
-      label: 'PALE, STEAMING SURFACE',
-      image: require('../../../assets/sear_images/steam.jpeg') as ImageSourcePropType,
-    },
-    {
-      id: 'B',
-      label: 'GOLDEN BROWN CRUST',
-      image: require('../../../assets/sear_images/Sear.jpg') as ImageSourcePropType,
-    },
-    {
-      id: 'C',
-      label: 'BURNT DARK EDGES',
-      image: require('../../../assets/sear_images/burnt.jpg') as ImageSourcePropType,
-    },
-  ] as ImageOption[],
-  correctId: 'B',
-};
 
 function ImageCard({
   option,
   selected,
   onSelect,
 }: {
-  option: ImageOption;
+  option: ImageIDOption;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -195,12 +168,13 @@ function SkipButton({ onPress }: { onPress: () => void }) {
 export default function ImageIDScreen({
   onNext,
   onSkip,
+  question,
 }: ImageIDScreenProps) {
   const insets = useSafeAreaInsets();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const topOptions = QUESTION.options.slice(0, 2);
-  const bottomOption = QUESTION.options[2];
+  const topOptions = question.options.slice(0, 2);
+  const bottomOption = question.options[2];
 
   return (
     <View style={styles.root}>
@@ -222,7 +196,7 @@ export default function ImageIDScreen({
         <View style={styles.questionRow}>
           <MonkeyMascot size={90} />
           <View style={styles.questionCard}>
-            <Text style={styles.questionText}>{QUESTION.text}</Text>
+            <Text style={styles.questionText}>{question.text}</Text>
           </View>
         </View>
 

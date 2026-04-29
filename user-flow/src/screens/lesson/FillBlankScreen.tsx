@@ -13,19 +13,13 @@ import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import MonkeyMascot from '../../components/MonkeyMascot';
 import { colors, fonts, spacing } from '../../theme';
+import { FillBlankData } from '../../types/lesson';
 
 interface FillBlankScreenProps {
   onNext: () => void;
   onSkip: () => void;
+  activity: FillBlankData;
 }
-
-const ACTIVITY = {
-  prompt: 'Complete the sentence with the correct term.',
-  sentenceBefore: 'The Maillard reaction requires temperatures above',
-  sentenceAfter: ', which is why wet surfaces prevent browning.',
-  correctToken: '280°F',
-  tokens: ['280°F', '212°F', '350°F', '165°F'],
-};
 
 function TokenChip({
   token,
@@ -166,6 +160,7 @@ function SkipButton({ onPress }: { onPress: () => void }) {
 export default function FillBlankScreen({
   onNext,
   onSkip,
+  activity,
 }: FillBlankScreenProps) {
   const insets = useSafeAreaInsets();
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
@@ -198,7 +193,7 @@ export default function FillBlankScreen({
         <View style={styles.questionRow}>
           <MonkeyMascot size={90} />
           <View style={styles.questionCard}>
-            <Text style={styles.questionText}>{ACTIVITY.prompt}</Text>
+            <Text style={styles.questionText}>{activity.prompt}</Text>
           </View>
         </View>
 
@@ -209,14 +204,14 @@ export default function FillBlankScreen({
             onPress={selectedToken ? handleBlankPress : undefined}
           >
             <Text style={styles.sentenceText}>
-              {ACTIVITY.sentenceBefore + ' '}
+              {activity.sentenceBefore + ' '}
               <Text
                 style={selectedToken ? styles.blankFilled : styles.blankEmpty}
                 suppressHighlighting
               >
                 {selectedToken ?? '________'}
               </Text>
-              {ACTIVITY.sentenceAfter}
+              {activity.sentenceAfter}
             </Text>
           </Pressable>
         </View>
@@ -224,7 +219,7 @@ export default function FillBlankScreen({
         {/* Word bank */}
         <Text style={styles.wordBankLabel}>WORD BANK</Text>
         <View style={styles.wordBankBox}>
-          {ACTIVITY.tokens.map((token) => (
+          {activity.tokens.map((token) => (
             <View
               key={token}
               style={styles.chipCell}

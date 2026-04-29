@@ -15,10 +15,12 @@ import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import MonkeyMascot from '../../components/MonkeyMascot';
 import { colors, fonts, spacing } from '../../theme';
+import { SequenceData } from '../../types/lesson';
 
 interface SequenceScreenProps {
   onNext: () => void;
   onSkip: () => void;
+  data: SequenceData;
 }
 
 interface DragItem {
@@ -27,14 +29,6 @@ interface DragItem {
   originalIndex: number;
 }
 
-const STEPS_IN_ORDER = [
-  'Heat the pan',
-  'Add oil',
-  'Pat chicken dry',
-  'Add chicken to pan',
-  "Don't move it",
-  'Flip once',
-];
 
 const ITEM_HEIGHT = 68;
 const ITEM_GAP = 10;
@@ -212,12 +206,13 @@ function SkipButton({ onPress }: { onPress: () => void }) {
 export default function SequenceScreen({
   onNext,
   onSkip,
+  data,
 }: SequenceScreenProps) {
   const insets = useSafeAreaInsets();
 
   const [items, setItems] = useState<DragItem[]>(() =>
     shuffleArray(
-      STEPS_IN_ORDER.map((label, i) => ({ key: `item-${i}`, label, originalIndex: i }))
+      data.steps.map((label: string, i: number) => ({ key: `item-${i}`, label, originalIndex: i }))
     )
   );
   const [draggingKey, setDraggingKey] = useState<string | null>(null);

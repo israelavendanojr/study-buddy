@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.ink,
   },
   headerTitle: {
-    fontFamily: fonts.headlineItalic,
+    fontFamily: fonts.headlineBoldItalic,
     fontSize: 22,
     color: colors.ink,
   },

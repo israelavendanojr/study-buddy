@@ -14,12 +14,14 @@ import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import MonkeyMascot from '../../components/MonkeyMascot';
 import { colors, fonts, spacing } from '../../theme';
+import { LessonCompleteData } from '../../types/lesson';
 
 interface LessonCompleteScreenProps {
   onContinue: () => void;
+  data: LessonCompleteData;
 }
 
-export default function LessonCompleteScreen({ onContinue }: LessonCompleteScreenProps) {
+export default function LessonCompleteScreen({ onContinue, data }: LessonCompleteScreenProps) {
   const insets = useSafeAreaInsets();
 
   const xpAnim = useRef(new Animated.Value(0)).current;
@@ -44,11 +46,12 @@ export default function LessonCompleteScreen({ onContinue }: LessonCompleteScree
     });
 
     const cfg = { duration: 1200, easing: Easing.out(Easing.quad), useNativeDriver: false };
+    const streakPct = Math.round((data.streakDays / data.streakNextBadgeDays) * 100);
     Animated.sequence([
-      Animated.timing(xpAnim, { toValue: 120, ...cfg }),
-      Animated.timing(timeAnim, { toValue: 402, ...cfg }),
-      Animated.timing(accuracyAnim, { toValue: 85, ...cfg }),
-      Animated.timing(streakAnim, { toValue: 80, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(xpAnim, { toValue: data.xp, ...cfg }),
+      Animated.timing(timeAnim, { toValue: data.timeSeconds, ...cfg }),
+      Animated.timing(accuracyAnim, { toValue: data.accuracy, ...cfg }),
+      Animated.timing(streakAnim, { toValue: streakPct, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
     ]).start();
 
     return () => {
@@ -75,7 +78,7 @@ export default function LessonCompleteScreen({ onContinue }: LessonCompleteScree
 
         {/* Title */}
         <Text style={styles.title}>Lesson Complete.</Text>
-        <Text style={styles.subtitle}>Searing Chicken · Chapter 1</Text>
+        <Text style={styles.subtitle}>{data.lessonTitle} · {data.chapterLabel}</Text>
 
         {/* Stat rows */}
         <View style={styles.statsContainer}>
@@ -94,12 +97,12 @@ export default function LessonCompleteScreen({ onContinue }: LessonCompleteScree
                 <Text style={styles.streakSub}>Come back tomorrow…</Text>
               </View>
             </View>
-            <Text style={styles.streakValue}>12 DAYS</Text>
+            <Text style={styles.streakValue}>{data.streakDays} DAYS</Text>
           </View>
           <View style={styles.progressTrack}>
             <Animated.View style={[styles.progressFill, { width: streakAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) }]} />
           </View>
-          <Text style={styles.progressLabel}>15 DAYS FOR NEXT BADGE</Text>
+          <Text style={styles.progressLabel}>{data.streakNextBadgeDays} DAYS FOR NEXT BADGE</Text>
         </View>
 
         {/* Mission unlocked card */}
@@ -108,8 +111,8 @@ export default function LessonCompleteScreen({ onContinue }: LessonCompleteScree
             <Text style={styles.missionBadgeText}>NEW</Text>
           </View>
           <View style={styles.missionText}>
-            <Text style={styles.missionTitle}>Mission Unlocked: Sear a piece of chicken</Text>
-            <Text style={styles.missionDesc}>Put your theory into practice in the real world.</Text>
+            <Text style={styles.missionTitle}>{data.missionTitle}</Text>
+            <Text style={styles.missionDesc}>{data.missionDescription}</Text>
           </View>
         </View>
 

@@ -13,27 +13,15 @@ import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import MonkeyMascot from '../../components/MonkeyMascot';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
+import { MultipleChoiceData } from '../../types/lesson';
 
 interface MultipleChoiceScreenProps {
   onNext: () => void;
   onSkip: () => void;
+  question: MultipleChoiceData;
 }
 
-interface Option {
-  id: string;
-  text: string;
-}
-
-const QUESTION = {
-  text: 'You add chicken to a hot pan and hear a loud aggressive sizzle. What does this mean?',
-  options: [
-    { id: 'A', text: 'The pan is too hot' },
-    { id: 'B', text: 'The pan is at the right temperature' },
-    { id: 'C', text: 'You need more oil' },
-    { id: 'D', text: 'The chicken needs more time to dry' },
-  ] as Option[],
-  correctId: 'B',
-};
+type Option = MultipleChoiceData['options'][number];
 
 function OptionCard({
   option,
@@ -185,6 +173,7 @@ function SkipButton({ onPress }: { onPress: () => void }) {
 export default function MultipleChoiceScreen({
   onNext,
   onSkip,
+  question,
 }: MultipleChoiceScreenProps) {
   const insets = useSafeAreaInsets();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -209,13 +198,13 @@ export default function MultipleChoiceScreen({
         <View style={styles.questionRow}>
           <MonkeyMascot size={90} />
           <View style={styles.questionCard}>
-            <Text style={styles.questionText}>{QUESTION.text}</Text>
+            <Text style={styles.questionText}>{question.text}</Text>
           </View>
         </View>
 
         {/* Options list */}
         <View style={styles.optionsList}>
-          {QUESTION.options.map((option) => (
+          {question.options.map((option) => (
             <OptionCard
               key={option.id}
               option={option}
