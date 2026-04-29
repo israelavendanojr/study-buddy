@@ -1,5 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   PanResponder,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   View,
+  unstable_batchedUpdates,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GridBackground from '../../components/GridBackground';
@@ -87,22 +88,68 @@ function DragRow({
   );
 }
 
-function FloatingDragRow({ item, position }: { item: DragItem; position: number }) {
+function FloatingDragRow({
+  item,
+  position,
+  colorAnim,
+}: {
+  item: DragItem;
+  position: number;
+  colorAnim: Animated.Value;
+}) {
+  const [borderStyle, setBorderStyle] = useState<'dashed' | 'solid'>('dashed');
+
+  useEffect(() => {
+    const id = colorAnim.addListener(({ value }) => {
+      setBorderStyle(value > 0.6 ? 'solid' : 'dashed');
+    });
+    return () => colorAnim.removeListener(id);
+  }, [colorAnim]);
+
+  const accentColor = colorAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.amber, colors.ink],
+  });
+  const badgeBg = colorAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.amber, colors.canvas],
+  });
+  const badgeTextColor = colorAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.white, colors.ink],
+  });
+  const iconAmberOpacity = colorAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
+  });
+
   return (
-    <View style={[styles.rowShadow, styles.rowShadowFloating]}>
-      <View style={[styles.row, styles.rowFloating]}>
-        <MaterialIcons
-          name="drag-indicator"
-          size={22}
-          color={colors.amber}
-          style={styles.dragHandle}
-        />
-        <Text style={[styles.rowText, styles.rowTextActive]}>{item.label}</Text>
-        <View style={[styles.numberBadge, styles.numberBadgeFloating]}>
-          <Text style={[styles.numberText, styles.numberTextFloating]}>{position + 1}</Text>
+    <Animated.View style={[styles.rowShadow, styles.rowShadowFloating, { shadowColor: accentColor }]}>
+      <Animated.View style={[styles.row, styles.rowFloating, { borderColor: accentColor, borderStyle }]}>
+        {/* Cross-fade drag handle: amber fades out, ink fades in */}
+        <View style={{ width: 22, height: 22, flexShrink: 0 }}>
+          <MaterialIcons
+            name="drag-indicator"
+            size={22}
+            color={colors.onSurfaceVariant}
+            style={StyleSheet.absoluteFill}
+          />
+          <Animated.View style={{ opacity: iconAmberOpacity }}>
+            <MaterialIcons name="drag-indicator" size={22} color={colors.amber} />
+          </Animated.View>
         </View>
-      </View>
-    </View>
+        <Animated.Text style={[styles.rowText, { color: accentColor }]}>
+          {item.label}
+        </Animated.Text>
+        <Animated.View
+          style={[styles.numberBadge, { borderColor: accentColor, backgroundColor: badgeBg }]}
+        >
+          <Animated.Text style={[styles.numberText, { color: badgeTextColor }]}>
+            {position + 1}
+          </Animated.Text>
+        </Animated.View>
+      </Animated.View>
+    </Animated.View>
   );
 }
 
@@ -184,11 +231,13 @@ export default function SequenceScreen({
   const dragStartIdxRef = useRef<number>(0);
   const dragStartPageYRef = useRef<number>(0);
   const currentHoverIdxRef = useRef<number>(0);
+  const dropSessionRef = useRef<number>(0);
   const listRef = useRef<View>(null);
   const listPageYRef = useRef(0);
 
   // Animated values
   const floatingTopAnim = useRef(new Animated.Value(0)).current;
+  const colorTransitionAnim = useRef(new Animated.Value(0)).current;
   const itemTranslateAnims = useRef<Record<string, Animated.Value>>({});
 
   // Ensure every item has an anim value
@@ -217,7 +266,9 @@ export default function SequenceScreen({
           currentHoverIdxRef.current = startIdx;
           draggingKeyRef.current = key;
 
+          dropSessionRef.current += 1; // invalidate any in-flight drop callback
           floatingTopAnim.setValue(startIdx * SLOT);
+          colorTransitionAnim.setValue(0);
           setHoverIndex(startIdx);
           setDraggingKey(key);
         },
@@ -267,22 +318,42 @@ export default function SequenceScreen({
           const fromIdx = dragStartIdxRef.current;
           const toIdx = currentHoverIdxRef.current;
 
-          setItems((prev) => {
-            if (fromIdx === toIdx) return prev;
-            const next = [...prev];
-            const [moved] = next.splice(fromIdx, 1);
-            next.splice(toIdx, 0, moved);
-            return next;
+          // Snap floating card to its landing slot and fade colors back, then commit
+          const thisSession = ++dropSessionRef.current;
+          Animated.parallel([
+            Animated.spring(floatingTopAnim, {
+              toValue: toIdx * SLOT,
+              tension: 400,
+              friction: 28,
+              useNativeDriver: false,
+            }),
+            Animated.timing(colorTransitionAnim, {
+              toValue: 1,
+              duration: 220,
+              useNativeDriver: false,
+            }),
+          ]).start(({ finished }) => {
+            // If a new drag started before this settled, bail — don't mutate state mid-drag
+            if (!finished || dropSessionRef.current !== thisSession) return;
+
+            Object.values(itemTranslateAnims.current).forEach((a) => a.setValue(0));
+            draggingKeyRef.current = null;
+            // Batch both updates into one render so the ghost never flickers visible mid-swap
+            unstable_batchedUpdates(() => {
+              setItems((prev) => {
+                if (fromIdx === toIdx) return prev;
+                const next = [...prev];
+                const [moved] = next.splice(fromIdx, 1);
+                next.splice(toIdx, 0, moved);
+                return next;
+              });
+              setDraggingKey(null);
+            });
           });
-
-          // Reset anim values immediately so the committed list renders clean
-          Object.values(itemTranslateAnims.current).forEach((a) => a.setValue(0));
-
-          draggingKeyRef.current = null;
-          setDraggingKey(null);
         },
         onPanResponderTerminate: () => {
           Object.values(itemTranslateAnims.current).forEach((a) => a.setValue(0));
+          colorTransitionAnim.setValue(0);
           draggingKeyRef.current = null;
           setDraggingKey(null);
         },
@@ -352,7 +423,7 @@ export default function SequenceScreen({
               pointerEvents="none"
               style={[styles.floatingCard, { top: floatingTopAnim }]}
             >
-              <FloatingDragRow item={draggingItem} position={hoverIndex} />
+              <FloatingDragRow item={draggingItem} position={hoverIndex} colorAnim={colorTransitionAnim} />
             </Animated.View>
           )}
         </View>
