@@ -1,4 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { Animated, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ProgressBar from '../../components/ProgressBar';
+import { useScreenTransition } from '../../hooks/useScreenTransition';
 import ConceptBeatScreen from './ConceptBeatScreen';
 import FillBlankScreen from './FillBlankScreen';
 import ImageIDScreen from './ImageIDScreen';
@@ -11,14 +15,13 @@ interface LessonFlowScreenProps {
 }
 
 type LessonStepHandlers = {
-  stepIndex: number;
-  totalSteps: number;
   onNext: () => void;
   onClose: () => void;
 };
 
 type LessonStep = {
   key: string;
+  showProgress?: boolean;
   render: (h: LessonStepHandlers) => React.ReactElement;
 };
 
@@ -37,52 +40,85 @@ const CONCEPT_2 = {
 const LESSON_FLOW: LessonStep[] = [
   {
     key: 'concept-1',
-    render: ({ stepIndex, totalSteps, onNext, onClose }) => (
-      <ConceptBeatScreen currentCard={stepIndex + 1} totalCards={totalSteps} onNext={onNext} onClose={onClose} />
-    ),
+    render: ({ onNext }) => <ConceptBeatScreen onNext={onNext} />,
   },
   {
     key: 'multiple-choice',
-    render: ({ stepIndex, totalSteps, onNext, onClose }) => (
-      <MultipleChoiceScreen currentStep={stepIndex + 1} totalSteps={totalSteps} onNext={onNext} onClose={onClose} onSkip={onNext} />
-    ),
+    render: ({ onNext }) => <MultipleChoiceScreen onNext={onNext} onSkip={onNext} />,
   },
   {
     key: 'concept-2',
-    render: ({ stepIndex, totalSteps, onNext, onClose }) => (
-      <ConceptBeatScreen currentCard={stepIndex + 1} totalCards={totalSteps} content={CONCEPT_2} onNext={onNext} onClose={onClose} />
-    ),
+    render: ({ onNext }) => <ConceptBeatScreen content={CONCEPT_2} onNext={onNext} />,
   },
   {
     key: 'fill-blank',
-    render: ({ stepIndex, totalSteps, onNext, onClose }) => (
-      <FillBlankScreen currentStep={stepIndex + 1} totalSteps={totalSteps} onNext={onNext} onClose={onClose} onSkip={onNext} />
-    ),
+    render: ({ onNext }) => <FillBlankScreen onNext={onNext} onSkip={onNext} />,
   },
   {
     key: 'image-id',
-    render: ({ stepIndex, totalSteps, onNext, onClose }) => (
-      <ImageIDScreen currentStep={stepIndex + 1} totalSteps={totalSteps} onNext={onNext} onClose={onClose} onSkip={onNext} />
-    ),
+    render: ({ onNext }) => <ImageIDScreen onNext={onNext} onSkip={onNext} />,
   },
   {
     key: 'sequence',
-    render: ({ stepIndex, totalSteps, onNext, onClose }) => (
-      <SequenceScreen currentStep={stepIndex + 1} totalSteps={totalSteps} onNext={onNext} onClose={onClose} onSkip={onNext} />
-    ),
+    render: ({ onNext }) => <SequenceScreen onNext={onNext} onSkip={onNext} />,
   },
   {
     key: 'complete',
+    showProgress: false,
     render: ({ onClose }) => <LessonCompleteScreen onContinue={onClose} />,
   },
 ];
 
 // Exclude the completion screen from the progress count
-const ACTIVITY_STEP_COUNT = LESSON_FLOW.length - 1;
+const ACTIVITY_STEP_COUNT = LESSON_FLOW.filter(s => s.showProgress !== false).length;
 
 export default function LessonFlowScreen({ onClose }: LessonFlowScreenProps) {
-  const [step, setStep] = useState(0);
-  const handleNext = () => setStep(s => s + 1);
+  const { index: step, prevIndex: prevStep, isTransitioning, navigate, incomingStyle, outgoingStyle } = useScreenTransition();
+  const insets = useSafeAreaInsets();
+
+  const handleNext = () => navigate(step + 1, 'forward');
+  const handleBack = () => step > 0 ? navigate(step - 1, 'back') : onClose();
+
   const current = LESSON_FLOW[step];
-  return current.render({ stepIndex: step, totalSteps: ACTIVITY_STEP_COUNT, onNext: handleNext, onClose });
+  const prev = prevStep !== null ? LESSON_FLOW[prevStep] : null;
+  const showProgress = current.showProgress !== false;
+  const progress = step / ACTIVITY_STEP_COUNT;
+
+  return (
+    <View style={StyleSheet.absoluteFillObject}>
+      {/* Outgoing screen — only visible during transition */}
+      {isTransitioning && prev && prevStep !== null && (
+        <Animated.View style={[StyleSheet.absoluteFillObject, outgoingStyle]}>
+          {prev.render({ onNext: handleNext, onClose })}
+        </Animated.View>
+      )}
+
+      {/* Incoming / current screen */}
+      <Animated.View style={[
+        StyleSheet.absoluteFillObject,
+        isTransitioning && incomingStyle,
+      ]}>
+        {current.render({ onNext: handleNext, onClose })}
+      </Animated.View>
+
+      {/* Progress bar overlay — persists across transitions */}
+      {showProgress && (
+        <View style={[styles.progressOverlay, { top: insets.top }]}>
+          <ProgressBar
+            progress={progress}
+            onBack={handleBack}
+          />
+        </View>
+      )}
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  progressOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+});

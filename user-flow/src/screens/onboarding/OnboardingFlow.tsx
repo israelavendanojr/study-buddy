@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
-import { Animated, Dimensions, Easing, StyleSheet, View } from 'react-native';
+import React, { useRef } from 'react';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProgressBar from '../../components/ProgressBar';
+import { useScreenTransition } from '../../hooks/useScreenTransition';
 import CommitmentScreen from './CommitmentScreen';
 import CookingFrequencyScreen from './CookingFrequencyScreen';
 import ExperienceLevelScreen from './ExperienceLevelScreen';
@@ -31,8 +32,6 @@ const ONBOARDING_FLOW: ScreenEntry[] = [
 
 const PROGRESS_SCREENS = ONBOARDING_FLOW.filter(s => s.showProgress !== false);
 
-const screenWidth = Dimensions.get('window').width;
-
 function progressOf(index: number) {
   const entry = ONBOARDING_FLOW[index];
   const pi = PROGRESS_SCREENS.findIndex(s => s.key === entry.key);
@@ -44,11 +43,7 @@ interface OnboardingFlowProps {
 }
 
 export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
-  const [screenIndex, setScreenIndex] = useState(0);
-  const [prevIndex, setPrevIndex] = useState<number | null>(null);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [direction, setDirection] = useState<'forward' | 'back'>('forward');
-  const slideAnim = useRef(new Animated.Value(0)).current;
+  const { index: screenIndex, prevIndex, isTransitioning, navigate, incomingStyle, outgoingStyle } = useScreenTransition();
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const insets = useSafeAreaInsets();
 
@@ -61,24 +56,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }).start(() => onComplete());
   };
 
-  const navigate = (nextIndex: number, dir: 'forward' | 'back') => {
-    if (isTransitioning) return;
-    setPrevIndex(screenIndex);
-    setScreenIndex(nextIndex);
-    setDirection(dir);
-    setIsTransitioning(true);
-    slideAnim.setValue(0);
-    Animated.timing(slideAnim, {
-      toValue: 1,
-      duration: 350,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
-    }).start(() => {
-      setIsTransitioning(false);
-      setPrevIndex(null);
-    });
-  };
-
   const current = ONBOARDING_FLOW[screenIndex];
   const CurrentScreen = current.component;
   const prev = prevIndex !== null ? ONBOARDING_FLOW[prevIndex] : null;
@@ -87,30 +64,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const progress = progressOf(screenIndex);
   const showProgress = current.showProgress !== false;
 
-  const sign = direction === 'forward' ? 1 : -1;
-  const slideDistance = screenWidth * 0.15;
-  const incomingTranslate = slideAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [sign * slideDistance, 0],
-  });
-  const outgoingTranslate = slideAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -sign * slideDistance],
-  });
-  const incomingOpacity = slideAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-  const outgoingOpacity = slideAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 0],
-  });
-
   return (
     <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: fadeAnim }]}>
       {/* Outgoing screen — only visible during transition */}
       {isTransitioning && PrevScreen && prevIndex !== null && (
-        <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: outgoingOpacity, transform: [{ translateX: outgoingTranslate }] }]}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, outgoingStyle]}>
           <PrevScreen
             key={prev!.key}
             progress={progressOf(prevIndex)}
@@ -123,7 +81,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       {/* Incoming / current screen */}
       <Animated.View style={[
         StyleSheet.absoluteFillObject,
-        isTransitioning && { opacity: incomingOpacity, transform: [{ translateX: incomingTranslate }] },
+        isTransitioning && incomingStyle,
       ]}>
         <CurrentScreen
           key={current.key}

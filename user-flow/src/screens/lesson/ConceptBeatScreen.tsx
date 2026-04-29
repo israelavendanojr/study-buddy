@@ -11,7 +11,6 @@ import { Line, Svg } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
-import ProgressBar from '../../components/ProgressBar';
 import { colors } from '../../theme';
 import MonkeyMascot from '../../components/MonkeyMascot';
 
@@ -22,10 +21,7 @@ interface ConceptContent {
 }
 
 interface ConceptBeatScreenProps {
-  currentCard: number;
-  totalCards: number;
   onNext: () => void;
-  onClose: () => void;
   content?: ConceptContent;
 }
 
@@ -41,25 +37,18 @@ const CONCEPT = {
 };
 
 export default function ConceptBeatScreen({
-  currentCard,
-  totalCards,
   onNext,
-  onClose,
   content,
 }: ConceptBeatScreenProps) {
   const insets = useSafeAreaInsets();
-  const progress = currentCard / totalCards;
   const data = content ?? CONCEPT;
 
   return (
     <View style={styles.root}>
       <GridBackground />
 
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        
-        <ProgressBar progress={progress} onBack={onClose} />
-      </View>
+      {/* Spacer for overlay progress bar */}
+      <View style={{ height: insets.top + 52 }} />
 
       {/* Scrollable content */}
       <ScrollView

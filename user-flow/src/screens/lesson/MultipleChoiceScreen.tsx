@@ -12,14 +12,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import MonkeyMascot from '../../components/MonkeyMascot';
-import ProgressBar from '../../components/ProgressBar';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
 
 interface MultipleChoiceScreenProps {
-  currentStep: number;
-  totalSteps: number;
   onNext: () => void;
-  onClose: () => void;
   onSkip: () => void;
 }
 
@@ -187,24 +183,18 @@ function SkipButton({ onPress }: { onPress: () => void }) {
 }
 
 export default function MultipleChoiceScreen({
-  currentStep,
-  totalSteps,
   onNext,
-  onClose,
   onSkip,
 }: MultipleChoiceScreenProps) {
   const insets = useSafeAreaInsets();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const progress = currentStep / totalSteps;
 
   return (
     <View style={styles.root}>
       <GridBackground />
 
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <ProgressBar progress={progress} onBack={onClose} />
-      </View>
+      {/* Spacer for overlay progress bar */}
+      <View style={{ height: insets.top + 52 }} />
 
       {/* Scrollable content */}
       <ScrollView
