@@ -67,12 +67,14 @@ function LessonCard({
   onPress,
   onClose,
   onStartLesson,
+  onDirectPress,
 }: {
   lesson: LessonData;
   isExpanded: boolean;
   onPress: () => void;
   onClose: () => void;
   onStartLesson?: () => void;
+  onDirectPress?: () => void;
 }) {
   const isCompleted = lesson.status === 'completed';
   const isActive = lesson.status === 'active';
@@ -106,7 +108,7 @@ function LessonCard({
 
       {/* Card face — in normal flow so cardOuter gets natural height */}
       <Pressable
-        onPress={isActive ? onPress : undefined}
+        onPress={onDirectPress ?? (isActive ? onPress : undefined)}
         style={[
           styles.cardFace,
           isCompleted && styles.cardFaceCompleted,
@@ -230,7 +232,7 @@ function NavTab({
   );
 }
 
-export default function TrailScreen({ onStartLesson }: { onStartLesson?: () => void }) {
+export default function TrailScreen({ onStartLesson, onStartRecipe }: { onStartLesson?: () => void; onStartRecipe?: () => void }) {
   const insets = useSafeAreaInsets();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -284,7 +286,7 @@ export default function TrailScreen({ onStartLesson }: { onStartLesson?: () => v
         <Connector variant="dashed" opacity={0.4} />
         <LessonCard lesson={LESSONS[3]} isExpanded={false} onPress={() => {}} onClose={() => {}} />
         <Connector variant="dashed" opacity={0.25} />
-        <LessonCard lesson={LESSONS[4]} isExpanded={false} onPress={() => {}} onClose={() => {}} />
+        <LessonCard lesson={LESSONS[4]} isExpanded={false} onPress={() => {}} onClose={() => {}} onDirectPress={onStartRecipe} />
       </ScrollView>
 
       {/* Bottom nav */}

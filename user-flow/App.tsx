@@ -22,6 +22,7 @@ import { colors } from './src/theme';
 import OnboardingFlow from './src/screens/onboarding/OnboardingFlow';
 import TrailScreen from './src/screens/trail/TrailScreen';
 import LessonFlowScreen from './src/screens/lesson/LessonFlowScreen';
+import RecipeFlowScreen from './src/screens/recipe/RecipeFlowScreen';
 import GridBackground from './src/components/GridBackground';
 
 const screenHeight = Dimensions.get('window').height;
@@ -29,6 +30,7 @@ const screenHeight = Dimensions.get('window').height;
 function AppContent() {
   const [isOnboarding, setIsOnboarding] = useState(true);
   const [isInLesson, setIsInLesson] = useState(false);
+  const [isInRecipe, setIsInRecipe] = useState(false);
   const curtainY = useRef(new Animated.Value(screenHeight)).current;
   const curtainOpacity = useRef(new Animated.Value(1)).current;
 
@@ -50,6 +52,45 @@ function AppContent() {
           useNativeDriver: true,
         }).start();
       }, 180);
+    });
+  };
+
+  const handleStartRecipe = () => {
+    curtainY.setValue(screenHeight);
+    curtainOpacity.setValue(1);
+    Animated.timing(curtainY, {
+      toValue: 0,
+      duration: 320,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      setIsInRecipe(true);
+      setTimeout(() => {
+        Animated.timing(curtainOpacity, {
+          toValue: 0,
+          duration: 420,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }).start();
+      }, 180);
+    });
+  };
+
+  const handleCloseRecipe = () => {
+    curtainY.setValue(0);
+    Animated.timing(curtainOpacity, {
+      toValue: 1,
+      duration: 200,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      setIsInRecipe(false);
+      Animated.timing(curtainY, {
+        toValue: screenHeight,
+        duration: 320,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }).start();
     });
   };
 
@@ -81,8 +122,10 @@ function AppContent() {
         <>
           {isInLesson ? (
             <LessonFlowScreen onClose={handleCloseLesson} />
+          ) : isInRecipe ? (
+            <RecipeFlowScreen onClose={handleCloseRecipe} />
           ) : (
-            <TrailScreen onStartLesson={handleStartLesson} />
+            <TrailScreen onStartLesson={handleStartLesson} onStartRecipe={handleStartRecipe} />
           )}
           {/* Grid curtain overlay */}
           <Animated.View

@@ -19,15 +19,20 @@ make setup      # First-time setup: install dependencies + start DB
 make install    # Install backend venv + mobile node_modules
 ```
 
-### Development Services
+### Frontend Prototype
+```bash
+cd user-flow && npm start   # Start user-flow Expo dev server (no backend needed)
+```
+
+### Full-Stack Development Services
 ```bash
 make db         # Start PostgreSQL (docker compose)
 make db-wait    # Start DB and wait until ready
 make db-stop    # Stop PostgreSQL
 make backend    # Start FastAPI server (requires DB running)
-make mobile     # Start Expo iOS dev server (syncs IP first)
-make mobile-expo # Start Expo dev server (web/any platform)
-make dev        # Start all services (DB + backend + mobile)
+make mobile     # Start mobile/ Expo iOS dev server (syncs IP first)
+make mobile-expo # Start mobile/ Expo dev server (web/any platform)
+make dev        # Start all services (DB + backend + mobile/)
 ```
 
 ### Database
@@ -81,28 +86,51 @@ cd backend && venv/bin/uvicorn app.main:app --reload --host 0.0.0.0
 ```
 Server: `http://localhost:8000`. Mobile connects via `EXPO_PUBLIC_API_BASE`.
 
-### Mobile App (`/mobile`)
+### Frontend Prototype (`/user-flow`) — Active Development
+
+`user-flow` is a standalone Expo app containing the current UI prototype. It has **no backend connection** — all content is static hardcoded data. The `mobile` directory is the older production app (Clerk auth, API client, React Navigation); `user-flow` is where UI work happens.
+
+```bash
+cd user-flow && npm start   # Start Expo dev server
+```
+
+**App-level navigation** (`App.tsx`) is state-based — no navigation library. Top-level state switches between `OnboardingFlow`, `TrailScreen`, `LessonFlowScreen`, and `RecipeFlowScreen`, with a curtain animation between them.
+
+**Flow pattern** — each flow is a declarative array of steps in a single `*FlowScreen` file:
+- `OnboardingFlow.tsx` → `ONBOARDING_FLOW: ScreenEntry[]`
+- `LessonFlowScreen.tsx` → `LESSON_FLOW: LessonStep[]`
+- `RecipeFlowScreen.tsx` → `RECIPE_FLOW: RecipeStep[]`
+
+To add, remove, or reorder screens in a flow, edit only that array. Step numbers and progress are derived automatically.
+
+**`useScreenTransition` hook** (`src/hooks/useScreenTransition.ts`): Manages animated slide transitions within a flow. Returns `{ index, prevIndex, isTransitioning, navigate, incomingStyle, outgoingStyle }`. Both the outgoing and incoming screens are rendered simultaneously during the transition so each flow screen only needs to handle its own content — no transition logic in individual screens.
 
 **Screens** (`src/screens/`):
-- `auth/` — SignIn, SignUp, Loading
-- `onboarding/` — 6-screen flow (Goal, Experience, Grading, Commitment, Coaching, Confirmation)
-- `trail/` — `TrailScreen` (winding path visualization of the lesson roadmap)
-- `lesson/` — `LessonFlowScreen` (orchestrates the lesson), `HookScreen`, `ConceptBeatScreen`, `MultipleChoiceScreen`, `FillBlankScreen`, `ImageIDScreen`, `SequenceScreen`, `LessonCompleteScreen`
-- `recipe/` — Multi-step cooking flow: `RecipeIntroScreen` → `RecipeIngredientsScreen` → `RecipeStepScreen` → `RecipePhotoScreen` → `RecipeFeedbackLoadingScreen` → `RecipeFeedbackScreen`
-- `kitchen/` — `KitchenScreen` (recipe browse/entry point)
-- `profile/` — `ProfileScreen` (user stats)
-- `mission/` — Legacy mission screens
+- `onboarding/` — Welcome, GoalSelection, CookingFrequency, ExperienceLevel, GradingMode, Commitment, RoadmapLoading
+- `trail/` — `TrailScreen` (vertical lesson roadmap with connector arrows; hardcoded `LESSONS` array)
+- `lesson/` — `LessonFlowScreen` orchestrates: ConceptBeat → MultipleChoice → FillBlank → ImageID → Sequence → LessonComplete
+- `recipe/` — `RecipeFlowScreen` orchestrates: RecipeIntro → RecipeIngredients (more steps TBD)
 
 **Key Components** (`src/components/`):
-- `MonkeyMascot` — Animated mascot character
-- `ui/InkButton`, `ui/InkCard` — Core design primitives (ink-border block-shadow style)
-- `ui/BottomNav` — Bottom tab navigation
-- `ui/GridBackground` — Background grid pattern
-- `ui/LessonProgressBar` — Activity progress indicator
+- `MonkeyMascot` — Animated mascot (SVG)
+- `InkButton` — Primary CTA; ink-border block-shadow style
+- `GridBackground` — Dot-grid canvas background
+- `ProgressBar` — Shared by lesson and onboarding flows; receives a `progress` (0–1) and `onBack` callback
+- `ProTipCard` — Highlighted tip block used in recipe/concept screens
+- `RecipeHeader` — Shared header for recipe flow screens
 
-**API Client** (`src/api/client.ts`): Single typed `request<T>()` function. All backend calls are named exports in this one file — add new endpoints here.
+**Theme** (`src/theme/index.ts`): Always use tokens, never hardcode values.
+- Colors: `canvas` (#FBF6E6), `ink` (#1A1A1A), `amber` (#B35C1E), `grid` (#EBE7D9)
+- Fonts: `headline` (Newsreader serif), `body` (BeVietnamPro), `label` (SpaceGrotesk monospace)
+- Also exports `spacing` and `borderRadius` scales
 
-**Theme** (`src/theme/index.ts`): GarlicMonkey design system — warm off-white canvas (`#F9F7F2`), amber primary (`#B35C1E`), ink black (`#1A1A1A`). Always use theme tokens, never hardcode colors.
+**Types** (`src/types/`):
+- `lesson.ts` — `ConceptContent`, `MultipleChoiceData`, `FillBlankData`, `ImageIDData`, `SequenceData`, `LessonCompleteData`
+- `recipe.ts` — `RecipeIntroContent`, `RecipeIngredientsContent`, `Ingredient`
+
+### Production Mobile App (`/mobile`)
+
+Older app with Clerk auth, React Navigation, and full backend integration. API client at `src/api/client.ts` — single typed `request<T>()` function, all endpoints as named exports.
 
 ## Core Learning Loop
 
@@ -145,12 +173,12 @@ Set during onboarding, stored in roadmap `_meta._grading_mode`, used by `/lesson
 
 ## Development Workflow
 
-1. **Start all services**: `make dev`
-2. **Backend iteration**: Edit routers/services — server hot-reloads automatically
-3. **Mobile iteration**: Edit screens/components — Expo fast refresh works automatically
-4. **Clear test data**: `make delete-roadmap` or `make delete-lessons`
-5. **Reset fully**: `make clean` + `make setup`
-6. **Physical device**: `make sync-ip` writes your current LAN IP to `mobile/.env`
+- **UI prototype work**: `cd user-flow && npm start` — no backend needed, Expo fast refresh
+- **Full-stack work**: `make dev` starts DB + backend + mobile/
+- **Backend iteration**: Edit routers/services — server hot-reloads automatically
+- **Clear test data**: `make delete-roadmap` or `make delete-lessons`
+- **Reset fully**: `make clean` + `make setup`
+- **Physical device (mobile/)**: `make sync-ip` writes your current LAN IP to `mobile/.env`
 
 ## Common Patterns
 

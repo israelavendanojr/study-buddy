@@ -1,7 +1,5 @@
-import { MaterialIcons } from '@expo/vector-icons';
 import React from 'react';
 import {
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +9,7 @@ import { Line, Svg } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
+import ProTipCard from '../../components/ProTipCard';
 import { colors } from '../../theme';
 import MonkeyMascot from '../../components/MonkeyMascot';
 import { ConceptContent } from '../../types/lesson';
@@ -64,16 +63,7 @@ export default function ConceptBeatScreen({
         </View>
 
         {/* Pro tip */}
-        <View style={styles.proTipRow}>
-          <View style={styles.proTipBox}>
-            <View style={styles.proTipIcon}>
-              <MaterialIcons name="lightbulb" size={16} color={colors.white} />
-            </View>
-            <Text style={styles.proTipText}>
-              * Pro Tip: {data.proTip}
-            </Text>
-          </View>
-        </View>
+        <ProTipCard text={data.proTip} />
       </ScrollView>
 
       {/* Footer */}
@@ -192,46 +182,6 @@ const styles = StyleSheet.create({
     fontFamily: 'BeVietnamPro_400Regular',
     fontSize: 16,
     lineHeight: 24,
-    color: colors.ink,
-  },
-
-  // Pro tip
-  proTipRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    transform: [{ rotate: '-4deg' }],
-    alignSelf: 'flex-end',
-    width: '65%',
-  },
-  proTipIcon: {
-    position: 'absolute',
-    top: -14,
-    left: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.amber,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  proTipBox: {
-    flex: 1,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.ink,
-    paddingTop: 22,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    shadowColor: colors.ink,
-    shadowOffset: { width: 3.5, height: 3.5 },
-    shadowOpacity: 0.1,
-    shadowRadius: 0,
-  },
-  proTipText: {
-    fontFamily: 'Newsreader_400Regular_Italic',
-    fontSize: 14,
-    lineHeight: 20,
     color: colors.ink,
   },
 
