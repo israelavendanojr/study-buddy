@@ -12,6 +12,7 @@ import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import ProTipCard from '../../components/ProTipCard';
 import RecipeHeader, { RECIPE_HEADER_HEIGHT } from '../../components/RecipeHeader';
+import RecipeStepIndicator from '../../components/RecipeStepIndicator';
 import { colors, fonts, spacing } from '../../theme';
 import { RecipeIngredientsContent } from '../../types/recipe';
 
@@ -46,20 +47,7 @@ export default function RecipeIngredientsScreen({ content, onNext, onBack, onClo
       />
 
       <View style={{ flex: 1, paddingTop: RECIPE_HEADER_HEIGHT + insets.top }}>
-      {/* Step dots indicator */}
-      <View style={styles.stepIndicatorWrap}>
-        <View style={styles.stepDots}>
-          {Array.from({ length: content.stepCount + 1 }).map((_, i) => (
-            <React.Fragment key={i}>
-              {i > 0 && <View style={styles.stepLine} />}
-              <View style={[styles.stepDot, i === 0 && styles.stepDotActive]} />
-            </React.Fragment>
-          ))}
-        </View>
-        <Text style={styles.stepLabel}>
-          STEP 0 OF {content.stepCount} — PREP
-        </Text>
-      </View>
+      <RecipeStepIndicator stepCount={content.stepCount} currentStep={0} />
 
       <ScrollView
         style={styles.scroll}
@@ -129,41 +117,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.canvas,
-  },
-
-  // Step dots
-  stepIndicatorWrap: {
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    gap: spacing.sm,
-  },
-  stepDots: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  stepDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    backgroundColor: colors.canvas,
-  },
-  stepDotActive: {
-    backgroundColor: colors.amber,
-    borderColor: colors.amber,
-  },
-  stepLine: {
-    width: 32,
-    height: 1.5,
-    backgroundColor: colors.ink,
-    opacity: 0.25,
-  },
-  stepLabel: {
-    fontFamily: fonts.label,
-    fontSize: 9,
-    letterSpacing: 2,
-    color: colors.onSurfaceVariant,
   },
 
   // Scroll

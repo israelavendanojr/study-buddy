@@ -21,3 +21,20 @@ export interface RecipeIngredientsContent {
   stepCount: number;
   timeMinutes: number;
 }
+
+export interface RecipeStepCheckpoint {
+  question: string;
+  options: string[];
+  correctIndex: number; // 0-based
+}
+
+export interface RecipeStepContent {
+  stepNumber: number;     // 1-based, shown as "STEP N"
+  stepCount: number;      // total cooking steps
+  title: string;
+  instruction: string;
+  whatToLookFor?: string;
+  suggestedTime?: string; // e.g. "90 SEC", "10-14 MIN"
+  checkpoint?: RecipeStepCheckpoint;
+  timeMinutes: number;    // for RecipeHeader
+}

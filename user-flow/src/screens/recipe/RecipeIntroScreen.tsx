@@ -75,7 +75,7 @@ export default function RecipeIntroScreen({ content, onNext, onClose }: RecipeIn
 
             {/* Chef tip row */}
             <View style={styles.tipRow}>
-              <MonkeyMascot size={80} />
+              <MonkeyMascot size={60} />
               <Text style={styles.tipQuote}>"{content.tipQuote}"</Text>
             </View>
 
