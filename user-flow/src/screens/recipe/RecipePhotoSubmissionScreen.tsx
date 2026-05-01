@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import GradingCriteriaCard from '../../components/GradingCriteriaCard';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import RecipeHeader, { RECIPE_HEADER_HEIGHT } from '../../components/RecipeHeader';
@@ -62,31 +63,12 @@ export default function RecipePhotoSubmissionScreen({
           </View>
 
           {/* Grading card */}
-          <View style={styles.cardShadowWrap}>
-            <View style={styles.cardShadow} />
-            <View style={styles.card}>
-              <Text style={styles.cardHeading}>WHAT WE'RE LOOKING FOR</Text>
-              <View style={styles.criteriaList}>
-                {content.gradingCriteria.map((criterion, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.criterionRow,
-                      i < content.gradingCriteria.length - 1 && styles.criterionBorder,
-                    ]}
-                  >
-                    <Text style={styles.criterionText}>{criterion}</Text>
-                    <View style={styles.stars}>
-                      {[0, 1, 2, 3, 4].map((s) => (
-                        <MaterialIcons key={s} name="star" size={18} color={colors.ink} />
-                      ))}
-                    </View>
-                  </View>
-                ))}
-              </View>
-              <Text style={styles.gradingNote}>{content.gradingNote}</Text>
-            </View>
-          </View>
+          <GradingCriteriaCard
+            heading="WHAT WE'RE LOOKING FOR"
+            criteria={content.gradingCriteria.map((label) => ({ label, score: 5, maxScore: 5 }))}
+            filledStarColor={colors.ink}
+            footer={<Text style={styles.gradingNote}>{content.gradingNote}</Text>}
+          />
 
           {/* Photo upload */}
           <Pressable style={styles.photoUpload}>
@@ -173,61 +155,6 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 
-  // Grading card with block shadow
-  cardShadowWrap: {
-    position: 'relative',
-    paddingBottom: 4,
-    paddingRight: 4,
-  },
-  cardShadow: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.ink,
-  },
-  card: {
-    backgroundColor: colors.surfaceContainer,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  cardHeading: {
-    fontFamily: fonts.label,
-    fontSize: 10,
-    letterSpacing: 2,
-    color: colors.amber,
-  },
-  criteriaList: {
-    gap: 0,
-  },
-  criterionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    gap: spacing.md,
-  },
-  criterionBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.ink,
-    borderStyle: 'solid',
-    opacity: 1,
-  },
-  criterionText: {
-    flex: 1,
-    fontFamily: fonts.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.ink,
-  },
-  stars: {
-    flexDirection: 'row',
-    gap: 2,
-    flexShrink: 0,
-  },
   gradingNote: {
     fontFamily: fonts.headlineItalic,
     fontSize: 13,

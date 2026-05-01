@@ -39,6 +39,23 @@ export interface RecipeStepContent {
   timeMinutes: number;    // for RecipeHeader
 }
 
+export interface CriterionResult {
+  label: string;
+  score: number;
+}
+
+export interface RecipePhotoFeedbackContent {
+  title: string;
+  stepCount: number;
+  gradingResults: CriterionResult[];
+  maxScorePerCriterion: number;
+  totalScore: number;
+  maxTotalScore: number;
+  xpEarned: number;
+  stampLabel: string;
+  timeMinutes: number;
+}
+
 export interface RecipePhotoSubmissionContent {
   stepNumber: number;       // shown in StepBadge as "STEP N"
   stepCount: number;        // total cooking steps (for indicator)

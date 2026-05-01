@@ -1,9 +1,11 @@
 import React from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { useScreenTransition } from '../../hooks/useScreenTransition';
-import { RecipeIngredientsContent, RecipeIntroContent, RecipePhotoSubmissionContent, RecipeStepContent } from '../../types/recipe';
+import { RecipeIngredientsContent, RecipeIntroContent, RecipePhotoFeedbackContent, RecipePhotoSubmissionContent, RecipeStepContent } from '../../types/recipe';
 import RecipeIngredientsScreen from './RecipeIngredientsScreen';
 import RecipeIntroScreen from './RecipeIntroScreen';
+import RecipePhotoFeedbackScreen from './RecipePhotoFeedbackScreen';
+import RecipePhotoLoadingScreen from './RecipePhotoLoadingScreen';
 import RecipePhotoSubmissionScreen from './RecipePhotoSubmissionScreen';
 import RecipeStepScreen from './RecipeStepScreen';
 
@@ -102,6 +104,22 @@ const STEP_3: RecipeStepContent = {
   timeMinutes: 25,
 };
 
+const PHOTO_FEEDBACK: RecipePhotoFeedbackContent = {
+  title: 'Pan-Seared Chicken with Pan Sauce',
+  stepCount: 4,
+  gradingResults: [
+    { label: 'Golden brown crust on the exterior', score: 4 },
+    { label: 'Juicy interior visible in the slice', score: 4 },
+    { label: 'Glossy sauce that coats not pools', score: 5 },
+  ],
+  maxScorePerCriterion: 5,
+  totalScore: 13,
+  maxTotalScore: 15,
+  xpEarned: 350,
+  stampLabel: 'NICE COOK',
+  timeMinutes: 25,
+};
+
 const PHOTO_SUBMISSION: RecipePhotoSubmissionContent = {
   stepNumber: 5,
   stepCount: 4,
@@ -180,6 +198,20 @@ const RECIPE_FLOW: RecipeStep[] = [
     key: 'photo-submission',
     render: ({ onNext, onBack, onClose }) => (
       <RecipePhotoSubmissionScreen content={PHOTO_SUBMISSION} onNext={onNext} onBack={onBack} onClose={onClose} />
+    ),
+  },
+  {
+    key: 'photo-loading',
+    showProgress: false,
+    render: ({ onNext }) => (
+      <RecipePhotoLoadingScreen onContinue={onNext} />
+    ),
+  },
+  {
+    key: 'photo-feedback',
+    showProgress: false,
+    render: ({ onBack, onClose }) => (
+      <RecipePhotoFeedbackScreen content={PHOTO_FEEDBACK} onBack={onBack} onClose={onClose} />
     ),
   },
 ];
