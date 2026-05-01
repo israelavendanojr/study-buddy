@@ -29,7 +29,8 @@ export default function RecipePhotoSubmissionScreen({
   onBack,
 }: RecipePhotoSubmissionScreenProps) {
   const insets = useSafeAreaInsets();
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState<string[]>([]);
+  const [newNote, setNewNote] = useState('');
 
   return (
     <View style={styles.root}>
@@ -50,7 +51,7 @@ export default function RecipePhotoSubmissionScreen({
 
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 104 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 140 }]}
           showsVerticalScrollIndicator={false}
         >
           {/* Step badge + title + instruction */}
@@ -98,16 +99,34 @@ export default function RecipePhotoSubmissionScreen({
           <View style={styles.notesSection}>
             <Text style={styles.notesLabel}>ADD NOTES (OPTIONAL)</Text>
             <View style={styles.notesBox}>
-              <TextInput
-                style={styles.notesInput}
-                multiline
-                numberOfLines={3}
-                placeholder="Any notes about your cook — what went well, what was tricky..."
-                placeholderTextColor={`${colors.ink}50`}
-                value={notes}
-                onChangeText={setNotes}
-                textAlignVertical="top"
-              />
+              {notes.map((note, i) => (
+                <View key={i} style={styles.bulletRow}>
+                  <Text style={styles.bullet}>•</Text>
+                  <Text style={styles.bulletText}>{note}</Text>
+                  <Pressable onPress={() => setNotes(notes.filter((_, j) => j !== i))} hitSlop={8}>
+                    <MaterialIcons name="close" size={16} color={`${colors.ink}60`} />
+                  </Pressable>
+                </View>
+              ))}
+              <View style={styles.noteInputRow}>
+                <Text style={styles.bullet}>•</Text>
+                <TextInput
+                  style={styles.notesInput}
+                  placeholder="Add a note..."
+                  placeholderTextColor={`${colors.ink}50`}
+                  value={newNote}
+                  onChangeText={setNewNote}
+                  onSubmitEditing={() => {
+                    const trimmed = newNote.trim();
+                    if (trimmed) {
+                      setNotes([...notes, trimmed]);
+                      setNewNote('');
+                    }
+                  }}
+                  returnKeyType="done"
+                  blurOnSubmit={false}
+                />
+              </View>
             </View>
           </View>
         </ScrollView>
@@ -258,17 +277,42 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.ink,
     borderStyle: 'dashed',
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    gap: spacing.xs,
   },
-  notesInput: {
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 2,
+  },
+  bullet: {
+    fontFamily: fonts.body,
+    fontSize: 16,
+    color: colors.ink,
+    lineHeight: 22,
+  },
+  bulletText: {
+    flex: 1,
     fontFamily: fonts.body,
     fontSize: 14,
     lineHeight: 22,
     color: colors.ink,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.ink,
-    paddingBottom: spacing.sm,
-    minHeight: 72,
+  },
+  noteInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  notesInput: {
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 14,
+    lineHeight: 22,
+    color: colors.ink,
+    paddingVertical: 2,
   },
 
   // Footer

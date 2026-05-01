@@ -38,7 +38,7 @@ export default function RecipeIntroScreen({ content, onNext, onBack }: RecipeInt
         style={styles.scroll}
         contentContainerStyle={{
           paddingTop: insets.top + RECIPE_HEADER_HEIGHT + spacing.lg,
-          paddingBottom: insets.bottom + 56 + spacing.lg + spacing.lg,
+          paddingBottom: insets.bottom,
           paddingHorizontal: spacing.lg,
         }}
         showsVerticalScrollIndicator={false}
