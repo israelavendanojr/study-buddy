@@ -44,7 +44,6 @@ export default function RecipeIngredientsScreen({ content, onNext, onBack, onClo
         title="YOU'LL NEED"
         timeMinutes={content.timeMinutes}
         onLeft={onBack}
-        variant="back"
       />
 
       <View style={{ flex: 1, paddingTop: RECIPE_HEADER_HEIGHT + insets.top }}>

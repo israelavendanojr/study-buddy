@@ -18,10 +18,10 @@ import { RecipeIntroContent } from '../../types/recipe';
 interface RecipeIntroScreenProps {
   content: RecipeIntroContent;
   onNext: () => void;
-  onClose: () => void;
+  onBack: () => void;
 }
 
-export default function RecipeIntroScreen({ content, onNext, onClose }: RecipeIntroScreenProps) {
+export default function RecipeIntroScreen({ content, onNext, onBack }: RecipeIntroScreenProps) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -31,8 +31,7 @@ export default function RecipeIntroScreen({ content, onNext, onClose }: RecipeIn
       <RecipeHeader
         title="RECIPE CHALLENGE"
         timeMinutes={content.timeMinutes}
-        onLeft={onClose}
-        variant="close"
+        onLeft={onBack}
       />
 
       <ScrollView

@@ -4,31 +4,38 @@ import { StyleSheet, Text, View } from 'react-native';
 import { colors, fonts, spacing } from '../theme';
 
 interface RecipeStepIndicatorProps {
-  stepCount: number;   // number of cooking steps (not counting prep)
-  currentStep: number; // 0 = prep/ingredients, 1..stepCount = cooking steps
+  stepCount: number;        // number of cooking steps (not counting prep)
+  currentStep: number;      // 0 = prep/ingredients, 1..stepCount = cooking steps
+  showCameraFinal?: boolean; // adds an extra camera icon dot, all prior dots shown as done
 }
 
-export default function RecipeStepIndicator({ stepCount, currentStep }: RecipeStepIndicatorProps) {
-  // Total dots = stepCount + 1 (index 0 = prep)
-  const totalDots = stepCount + 1;
+export default function RecipeStepIndicator({ stepCount, currentStep, showCameraFinal }: RecipeStepIndicatorProps) {
+  // When showCameraFinal: all stepCount+1 normal dots are done, plus 1 camera dot
+  const normalDots = stepCount + 1;
+  const totalDots = showCameraFinal ? normalDots + 1 : normalDots;
 
-  const label = currentStep === 0
-    ? `STEP 0 OF ${stepCount}`
-    : `STEP ${currentStep} OF ${stepCount}`;
+  const label = showCameraFinal
+    ? 'FINAL SUBMISSION'
+    : currentStep === 0
+      ? `STEP 0 OF ${stepCount}`
+      : `STEP ${currentStep} OF ${stepCount}`;
 
   return (
     <View style={styles.wrap}>
       <View style={styles.dots}>
         {Array.from({ length: totalDots }).map((_, i) => {
-          const isDone = i < currentStep;
-          const isActive = i === currentStep;
+          const isCameraFinalDot = showCameraFinal && i === totalDots - 1;
+          const isDone = showCameraFinal ? !isCameraFinalDot : i < currentStep;
+          const isActive = !showCameraFinal && i === currentStep;
           return (
             <React.Fragment key={i}>
               {i > 0 && <View style={styles.line} />}
-              {isDone ? (
-                <View style={styles.dotDone}>
-                  {/* <MaterialIcons name="check" size={7} color={colors.white} /> */}
+              {isCameraFinalDot ? (
+                <View style={styles.dotCameraOuter}>
+                  <MaterialIcons name="photo-camera" size={11} color={colors.ink} />
                 </View>
+              ) : isDone ? (
+                <View style={styles.dotDone} />
               ) : isActive ? (
                 <View style={styles.dotActiveOuter}>
                   <View style={styles.dotActiveInner} />
@@ -40,7 +47,7 @@ export default function RecipeStepIndicator({ stepCount, currentStep }: RecipeSt
           );
         })}
       </View>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, showCameraFinal && styles.labelFinal]}>{label}</Text>
     </View>
   );
 }
@@ -99,10 +106,25 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     backgroundColor: colors.canvas,
   },
+  // Camera final dot: dashed amber border, 22×22
+  dotCameraOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.amber,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.canvas,
+  },
   label: {
     fontFamily: fonts.label,
     fontSize: 9,
     letterSpacing: 2,
     color: colors.onSurfaceVariant,
+  },
+  labelFinal: {
+    color: colors.amber,
   },
 });

@@ -38,3 +38,14 @@ export interface RecipeStepContent {
   checkpoint?: RecipeStepCheckpoint;
   timeMinutes: number;    // for RecipeHeader
 }
+
+export interface RecipePhotoSubmissionContent {
+  stepNumber: number;       // shown in StepBadge as "STEP N"
+  stepCount: number;        // total cooking steps (for indicator)
+  title: string;
+  instruction: string;
+  gradingCriteria: string[];
+  gradingNote: string;      // italic footer inside grading card
+  submitHint: string;       // text below submit button
+  timeMinutes: number;      // for RecipeHeader
+}

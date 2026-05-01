@@ -114,7 +114,6 @@ export default function RecipeStepScreen({ content, onNext, onBack, onClose }: R
         title="RECIPE CHALLENGE"
         timeMinutes={content.timeMinutes}
         onLeft={onBack}
-        variant="back"
       />
 
       <View style={{ flex: 1, paddingTop: RECIPE_HEADER_HEIGHT + insets.top }}>

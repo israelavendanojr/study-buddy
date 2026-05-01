@@ -1,9 +1,10 @@
 import React from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { useScreenTransition } from '../../hooks/useScreenTransition';
-import { RecipeIngredientsContent, RecipeIntroContent, RecipeStepContent } from '../../types/recipe';
+import { RecipeIngredientsContent, RecipeIntroContent, RecipePhotoSubmissionContent, RecipeStepContent } from '../../types/recipe';
 import RecipeIngredientsScreen from './RecipeIngredientsScreen';
 import RecipeIntroScreen from './RecipeIntroScreen';
+import RecipePhotoSubmissionScreen from './RecipePhotoSubmissionScreen';
 import RecipeStepScreen from './RecipeStepScreen';
 
 interface RecipeFlowScreenProps {
@@ -101,6 +102,21 @@ const STEP_3: RecipeStepContent = {
   timeMinutes: 25,
 };
 
+const PHOTO_SUBMISSION: RecipePhotoSubmissionContent = {
+  stepNumber: 5,
+  stepCount: 4,
+  title: 'Plate and Submit.',
+  instruction: 'Slice the chicken, spoon the sauce over it. Plate it like you mean it.',
+  gradingCriteria: [
+    'Golden brown crust on the exterior',
+    'Juicy interior visible in the slice',
+    'Glossy sauce that coats not pools',
+  ],
+  gradingNote: 'Take the photo in good light. Be proud of this.',
+  submitHint: 'Garlic will review your photo and give specific feedback.',
+  timeMinutes: 25,
+};
+
 const STEP_4: RecipeStepContent = {
   stepNumber: 4,
   stepCount: 4,
@@ -125,8 +141,8 @@ const RECIPE_FLOW: RecipeStep[] = [
   {
     key: 'intro',
     showProgress: false,
-    render: ({ onNext, onClose }) => (
-      <RecipeIntroScreen content={INTRO} onNext={onNext} onClose={onClose} />
+    render: ({ onNext, onBack }) => (
+      <RecipeIntroScreen content={INTRO} onNext={onNext} onBack={onBack} />
     ),
   },
   {
@@ -158,6 +174,12 @@ const RECIPE_FLOW: RecipeStep[] = [
     key: 'step-4',
     render: ({ onNext, onBack, onClose }) => (
       <RecipeStepScreen content={STEP_4} onNext={onNext} onBack={onBack} onClose={onClose} />
+    ),
+  },
+  {
+    key: 'photo-submission',
+    render: ({ onNext, onBack, onClose }) => (
+      <RecipePhotoSubmissionScreen content={PHOTO_SUBMISSION} onNext={onNext} onBack={onBack} onClose={onClose} />
     ),
   },
 ];

@@ -1,4 +1,3 @@
-import { MaterialIcons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,24 +9,18 @@ interface RecipeHeaderProps {
   title: string;
   timeMinutes: number;
   onLeft: () => void;
-  variant: 'close' | 'back';
 }
 
-export default function RecipeHeader({ title, timeMinutes, onLeft, variant }: RecipeHeaderProps) {
+export default function RecipeHeader({ title, timeMinutes, onLeft }: RecipeHeaderProps) {
   const insets = useSafeAreaInsets();
 
   return (
     <View style={[styles.topBar, { paddingTop: insets.top, height: RECIPE_HEADER_HEIGHT + insets.top }]}>
       <Pressable onPress={onLeft} style={styles.leftBtn} hitSlop={12}>
-        {variant === 'close' ? (
-          <MaterialIcons name="close" size={22} color={colors.ink} />
-        ) : (
-          <Text style={styles.backArrow}>‹</Text>
-        )}
+        <Text style={styles.backArrow}>‹</Text>
       </Pressable>
       <Text style={styles.title}>{title}</Text>
       <View style={styles.timeSlot}>
-        <MaterialIcons name="schedule" size={14} color={colors.amber} />
         <Text style={styles.timeText}>{timeMinutes} MIN</Text>
       </View>
     </View>
