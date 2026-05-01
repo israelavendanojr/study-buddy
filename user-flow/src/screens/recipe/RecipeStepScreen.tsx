@@ -2,12 +2,19 @@ import { MaterialIcons } from '@expo/vector-icons';
 import React, { useRef, useState } from 'react';
 import {
   Animated,
+  LayoutAnimation,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  UIManager,
   View,
 } from 'react-native';
+
+if (Platform.OS === 'android') {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AccentCard from '../../components/AccentCard';
 import GridBackground from '../../components/GridBackground';
@@ -86,7 +93,13 @@ function CheckpointOption({
 export default function RecipeStepScreen({ content, onNext, onBack, onClose }: RecipeStepScreenProps) {
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<number | null>(null);
+  const [checkpointOpen, setCheckpointOpen] = useState(false);
   const skipAnim = useRef(new Animated.Value(0)).current;
+
+  const toggleCheckpoint = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setCheckpointOpen(prev => !prev);
+  };
 
   const handleSkipPressIn = () => Animated.timing(skipAnim, { toValue: 1, duration: 80, useNativeDriver: true }).start();
   const handleSkipPressOut = () => Animated.timing(skipAnim, { toValue: 0, duration: 80, useNativeDriver: true }).start();
@@ -154,52 +167,64 @@ export default function RecipeStepScreen({ content, onNext, onBack, onClose }: R
             <View style={styles.checkpointShadowWrap}>
               <View style={styles.checkpointShadow} />
               <View style={styles.checkpointCard}>
-                <View style={styles.checkpointBadge}>
-                  <Text style={styles.checkpointBadgeText}>CHECKPOINT</Text>
-                </View>
-                <Text style={styles.checkpointQuestion}>{checkpoint.question}</Text>
-
-                <View style={styles.options}>
-                  {checkpoint.options.map((option, i) => (
-                    <CheckpointOption
-                      key={i}
-                      letter={OPTION_LETTERS[i]}
-                      text={option}
-                      selected={selected === i}
-                      onSelect={() => setSelected(i)}
-                    />
-                  ))}
-                </View>
-
-                {/* Inline action row */}
-                <View style={styles.actionRow}>
-                  <Pressable
-                    onPressIn={handleSkipPressIn}
-                    onPressOut={handleSkipPressOut}
-                    onPress={() => {}}
-                    style={styles.skipWrapper}
-                  >
-                    <Animated.View
-                      style={[styles.skipShadow, {
-                        opacity: skipAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
-                      }]}
-                    />
-                    <Animated.View
-                      style={[styles.skipButton, {
-                        transform: [
-                          { translateX: skipAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }) },
-                          { translateY: skipAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }) },
-                        ],
-                      }]}
-                    >
-                      <MaterialIcons name="skip-next" size={18} color={colors.ink} />
-                      <Text style={styles.skipLabel}>SKIP</Text>
-                    </Animated.View>
-                  </Pressable>
-                  <View style={styles.checkWrapper}>
-                    <InkButton label="CHECK" onPress={() => {}} />
+                <Pressable style={styles.checkpointHeader} onPress={toggleCheckpoint}>
+                  <View style={styles.checkpointBadge}>
+                    <Text style={styles.checkpointBadgeText}>CHECKPOINT QUESTION</Text>
                   </View>
-                </View>
+                  <MaterialIcons
+                    name={checkpointOpen ? 'expand-less' : 'expand-more'}
+                    size={22}
+                    color={colors.ink}
+                  />
+                </Pressable>
+
+                {checkpointOpen && (
+                  <>
+                    <Text style={styles.checkpointQuestion}>{checkpoint.question}</Text>
+
+                    <View style={styles.options}>
+                      {checkpoint.options.map((option, i) => (
+                        <CheckpointOption
+                          key={i}
+                          letter={OPTION_LETTERS[i]}
+                          text={option}
+                          selected={selected === i}
+                          onSelect={() => setSelected(i)}
+                        />
+                      ))}
+                    </View>
+
+                    {/* Inline action row */}
+                    <View style={styles.actionRow}>
+                      <Pressable
+                        onPressIn={handleSkipPressIn}
+                        onPressOut={handleSkipPressOut}
+                        onPress={() => {}}
+                        style={styles.skipWrapper}
+                      >
+                        <Animated.View
+                          style={[styles.skipShadow, {
+                            opacity: skipAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+                          }]}
+                        />
+                        <Animated.View
+                          style={[styles.skipButton, {
+                            transform: [
+                              { translateX: skipAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }) },
+                              { translateY: skipAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }) },
+                            ],
+                          }]}
+                        >
+                          <MaterialIcons name="skip-next" size={18} color={colors.ink} />
+                          <Text style={styles.skipLabel}>SKIP</Text>
+                        </Animated.View>
+                      </Pressable>
+                      <View style={styles.checkWrapper}>
+                        <InkButton label="CHECK" onPress={() => {}} />
+                      </View>
+                    </View>
+                  </>
+                )}
               </View>
             </View>
           )}
@@ -325,6 +350,11 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     padding: spacing.lg,
     gap: spacing.md,
+  },
+  checkpointHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   checkpointBadge: {
     alignSelf: 'flex-start',
