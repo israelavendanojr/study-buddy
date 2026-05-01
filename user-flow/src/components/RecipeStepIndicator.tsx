@@ -13,7 +13,7 @@ export default function RecipeStepIndicator({ stepCount, currentStep }: RecipeSt
   const totalDots = stepCount + 1;
 
   const label = currentStep === 0
-    ? `STEP 0 OF ${stepCount} — PREP`
+    ? `STEP 0 OF ${stepCount}`
     : `STEP ${currentStep} OF ${stepCount}`;
 
   return (
@@ -27,7 +27,7 @@ export default function RecipeStepIndicator({ stepCount, currentStep }: RecipeSt
               {i > 0 && <View style={styles.line} />}
               {isDone ? (
                 <View style={styles.dotDone}>
-                  <MaterialIcons name="check" size={7} color={colors.white} />
+                  {/* <MaterialIcons name="check" size={7} color={colors.white} /> */}
                 </View>
               ) : isActive ? (
                 <View style={styles.dotActiveOuter}>

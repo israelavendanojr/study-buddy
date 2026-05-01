@@ -13,6 +13,7 @@ import InkButton from '../../components/InkButton';
 import ProTipCard from '../../components/ProTipCard';
 import RecipeHeader, { RECIPE_HEADER_HEIGHT } from '../../components/RecipeHeader';
 import RecipeStepIndicator from '../../components/RecipeStepIndicator';
+import StepBadge from '../../components/StepBadge';
 import { colors, fonts, spacing } from '../../theme';
 import { RecipeIngredientsContent } from '../../types/recipe';
 
@@ -57,6 +58,8 @@ export default function RecipeIngredientsScreen({ content, onNext, onBack, onClo
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <StepBadge label="STEP 0" />
+
         {/* Ingredients card */}
         <View style={styles.cardShadowWrap}>
           <View style={styles.cardShadow} />

@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { Line, Svg } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AccentCard from '../../components/AccentCard';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import ProTipCard from '../../components/ProTipCard';
@@ -45,22 +46,20 @@ export default function ConceptBeatScreen({
         <MonkeyMascot size={100}></MonkeyMascot>
 
         {/* Quote card */}
-        <View style={styles.cardShadow}>
-          <View style={styles.card}>
-            <Text style={styles.quoteText}>
-              <Text>{data.quote.before}</Text>
-              <Text style={styles.quoteHighlight}>{data.quote.highlight}</Text>
-              <Text>{data.quote.after}</Text>
-            </Text>
+        <AccentCard contentStyle={{ gap: 16 }}>
+          <Text style={styles.quoteText}>
+            <Text>{data.quote.before}</Text>
+            <Text style={styles.quoteHighlight}>{data.quote.highlight}</Text>
+            <Text>{data.quote.after}</Text>
+          </Text>
 
-            <Svg width="100%" height={1}>
-              <Line x1="0" y1="0" x2="2000" y2="0" stroke={colors.ink} strokeWidth={1} strokeDasharray="5,5" strokeOpacity={0.35} />
-            </Svg>
+          <Svg width="100%" height={1}>
+            <Line x1="0" y1="0" x2="2000" y2="0" stroke={colors.ink} strokeWidth={1} strokeDasharray="5,5" strokeOpacity={0.35} />
+          </Svg>
 
-            <Text style={styles.whyLabel}>WHY THIS MATTERS</Text>
-            <Text style={styles.whyText}>{data.whyItMatters}</Text>
-          </View>
-        </View>
+          <Text style={styles.whyLabel}>WHY THIS MATTERS</Text>
+          <Text style={styles.whyText}>{data.whyItMatters}</Text>
+        </AccentCard>
 
         {/* Pro tip */}
         <ProTipCard text={data.proTip} />
@@ -137,27 +136,6 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
 
-  // Quote card
-  cardShadow: {
-    shadowColor: colors.ink,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 4,
-  },
-  card: {
-    backgroundColor: colors.canvas,
-    borderTopWidth: 2,
-    borderRightWidth: 2,
-    borderBottomWidth: 2,
-    borderTopColor: colors.ink,
-    borderRightColor: colors.ink,
-    borderBottomColor: colors.ink,
-    borderLeftWidth: 10,
-    borderLeftColor: colors.amber,
-    padding: 20,
-    gap: 16,
-  },
   quoteText: {
     fontFamily: 'Newsreader_700Bold',
     fontStyle: 'italic',

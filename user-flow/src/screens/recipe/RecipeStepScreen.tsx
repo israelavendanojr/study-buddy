@@ -1,6 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  Animated,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,11 +9,13 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AccentCard from '../../components/AccentCard';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import RecipeHeader, { RECIPE_HEADER_HEIGHT } from '../../components/RecipeHeader';
 import RecipeStepIndicator from '../../components/RecipeStepIndicator';
-import { colors, fonts, spacing } from '../../theme';
+import StepBadge from '../../components/StepBadge';
+import { borderRadius, colors, fonts, spacing } from '../../theme';
 import { RecipeStepContent } from '../../types/recipe';
 
 interface RecipeStepScreenProps {
@@ -24,31 +27,71 @@ interface RecipeStepScreenProps {
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E'];
 
-type OptionState = 'default' | 'selected' | 'correct' | 'wrong' | 'dimmed';
+function CheckpointOption({
+  letter,
+  text,
+  selected,
+  onSelect,
+}: {
+  letter: string;
+  text: string;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const translateAnim = useRef(new Animated.Value(0)).current;
+  const shadowOffset = selected ? 6 : 4;
+  const shadowColor = selected ? colors.amberDark : colors.ink;
+
+  const handlePressIn = () =>
+    Animated.timing(translateAnim, { toValue: 1, duration: 80, useNativeDriver: true }).start();
+  const handlePressOut = () =>
+    Animated.timing(translateAnim, { toValue: 0, duration: 80, useNativeDriver: true }).start();
+
+  return (
+    <Pressable onPress={onSelect} onPressIn={handlePressIn} onPressOut={handlePressOut} style={styles.optionWrapper}>
+      <Animated.View
+        style={[styles.optionShadow, {
+          backgroundColor: shadowColor,
+          top: shadowOffset,
+          left: shadowOffset,
+          opacity: translateAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+        }]}
+      />
+      <Animated.View
+        style={[
+          styles.optionCard,
+          selected ? styles.optionCardSelected : styles.optionCardActive,
+          {
+            transform: [
+              { translateX: translateAnim.interpolate({ inputRange: [0, 1], outputRange: [0, shadowOffset] }) },
+              { translateY: translateAnim.interpolate({ inputRange: [0, 1], outputRange: [0, shadowOffset] }) },
+            ],
+          },
+        ]}
+      >
+        {selected && (
+          <View style={styles.checkBadge}>
+            <MaterialIcons name="check" size={16} color={colors.white} />
+          </View>
+        )}
+        <View style={[styles.letterBadge, selected && styles.letterBadgeSelected]}>
+          <Text style={[styles.letterText, selected && styles.letterTextSelected]}>{letter}</Text>
+        </View>
+        <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{text}</Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
 
 export default function RecipeStepScreen({ content, onNext, onBack, onClose }: RecipeStepScreenProps) {
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<number | null>(null);
-  const [checked, setChecked] = useState(false);
-  const [skipped, setSkipped] = useState(false);
+  const skipAnim = useRef(new Animated.Value(0)).current;
+
+  const handleSkipPressIn = () => Animated.timing(skipAnim, { toValue: 1, duration: 80, useNativeDriver: true }).start();
+  const handleSkipPressOut = () => Animated.timing(skipAnim, { toValue: 0, duration: 80, useNativeDriver: true }).start();
 
   const { checkpoint } = content;
-
-  const handleCheck = () => {
-    if (selected !== null) setChecked(true);
-  };
-
-  const handleSkip = () => {
-    setSkipped(true);
-  };
-
-  // Determine option style state after checking
-  const getOptionState = (i: number): OptionState => {
-    if (!checked) return selected === i ? 'selected' : 'default';
-    if (i === checkpoint?.correctIndex) return 'correct';
-    if (i === selected && selected !== checkpoint?.correctIndex) return 'wrong';
-    return 'dimmed';
-  };
 
   return (
     <View style={styles.root}>
@@ -71,30 +114,22 @@ export default function RecipeStepScreen({ content, onNext, onBack, onClose }: R
         >
           {/* Step badge + title */}
           <View style={styles.stepHeader}>
-            <View style={styles.stepBadge}>
-              <Text style={styles.stepBadgeText}>STEP {content.stepNumber}</Text>
-            </View>
+            <StepBadge label={`STEP ${content.stepNumber}`} />
             <Text style={styles.title}>{content.title}</Text>
           </View>
 
           {/* Instruction card */}
-          <View style={styles.cardShadowWrap}>
-            <View style={styles.cardShadow} />
-            <View style={styles.card}>
-              <View style={styles.accentBar} />
-              <View style={styles.cardInner}>
-                <Text style={styles.instruction}>{content.instruction}</Text>
+          <AccentCard>
+            <Text style={styles.instruction}>{content.instruction}</Text>
 
-                {content.whatToLookFor && (
-                  <>
-                    <View style={styles.divider} />
-                    <Text style={styles.lookForLabel}>WHAT TO LOOK FOR</Text>
-                    <Text style={styles.lookForText}>{content.whatToLookFor}</Text>
-                  </>
-                )}
-              </View>
-            </View>
-          </View>
+            {content.whatToLookFor && (
+              <>
+                <View style={styles.divider} />
+                <Text style={styles.lookForLabel}>WHAT TO LOOK FOR</Text>
+                <Text style={styles.lookForText}>{content.whatToLookFor}</Text>
+              </>
+            )}
+          </AccentCard>
 
           {/* Suggested time */}
           {content.suggestedTime && (
@@ -115,7 +150,7 @@ export default function RecipeStepScreen({ content, onNext, onBack, onClose }: R
           )}
 
           {/* Checkpoint */}
-          {checkpoint && !skipped && (
+          {checkpoint && (
             <View style={styles.checkpointShadowWrap}>
               <View style={styles.checkpointShadow} />
               <View style={styles.checkpointCard}>
@@ -125,46 +160,46 @@ export default function RecipeStepScreen({ content, onNext, onBack, onClose }: R
                 <Text style={styles.checkpointQuestion}>{checkpoint.question}</Text>
 
                 <View style={styles.options}>
-                  {checkpoint.options.map((option, i) => {
-                    const state = getOptionState(i);
-                    return (
-                      <Pressable
-                        key={i}
-                        style={[styles.option, optionBorderStyle(state)]}
-                        onPress={() => !checked && setSelected(i)}
-                        disabled={checked}
-                      >
-                        <View style={[styles.optionBadge, optionBadgeStyle(state)]}>
-                          {state === 'correct' ? (
-                            <MaterialIcons name="check" size={14} color={colors.white} />
-                          ) : (
-                            <Text style={styles.optionLetter}>{OPTION_LETTERS[i]}</Text>
-                          )}
-                        </View>
-                        <Text style={[styles.optionText, state === 'dimmed' && styles.optionTextDimmed]}>
-                          {option}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                  {checkpoint.options.map((option, i) => (
+                    <CheckpointOption
+                      key={i}
+                      letter={OPTION_LETTERS[i]}
+                      text={option}
+                      selected={selected === i}
+                      onSelect={() => setSelected(i)}
+                    />
+                  ))}
                 </View>
 
                 {/* Inline action row */}
-                {!checked && (
-                  <View style={styles.actionRow}>
-                    <Pressable style={styles.skipButton} onPress={handleSkip}>
-                      <MaterialIcons name="fast-forward" size={16} color={colors.ink} />
-                      <Text style={styles.skipLabel}>SKIP</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.checkButton, selected === null && styles.checkButtonDisabled]}
-                      onPress={handleCheck}
+                <View style={styles.actionRow}>
+                  <Pressable
+                    onPressIn={handleSkipPressIn}
+                    onPressOut={handleSkipPressOut}
+                    onPress={() => {}}
+                    style={styles.skipWrapper}
+                  >
+                    <Animated.View
+                      style={[styles.skipShadow, {
+                        opacity: skipAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+                      }]}
+                    />
+                    <Animated.View
+                      style={[styles.skipButton, {
+                        transform: [
+                          { translateX: skipAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }) },
+                          { translateY: skipAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }) },
+                        ],
+                      }]}
                     >
-                      <MaterialIcons name="check-circle" size={16} color={colors.white} />
-                      <Text style={styles.checkLabel}>CHECK ANSWER</Text>
-                    </Pressable>
+                      <MaterialIcons name="skip-next" size={18} color={colors.ink} />
+                      <Text style={styles.skipLabel}>SKIP</Text>
+                    </Animated.View>
+                  </Pressable>
+                  <View style={styles.checkWrapper}>
+                    <InkButton label="CHECK" onPress={() => {}} />
                   </View>
-                )}
+                </View>
               </View>
             </View>
           )}
@@ -179,23 +214,6 @@ export default function RecipeStepScreen({ content, onNext, onBack, onClose }: R
   );
 }
 
-function optionBorderStyle(state: OptionState) {
-  switch (state) {
-    case 'selected': return styles.optionSelected;
-    case 'correct':  return styles.optionCorrect;
-    case 'wrong':    return styles.optionWrong;
-    default:         return undefined;
-  }
-}
-
-function optionBadgeStyle(state: OptionState) {
-  switch (state) {
-    case 'selected': return styles.optionBadgeSelected;
-    case 'correct':  return styles.optionBadgeCorrect;
-    case 'wrong':    return styles.optionBadgeWrong;
-    default:         return undefined;
-  }
-}
 
 const styles = StyleSheet.create({
   root: {
@@ -217,20 +235,6 @@ const styles = StyleSheet.create({
   stepHeader: {
     gap: spacing.sm,
   },
-  stepBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.amber,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-  },
-  stepBadgeText: {
-    fontFamily: fonts.label,
-    fontSize: 12,
-    letterSpacing: 2,
-    color: colors.white,
-  },
   title: {
     fontFamily: fonts.headline,
     fontSize: 36,
@@ -238,38 +242,6 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
 
-  // Instruction card
-  cardShadowWrap: {
-    position: 'relative',
-    paddingBottom: 4,
-    paddingRight: 4,
-  },
-  cardShadow: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.ink,
-  },
-  card: {
-    backgroundColor: colors.surfaceContainer,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    flexDirection: 'row',
-    overflow: 'hidden',
-  },
-  accentBar: {
-    width: 4,
-    backgroundColor: colors.amber,
-    marginVertical: spacing.sm,
-    marginLeft: spacing.sm,
-    borderRadius: 2,
-  },
-  cardInner: {
-    flex: 1,
-    padding: spacing.lg,
-  },
   instruction: {
     fontFamily: fonts.body,
     fontSize: 19,
@@ -377,53 +349,69 @@ const styles = StyleSheet.create({
 
   // Options
   options: {
-    gap: spacing.sm,
+    gap: 14,
   },
-  option: {
+  optionWrapper: {
+    position: 'relative',
+    paddingBottom: 6,
+    paddingRight: 6,
+  },
+  optionShadow: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+  },
+  optionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     backgroundColor: colors.surfaceContainer,
-    borderWidth: 2,
-    borderColor: colors.ink,
     padding: spacing.md,
+    position: 'relative',
   },
-  optionSelected: {
-    borderStyle: 'dashed',
-    borderColor: colors.amber,
-  },
-  optionCorrect: {
-    borderColor: colors.amber,
-  },
-  optionWrong: {
-    borderStyle: 'dashed',
-    borderColor: '#BA1A1A',
-  },
-  optionBadge: {
-    width: 36,
-    height: 36,
-    backgroundColor: colors.ink,
+  optionCardActive: {
     borderWidth: 2,
     borderColor: colors.ink,
+  },
+  optionCardSelected: {
+    borderWidth: 2,
+    borderColor: colors.amberDark,
+    borderStyle: 'dashed',
+  },
+  checkBadge: {
+    position: 'absolute',
+    top: -12,
+    right: -12,
+    width: 28,
+    height: 28,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.amberDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.canvas,
+    zIndex: 5,
+  },
+  letterBadge: {
+    width: 40,
+    height: 40,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    backgroundColor: colors.canvasAlt,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  optionBadgeSelected: {
+  letterBadgeSelected: {
     backgroundColor: colors.amber,
-    borderColor: colors.amber,
+    borderWidth: 0,
   },
-  optionBadgeCorrect: {
-    backgroundColor: colors.amber,
-    borderColor: colors.amber,
-  },
-  optionBadgeWrong: {
-    backgroundColor: '#BA1A1A',
-    borderColor: '#BA1A1A',
-  },
-  optionLetter: {
+  letterText: {
     fontFamily: fonts.label,
-    fontSize: 14,
+    fontSize: 16,
+    color: colors.ink,
+  },
+  letterTextSelected: {
     color: colors.white,
   },
   optionText: {
@@ -433,8 +421,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: colors.ink,
   },
-  optionTextDimmed: {
-    opacity: 0.4,
+  optionTextSelected: {
+    color: colors.amberDark,
   },
 
   // Inline action row
@@ -444,44 +432,44 @@ const styles = StyleSheet.create({
     borderTopWidth: 2,
     borderTopColor: colors.ink,
     paddingTop: spacing.md,
-    opacity: 0.9,
+    alignItems: 'stretch',
+  },
+  skipWrapper: {
+    width: '35%',
+    height: 56,
+    position: 'relative',
+  },
+  skipShadow: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.ink,
   },
   skipButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 4,
+    bottom: 4,
     borderWidth: 2,
     borderColor: colors.ink,
     borderStyle: 'dashed',
-    paddingVertical: spacing.sm + 2,
+    backgroundColor: colors.canvas,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 4,
   },
   skipLabel: {
     fontFamily: fonts.label,
-    fontSize: 11,
+    fontSize: 14,
     letterSpacing: 2,
     color: colors.ink,
   },
-  checkButton: {
+  checkWrapper: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.amberDark,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    paddingVertical: spacing.sm + 2,
-  },
-  checkButtonDisabled: {
-    opacity: 0.4,
-  },
-  checkLabel: {
-    fontFamily: fonts.label,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    color: colors.white,
   },
 
   // Footer
