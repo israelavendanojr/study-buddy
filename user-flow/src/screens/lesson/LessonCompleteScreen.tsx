@@ -27,11 +27,12 @@ export default function LessonCompleteScreen({ onContinue, data }: LessonComplet
   const xpAnim = useRef(new Animated.Value(0)).current;
   const timeAnim = useRef(new Animated.Value(0)).current;
   const accuracyAnim = useRef(new Animated.Value(0)).current;
-  const streakAnim = useRef(new Animated.Value(0)).current;
+  const streakScaleAnim = useRef(new Animated.Value(1)).current;
 
   const [xpDisplay, setXpDisplay] = useState('+0');
   const [timeDisplay, setTimeDisplay] = useState('0:00');
   const [accuracyDisplay, setAccuracyDisplay] = useState('0%');
+  const [streakDisplay, setStreakDisplay] = useState(String(data.streakDays));
 
   useEffect(() => {
     const xpId = xpAnim.addListener(({ value }) => {
@@ -46,13 +47,17 @@ export default function LessonCompleteScreen({ onContinue, data }: LessonComplet
     });
 
     const cfg = { duration: 1200, easing: Easing.out(Easing.quad), useNativeDriver: false };
-    const streakPct = Math.round((data.streakDays / data.streakNextBadgeDays) * 100);
     Animated.sequence([
       Animated.timing(xpAnim, { toValue: data.xp, ...cfg }),
       Animated.timing(timeAnim, { toValue: data.timeSeconds, ...cfg }),
       Animated.timing(accuracyAnim, { toValue: data.accuracy, ...cfg }),
-      Animated.timing(streakAnim, { toValue: streakPct, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-    ]).start();
+    ]).start(() => {
+      setStreakDisplay(String(data.streakDays + 1));
+      Animated.sequence([
+        Animated.spring(streakScaleAnim, { toValue: 1.2, useNativeDriver: true, speed: 30, bounciness: 0 }),
+        Animated.spring(streakScaleAnim, { toValue: 1, useNativeDriver: true, speed: 8, bounciness: 14 }),
+      ]).start();
+    });
 
     return () => {
       xpAnim.removeListener(xpId);
@@ -97,12 +102,10 @@ export default function LessonCompleteScreen({ onContinue, data }: LessonComplet
                 <Text style={styles.streakSub}>Come back tomorrow…</Text>
               </View>
             </View>
-            <Text style={styles.streakValue}>{data.streakDays} DAYS</Text>
+            <Animated.Text style={[styles.streakValue, { transform: [{ scale: streakScaleAnim }] }]}>
+              {streakDisplay} DAYS
+            </Animated.Text>
           </View>
-          <View style={styles.progressTrack}>
-            <Animated.View style={[styles.progressFill, { width: streakAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) }]} />
-          </View>
-          <Text style={styles.progressLabel}>{data.streakNextBadgeDays} DAYS FOR NEXT BADGE</Text>
         </View>
 
         {/* Mission unlocked card */}
@@ -255,23 +258,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: colors.amber,
   },
-  progressTrack: {
-    height: 14,
-    backgroundColor: colors.surfaceVariant,
-    borderWidth: 2,
-    borderColor: colors.ink,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.amber,
-  },
-  progressLabel: {
-    fontFamily: fonts.label,
-    fontSize: 10,
-    color: colors.amber,
-    letterSpacing: 0.5,
-  },
-
   // Mission card
   missionCard: {
     borderWidth: 2,
