@@ -1,6 +1,8 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useRef } from 'react';
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GridBackground from '../../components/GridBackground';
 import { colors, fonts, spacing } from '../../theme';
 
@@ -136,29 +138,24 @@ function CompletedItem({ item }: { item: CompletedData }) {
   );
 }
 
-export default function KitchenScreen({
-  paddingTop,
-  paddingBottom,
-  onStartMission,
-}: {
-  paddingTop: number;
-  paddingBottom: number;
-  onStartMission?: () => void;
-}) {
+export default function KitchenScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+
   return (
     <View style={styles.root}>
       <GridBackground />
 
       {/* Header */}
-      <View style={[styles.header, { height: HEADER_HEIGHT + paddingTop, paddingTop }]}>
+      <View style={[styles.header, { height: HEADER_HEIGHT + insets.top, paddingTop: insets.top }]}>
         <Text style={styles.headerTitle}>KITCHEN</Text>
       </View>
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={{
-          paddingTop: paddingTop + HEADER_HEIGHT + spacing.lg,
-          paddingBottom: paddingBottom + spacing.lg,
+          paddingTop: insets.top + HEADER_HEIGHT + spacing.lg,
+          paddingBottom: insets.bottom + spacing.lg,
           paddingHorizontal: spacing.lg,
         }}
         showsVerticalScrollIndicator={false}
@@ -166,7 +163,7 @@ export default function KitchenScreen({
         {/* ACTIVE MISSIONS */}
         <SectionLabel label="ACTIVE MISSIONS" />
         {ACTIVE_MISSIONS.map((m) => (
-          <MissionCard key={m.id} mission={m} onStart={onStartMission} />
+          <MissionCard key={m.id} mission={m} onStart={() => router.push('/mission')} />
         ))}
 
         {/* MY SUBMISSIONS */}
