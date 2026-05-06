@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useRef } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import GridBackground from '../../components/GridBackground';
 import { colors, fonts, spacing } from '../../theme';
 
@@ -17,6 +17,7 @@ interface SubmissionData {
   title: string;
   stars: number;
   timeAgo: string;
+  image: ReturnType<typeof require>;
 }
 
 interface CompletedData {
@@ -32,8 +33,9 @@ const ACTIVE_MISSIONS: MissionData[] = [
 ];
 
 const SUBMISSIONS: SubmissionData[] = [
-  { id: 'mushrooms',  title: 'Sautéed Mushrooms', stars: 0, timeAgo: '2 days ago' },
-  { id: 'omelette',   title: 'Classic Omelette',  stars: 0, timeAgo: '5 days ago' },
+  { id: 'mushrooms',       title: 'Sautéed Mushrooms', stars: 4, timeAgo: '2 days ago', image: require('../../../assets/submissions/Sauteed-Mushrooms.jpg') },
+  { id: 'omelette',        title: 'Classic Omelette',  stars: 5, timeAgo: '5 days ago', image: require('../../../assets/submissions/ommelte.jpg') },
+  { id: 'roasted-chicken', title: 'Roasted Chicken',   stars: 3, timeAgo: '5 days ago', image: require('../../../assets/submissions/roasted-chicken.jpg') },
 ];
 
 const COMPLETED: CompletedData[] = [
@@ -51,13 +53,10 @@ function SectionLabel({ label, amber = true }: { label: string; amber?: boolean 
 }
 
 function MissionCard({ mission }: { mission: MissionData }) {
-  const pressAnim = useRef(new Animated.Value(0)).current;
+  const pressAnim = useRef(new Animated.Value(1)).current;
 
-  const onPressIn = () => Animated.timing(pressAnim, { toValue: 1, duration: 80, useNativeDriver: true }).start();
-  const onPressOut = () => Animated.timing(pressAnim, { toValue: 0, duration: 80, useNativeDriver: true }).start();
-
-  const translate = pressAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 3] });
-  const shadowOpacity = pressAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const onPressIn = () => Animated.timing(pressAnim, { toValue: 0.94, duration: 80, useNativeDriver: true }).start();
+  const onPressOut = () => Animated.timing(pressAnim, { toValue: 1, duration: 80, useNativeDriver: true }).start();
 
   return (
     <View style={styles.missionCardOuter}>
@@ -74,9 +73,8 @@ function MissionCard({ mission }: { mission: MissionData }) {
 
         {/* Start button */}
         <View style={styles.startBtnOuter}>
-          <Animated.View style={[styles.startBtnShadow, { opacity: shadowOpacity }]} />
           <Pressable onPressIn={onPressIn} onPressOut={onPressOut}>
-            <Animated.View style={[styles.startBtnFace, { transform: [{ translateX: translate }, { translateY: translate }] }]}>
+            <Animated.View style={[styles.startBtnFace, { transform: [{ scale: pressAnim }] }]}>
               <Text style={styles.startBtnLabel}>START MISSION</Text>
             </Animated.View>
           </Pressable>
@@ -106,10 +104,8 @@ function SubmissionCard({ submission }: { submission: SubmissionData }) {
     <View style={styles.submissionCardOuter}>
       <View style={styles.submissionCardShadow} />
       <View style={styles.submissionCardFace}>
-        {/* Image placeholder */}
-        <View style={styles.submissionImagePlaceholder}>
-          <MaterialIcons name="image" size={36} color={colors.surfaceVariant} />
-        </View>
+        {/* Image */}
+        <Image source={submission.image} style={styles.submissionImagePlaceholder} resizeMode="cover" />
         {/* Info */}
         <View style={styles.submissionInfo}>
           <Text style={styles.submissionTitle}>{submission.title}</Text>
@@ -126,10 +122,8 @@ function CompletedItem({ item }: { item: CompletedData }) {
     <View style={styles.completedCardOuter}>
       <View style={styles.completedCardShadow} />
       <View style={styles.completedCardFace}>
-        {/* Check icon box */}
-        <View style={styles.completedIconBox}>
-          <MaterialIcons name="check-circle" size={24} color={colors.onSurfaceVariant} />
-        </View>
+        {/* Check icon */}
+        <MaterialIcons name="check-circle" size={24} color={colors.onSurfaceVariant} style={styles.completedIcon} />
         {/* Text */}
         <View style={styles.completedTextCol}>
           <Text style={styles.completedTitle}>{item.title}</Text>
@@ -176,11 +170,16 @@ export default function KitchenScreen({
         {/* MY SUBMISSIONS */}
         <View style={styles.sectionGap} />
         <SectionLabel label="MY SUBMISSIONS" />
-        <View style={styles.submissionsGrid}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.submissionsScroll}
+          contentContainerStyle={styles.submissionsScrollContent}
+        >
           {SUBMISSIONS.map((s) => (
             <SubmissionCard key={s.id} submission={s} />
           ))}
-        </View>
+        </ScrollView>
         <Pressable style={styles.viewAllRow}>
           <Text style={styles.viewAllLabel}>VIEW ALL SUBMISSIONS →</Text>
         </Pressable>
@@ -294,17 +293,7 @@ const styles = StyleSheet.create({
 
   // Start button
   startBtnOuter: {
-    paddingBottom: 3,
-    paddingRight: 3,
     marginRight: spacing.sm,
-  },
-  startBtnShadow: {
-    position: 'absolute',
-    top: 3,
-    left: 3,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.ink,
   },
   startBtnFace: {
     backgroundColor: colors.amber,
@@ -320,13 +309,16 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
 
-  // Submissions grid
-  submissionsGrid: {
-    flexDirection: 'row',
+  // Submissions scroll
+  submissionsScroll: {
+    marginHorizontal: -spacing.lg,
+  },
+  submissionsScrollContent: {
+    paddingHorizontal: spacing.lg,
     gap: spacing.sm,
   },
   submissionCardOuter: {
-    flex: 1,
+    width: 160,
     paddingBottom: 4,
     paddingRight: 4,
   },
@@ -346,11 +338,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   submissionImagePlaceholder: {
-    width: '100%',
-    aspectRatio: 4 / 3,
-    backgroundColor: colors.surfaceVariant,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 237,
+    height: 137,
     borderBottomWidth: 1,
     borderBottomColor: colors.ink,
   },
@@ -410,15 +399,8 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     minHeight: 64,
   },
-  completedIconBox: {
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    margin: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.ink,
-    borderStyle: 'dashed',
+  completedIcon: {
+    marginHorizontal: spacing.md,
     opacity: 0.6,
   },
   completedTextCol: {
