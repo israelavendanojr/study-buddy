@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GridBackground from '../../components/GridBackground';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
 import MonkeyMascot from '../../components/MonkeyMascot';
+import KitchenScreen from '../kitchen/KitchenScreen';
 
 const HEADER_HEIGHT = 56;
 const BOTTOM_NAV_HEIGHT = 64;
@@ -206,13 +207,15 @@ function NavTab({
   label,
   icon,
   active,
+  onPress,
 }: {
   label: string;
   icon: keyof typeof MaterialIcons.glyphMap;
   active: boolean;
+  onPress?: () => void;
 }) {
   return (
-    <View style={styles.navTab}>
+    <Pressable style={styles.navTab} onPress={onPress}>
       <View style={active ? styles.navTabActiveBox : undefined}>
         <MaterialIcons
           name={icon}
@@ -228,71 +231,85 @@ function NavTab({
       >
         {label}
       </Text>
-    </View>
+    </Pressable>
   );
 }
+
+type ActiveTab = 'trail' | 'kitchen';
 
 export default function TrailScreen({ onStartLesson, onStartRecipe }: { onStartLesson?: () => void; onStartRecipe?: () => void }) {
   const insets = useSafeAreaInsets();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ActiveTab>('trail');
+
+  const bottomNavHeight = BOTTOM_NAV_HEIGHT + insets.bottom;
 
   return (
     <View style={styles.root}>
-      <GridBackground />
-
-      {/* Sticky header */}
-      <View style={[styles.stickyHeader, { top: 0, paddingTop: insets.top, height: HEADER_HEIGHT + insets.top }]}>
-        <Text style={styles.headerTitle}>GarlicMonkey</Text>
-        <View style={styles.hudRow}>
-          <HudPill icon={<MaterialIcons name="local-fire-department" size={14} color={colors.ink} />} count="7" />
-          <HudPill icon={<MaterialCommunityIcons name={"food-hot-dog" as any} size={14} color={colors.ink} />} count="120" />
-        </View>
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={{
-          paddingTop: insets.top + HEADER_HEIGHT + spacing.lg,
-          paddingBottom: BOTTOM_NAV_HEIGHT + insets.bottom + spacing.lg,
-          paddingHorizontal: spacing.lg,
-        }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Chapter header */}
-        <View style={styles.chapterHeader}>
-          <Text style={styles.chapterLabel}>CHAPTER 1:</Text>
-          <Text style={styles.chapterTitle}>The Foundation</Text>
-          <View style={styles.chapterSeparator} />
-        </View>
-
-        {/* Lesson cards with connectors */}
-        <LessonCard lesson={LESSONS[0]} isExpanded={false} onPress={() => {}} onClose={() => {}} />
-        <Connector variant="solid" opacity={1} />
-        <LessonCard lesson={LESSONS[1]} isExpanded={false} onPress={() => {}} onClose={() => {}} />
-        <Connector variant="solid" opacity={1} />
-        <LessonCard
-          lesson={LESSONS[2]}
-          isExpanded={expandedId === LESSONS[2].id}
-          onPress={() => {
-            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-            setExpandedId(expandedId === LESSONS[2].id ? null : LESSONS[2].id);
-          }}
-          onClose={() => {
-            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-            setExpandedId(null);
-          }}
-          onStartLesson={onStartLesson}
+      {activeTab === 'kitchen' ? (
+        <KitchenScreen
+          paddingTop={insets.top}
+          paddingBottom={bottomNavHeight}
         />
-        <Connector variant="dashed" opacity={0.4} />
-        <LessonCard lesson={LESSONS[3]} isExpanded={false} onPress={() => {}} onClose={() => {}} />
-        <Connector variant="dashed" opacity={0.25} />
-        <LessonCard lesson={LESSONS[4]} isExpanded={false} onPress={() => {}} onClose={() => {}} onDirectPress={onStartRecipe} />
-      </ScrollView>
+      ) : (
+        <>
+          <GridBackground />
 
-      {/* Bottom nav */}
+          {/* Sticky header */}
+          <View style={[styles.stickyHeader, { top: 0, paddingTop: insets.top, height: HEADER_HEIGHT + insets.top }]}>
+            <Text style={styles.headerTitle}>GarlicMonkey</Text>
+            <View style={styles.hudRow}>
+              <HudPill icon={<MaterialIcons name="local-fire-department" size={14} color={colors.ink} />} count="7" />
+              <HudPill icon={<MaterialCommunityIcons name={"food-hot-dog" as any} size={14} color={colors.ink} />} count="120" />
+            </View>
+          </View>
+
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={{
+              paddingTop: insets.top + HEADER_HEIGHT + spacing.lg,
+              paddingBottom: bottomNavHeight + spacing.lg,
+              paddingHorizontal: spacing.lg,
+            }}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Chapter header */}
+            <View style={styles.chapterHeader}>
+              <Text style={styles.chapterLabel}>CHAPTER 1:</Text>
+              <Text style={styles.chapterTitle}>The Foundation</Text>
+              <View style={styles.chapterSeparator} />
+            </View>
+
+            {/* Lesson cards with connectors */}
+            <LessonCard lesson={LESSONS[0]} isExpanded={false} onPress={() => {}} onClose={() => {}} />
+            <Connector variant="solid" opacity={1} />
+            <LessonCard lesson={LESSONS[1]} isExpanded={false} onPress={() => {}} onClose={() => {}} />
+            <Connector variant="solid" opacity={1} />
+            <LessonCard
+              lesson={LESSONS[2]}
+              isExpanded={expandedId === LESSONS[2].id}
+              onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setExpandedId(expandedId === LESSONS[2].id ? null : LESSONS[2].id);
+              }}
+              onClose={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setExpandedId(null);
+              }}
+              onStartLesson={onStartLesson}
+            />
+            <Connector variant="dashed" opacity={0.4} />
+            <LessonCard lesson={LESSONS[3]} isExpanded={false} onPress={() => {}} onClose={() => {}} />
+            <Connector variant="dashed" opacity={0.25} />
+            <LessonCard lesson={LESSONS[4]} isExpanded={false} onPress={() => {}} onClose={() => {}} onDirectPress={onStartRecipe} />
+          </ScrollView>
+        </>
+      )}
+
+      {/* Bottom nav — always visible */}
       <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
-        <NavTab label="TRAIL" icon="map" active={true} />
-        <NavTab label="KITCHEN" icon="restaurant" active={false} />
+        <NavTab label="TRAIL" icon="map" active={activeTab === 'trail'} onPress={() => setActiveTab('trail')} />
+        <NavTab label="KITCHEN" icon="restaurant" active={activeTab === 'kitchen'} onPress={() => setActiveTab('kitchen')} />
         <NavTab label="PROFILE" icon="person" active={false} />
       </View>
     </View>
