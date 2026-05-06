@@ -32,7 +32,7 @@ export interface RecipeStepContent {
   stepNumber: number;     // 1-based, shown as "STEP N"
   stepCount: number;      // total cooking steps
   title: string;
-  instruction: string;
+  steps: string[];        // ordered action items, rendered as a numbered list
   whatToLookFor?: string;
   suggestedTime?: string; // e.g. "90 SEC", "10-14 MIN"
   checkpoint?: RecipeStepCheckpoint;

@@ -62,13 +62,7 @@ export default function RecipePhotoSubmissionScreen({
             <Text style={styles.instruction}>{content.instruction}</Text>
           </View>
 
-          {/* Grading card */}
-          <GradingCriteriaCard
-            heading="WHAT WE'RE LOOKING FOR"
-            criteria={content.gradingCriteria.map((label) => ({ label, score: 5, maxScore: 5 }))}
-            filledStarColor={colors.ink}
-            footer={<Text style={styles.gradingNote}>{content.gradingNote}</Text>}
-          />
+          
 
           {/* Photo upload */}
           <Pressable style={styles.photoUpload}>
@@ -77,6 +71,16 @@ export default function RecipePhotoSubmissionScreen({
             <Text style={styles.photoHint}>or upload from camera roll</Text>
           </Pressable>
 
+
+          {/* Grading card */}
+            <GradingCriteriaCard
+              heading="WHAT WE'RE LOOKING FOR"
+              criteria={content.gradingCriteria.map((label) => ({ label, score: 5, maxScore: 5 }))}
+              filledStarColor={colors.ink}
+              footer={<Text style={styles.gradingNote}>{content.gradingNote}</Text>}
+            />
+
+            
           {/* Notes section */}
           <View style={styles.notesSection}>
             <Text style={styles.notesLabel}>ADD NOTES (OPTIONAL)</Text>
@@ -110,7 +114,9 @@ export default function RecipePhotoSubmissionScreen({
                 />
               </View>
             </View>
+            
           </View>
+          
         </ScrollView>
 
         {/* Sticky footer */}

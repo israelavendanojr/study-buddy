@@ -61,7 +61,12 @@ const STEP_1: RecipeStepContent = {
   stepNumber: 1,
   stepCount: 4,
   title: 'Get the Pan Ready',
-  instruction: 'Heavy pan over medium-high heat. No oil yet. Let it heat for 90 seconds. Add your oil and wait for the shimmer. You\'ll know it\'s ready when a drop of water flicked in dances and evaporates immediately.',
+  steps: [
+    'Heavy pan over medium-high heat, no oil yet',
+    'Let it heat for 90 seconds',
+    'Add oil and wait for the shimmer',
+    'Test: flick a drop of water in — it should dance and evaporate immediately',
+  ],
   whatToLookFor: 'Oil shimmering, barely starting to smoke at the edges. Not a moment before.',
   suggestedTime: '90 SEC',
   timeMinutes: 25,
@@ -71,7 +76,13 @@ const STEP_2: RecipeStepContent = {
   stepNumber: 2,
   stepCount: 4,
   title: 'The Sear',
-  instruction: 'Lay the chicken away from you into the pan. You want an aggressive sizzle. If it\'s quiet, your pan wasn\'t hot enough — leave it anyway and let the surface dry out.\n\nDo not move it. Set a timer for 5 minutes and walk away. You\'re listening for the sizzle to stay consistent, not fade into a steam.',
+  steps: [
+    'Lay chicken away from you into the pan',
+    'You want an aggressive sizzle — if quiet, the pan wasn\'t hot enough',
+    'Do not move it',
+    'Set a timer for 5 minutes and walk away',
+    'Listen for the sizzle to stay consistent, not fade into steam',
+  ],
   suggestedTime: '5 MIN',
   checkpoint: {
     question: 'Your chicken has been in the pan for 3 minutes and the sizzle has gone quiet and steamy. What happened and what do you do?',
@@ -89,7 +100,12 @@ const STEP_3: RecipeStepContent = {
   stepNumber: 3,
   stepCount: 4,
   title: 'The Flip',
-  instruction: 'When the chicken releases cleanly from the pan without forcing, it\'s ready to flip. If it\'s sticking, it\'s not ready. Another 60 seconds and try again. Sear the second side for 4 minutes. Remove chicken and rest it on a plate tented loosely with foil.',
+  steps: [
+    'When chicken releases cleanly from the pan, it\'s ready to flip',
+    'If it\'s sticking, wait 60 more seconds and try again',
+    'Sear the second side for 4 minutes',
+    'Remove chicken and rest on a plate, tented loosely with foil',
+  ],
   whatToLookFor: 'Clean release, golden brown underside, internal temp approaching 165°F.',
   suggestedTime: '10-14 MIN',
   checkpoint: {
@@ -139,7 +155,14 @@ const STEP_4: RecipeStepContent = {
   stepNumber: 4,
   stepCount: 4,
   title: 'The Pan Sauce',
-  instruction: 'Don\'t touch that fond. Lower heat to medium. Add shallots directly to the pan and cook 60 seconds until soft. Pour in stock and scrape up every bit of fond from the bottom — this is flavor. Let it reduce by half, about 2 minutes. Pull off heat, swirl in cold butter until glossy.\n\nTaste it. Add salt if it needs it.',
+  steps: [
+    'Don\'t touch that fond — lower heat to medium',
+    'Add shallots and cook 60 seconds until soft',
+    'Pour in stock and scrape up every bit of fond from the bottom',
+    'Let it reduce by half, about 2 minutes',
+    'Pull off heat, swirl in cold butter until glossy',
+    'Taste it — add salt if needed',
+  ],
   checkpoint: {
     question: 'Your sauce looks thin and watery after adding the stock. What do you do?',
     options: [

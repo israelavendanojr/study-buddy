@@ -132,7 +132,14 @@ export default function RecipeStepScreen({ content, onNext, onBack, onClose }: R
 
           {/* Instruction card */}
           <AccentCard>
-            <Text style={styles.instruction}>{content.instruction}</Text>
+            <View style={styles.steps}>
+              {content.steps.map((step, i) => (
+                <View key={i} style={styles.stepRow}>
+                  <Text style={styles.stepNum}>•</Text>
+                  <Text style={styles.stepText}>{step}</Text>
+                </View>
+              ))}
+            </View>
 
             {content.whatToLookFor && (
               <>
@@ -266,10 +273,26 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
 
-  instruction: {
+  steps: {
+    gap: spacing.sm,
+  },
+  stepRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: spacing.sm,
+  },
+  stepNum: {
+    fontFamily: fonts.label,
+    fontSize: 13,
+    color: colors.ink,
+    lineHeight: 26,
+    flexShrink: 0,
+  },
+  stepText: {
+    flex: 1,
     fontFamily: fonts.body,
-    fontSize: 19,
-    lineHeight: 30,
+    fontSize: 17,
+    lineHeight: 26,
     color: colors.ink,
   },
   divider: {
