@@ -1,8 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  Animated,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,9 +8,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import MonkeyMascot from '../../components/MonkeyMascot';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
+import PressableCard from '../../components/PressableCard';
+import QuestionHeader from '../../components/QuestionHeader';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
 import { OnboardingScreenProps } from './types';
 
@@ -58,77 +57,22 @@ function ExperienceCard({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const translateAnim = useRef(new Animated.Value(0)).current;
-
-  const handlePressIn = () => {
-    Animated.timing(translateAnim, { toValue: 1, duration: 80, useNativeDriver: true }).start();
-  };
-  const handlePressOut = () => {
-    Animated.timing(translateAnim, { toValue: 0, duration: 80, useNativeDriver: true }).start();
-  };
-
-  const shadowColor = selected ? colors.amberDark : colors.ink;
-  const shadowOffset = selected ? 6 : 4;
-
   return (
-    <Pressable
+    <PressableCard
       onPress={onSelect}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      style={styles.cardWrapper}
+      selected={selected}
+      cardStyle={[styles.card, selected ? styles.cardSelected : styles.cardActive]}
     >
-      {/* Block shadow */}
-      <Animated.View
-        style={[
-          styles.cardShadow,
-          {
-            backgroundColor: shadowColor,
-            top: shadowOffset,
-            left: shadowOffset,
-            opacity: translateAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [1, 0],
-            }),
-          },
-        ]}
-      />
-
-      {/* Card face */}
-      <Animated.View
-        style={[
-          styles.card,
-          selected ? styles.cardSelected : styles.cardActive,
-          {
-            transform: [
-              {
-                translateX: translateAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, shadowOffset],
-                }),
-              },
-              {
-                translateY: translateAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, shadowOffset],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        {/* Checkmark badge */}
-        {selected && (
-          <View style={styles.checkBadge}>
-            <MaterialIcons name="check" size={16} color={colors.white} />
-          </View>
-        )}
-
-        <Text style={[styles.cardTitle, selected && styles.cardTitleSelected]}>
-          {option.title}
-        </Text>
-        <Text style={styles.cardDescription}>{option.description}</Text>
-      </Animated.View>
-    </Pressable>
+      {selected && (
+        <View style={styles.checkBadge}>
+          <MaterialIcons name="check" size={16} color={colors.white} />
+        </View>
+      )}
+      <Text style={[styles.cardTitle, selected && styles.cardTitleSelected]}>
+        {option.title}
+      </Text>
+      <Text style={styles.cardDescription}>{option.description}</Text>
+    </PressableCard>
   );
 }
 
@@ -140,7 +84,6 @@ export default function ExperienceLevelScreen({ onContinue, onBack, progress }: 
     <View style={styles.root}>
       <GridBackground />
 
-
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -149,15 +92,10 @@ export default function ExperienceLevelScreen({ onContinue, onBack, progress }: 
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header: mascot + question */}
-        <View style={styles.header}>
-          <MonkeyMascot size={90} />
-          <View style={styles.questionCard}>
-            <Text style={styles.questionText}>What's your experience level?</Text>
-          </View>
+        <View style={styles.headerWrapper}>
+          <QuestionHeader question="What's your experience level?" fontSize={20} />
         </View>
 
-        {/* Options list */}
         <View style={styles.list}>
           {OPTIONS.map((option) => (
             <ExperienceCard
@@ -170,7 +108,6 @@ export default function ExperienceLevelScreen({ onContinue, onBack, progress }: 
         </View>
       </ScrollView>
 
-      {/* Fixed footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
         <InkButton label="CONTINUE" textColor="#FBF6E6" onPress={() => onContinue?.()} />
         <Text style={styles.footerCaption}>This helps me decide which lessons to unlock first.</Text>
@@ -191,29 +128,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: spacing.md,
+  headerWrapper: {
     marginBottom: spacing.lg,
-  },
-  questionCard: {
-    flex: 1,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    backgroundColor: colors.canvasAlt,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  questionText: {
-    fontFamily: fonts.headlineItalic,
-    fontSize: 20,
-    lineHeight: 26,
-    color: colors.ink,
-    textAlign: 'center',
   },
 
   // List
@@ -221,19 +137,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
 
-  // Card
-  cardWrapper: {
-    position: 'relative',
-    paddingBottom: 6,
-    paddingRight: 6,
-  },
-  cardShadow: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    right: 0,
-    bottom: 0,
-  },
+  // Card face
   card: {
     backgroundColor: colors.surfaceContainer,
     paddingVertical: spacing.md,

@@ -1,6 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useRef, useState } from 'react';
-import MonkeyMascot from '../../components/MonkeyMascot';
+import React, { useState } from 'react';
 import {
   Animated,
   Pressable,
@@ -13,6 +12,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
+import QuestionHeader from '../../components/QuestionHeader';
+import { useButtonPress } from '../../hooks/useButtonPress';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
 import { OnboardingScreenProps } from './types';
 
@@ -77,16 +78,7 @@ function GoalCard({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const translateAnim = useRef(new Animated.Value(0)).current;
-
-  const handlePressIn = () => {
-    if (goal.disabled) return;
-    Animated.timing(translateAnim, { toValue: 1, duration: 80, useNativeDriver: true }).start();
-  };
-  const handlePressOut = () => {
-    if (goal.disabled) return;
-    Animated.timing(translateAnim, { toValue: 0, duration: 80, useNativeDriver: true }).start();
-  };
+  const { translateAnim, handlePressIn, handlePressOut } = useButtonPress();
 
   const isSelected = selected && !goal.disabled;
   const shadowColor = isSelected ? colors.amberDark : colors.ink;
@@ -95,11 +87,11 @@ function GoalCard({
   return (
     <Pressable
       onPress={goal.disabled ? undefined : onSelect}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
+      onPressIn={goal.disabled ? undefined : handlePressIn}
+      onPressOut={goal.disabled ? undefined : handlePressOut}
       style={[styles.cardWrapper, goal.disabled && styles.cardDisabled]}
     >
-      {/* Block shadow */}
+      {/* Block shadow — only shown for interactive cards */}
       {!goal.disabled && (
         <Animated.View
           style={[
@@ -188,7 +180,6 @@ export default function GoalSelectionScreen({ onContinue, onBack, progress }: On
     <View style={styles.root}>
       <GridBackground />
 
-
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -197,17 +188,10 @@ export default function GoalSelectionScreen({ onContinue, onBack, progress }: On
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header: mascot + question */}
-        <View style={styles.header}>
-          {/* Monkey mascot */}
-          <MonkeyMascot size={90} />
-          {/* Question card */}
-          <View style={styles.questionCard}>
-            <Text style={styles.questionText}>Whats your cooking goal?</Text>
-          </View>
+        <View style={styles.headerWrapper}>
+          <QuestionHeader question="Whats your cooking goal?" fontSize={20} />
         </View>
 
-        {/* 2-column goals grid */}
         <View style={styles.grid}>
           {GOALS.map((goal) => (
             <View key={goal.id} style={styles.gridItem}>
@@ -221,7 +205,6 @@ export default function GoalSelectionScreen({ onContinue, onBack, progress }: On
         </View>
       </ScrollView>
 
-      {/* Fixed footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
         <InkButton label="CONTINUE" textColor="#FBF6E6" onPress={() => onContinue?.()} />
         <Text style={styles.footerCaption}>You can change your goal anytime in your profile.</Text>
@@ -242,38 +225,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: spacing.md,
+  headerWrapper: {
     marginBottom: spacing.lg,
-  },
-  mascot: {
-    width: 84,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    backgroundColor: colors.canvasAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 4,
-  },
-  questionCard: {
-    flex: 1,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    backgroundColor: colors.canvasAlt,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  questionText: {
-    fontFamily: fonts.headlineItalic,
-    fontSize: 20,
-    lineHeight: 26,
-    color: colors.ink,
-    textAlign: 'center',
   },
 
   // Grid
@@ -285,10 +238,10 @@ const styles = StyleSheet.create({
   gridItem: {
     width: '50%',
     paddingHorizontal: spacing.sm,
-    paddingBottom: spacing.md + 4, // extra room for block shadow
+    paddingBottom: spacing.md + 4,
   },
 
-  // Card
+  // Card wrapper
   cardWrapper: {
     flex: 1,
     position: 'relative',

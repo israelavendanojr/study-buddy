@@ -1,9 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  Animated,
   Image,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,7 +10,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
-import MonkeyMascot from '../../components/MonkeyMascot';
+import PressableCard from '../../components/PressableCard';
+import QuestionHeader from '../../components/QuestionHeader';
+import SkipButton from '../../components/SkipButton';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
 import { ImageIDData, ImageIDOption } from '../../types/lesson';
 
@@ -31,137 +31,32 @@ function ImageCard({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const translateAnim = useRef(new Animated.Value(0)).current;
-  const shadowOffset = selected ? 6 : 4;
-  const shadowColor = selected ? colors.amberDark : colors.ink;
-
-  const handlePressIn = () => {
-    Animated.timing(translateAnim, { toValue: 1, duration: 80, useNativeDriver: true }).start();
-  };
-  const handlePressOut = () => {
-    Animated.timing(translateAnim, { toValue: 0, duration: 80, useNativeDriver: true }).start();
-  };
-
   return (
-    <Pressable
+    <PressableCard
       onPress={onSelect}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      style={styles.cardWrapper}
+      selected={selected}
+      cardStyle={[
+        styles.cardFace,
+        selected ? styles.cardFaceSelected : styles.cardFaceActive,
+      ]}
     >
-      {/* Block shadow */}
-      <Animated.View
-        style={[
-          styles.cardShadow,
-          {
-            backgroundColor: shadowColor,
-            top: shadowOffset,
-            left: shadowOffset,
-            opacity: translateAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [1, 0],
-            }),
-          },
-        ]}
-      />
-
-      {/* Card face */}
-      <Animated.View
-        style={[
-          styles.cardFace,
-          selected ? styles.cardFaceSelected : styles.cardFaceActive,
-          {
-            transform: [
-              {
-                translateX: translateAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, shadowOffset],
-                }),
-              },
-              {
-                translateY: translateAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, shadowOffset],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        {/* Checkmark badge */}
-        {selected && (
-          <View style={styles.checkBadge}>
-            <MaterialIcons name="check" size={14} color={colors.white} />
-          </View>
-        )}
-
-        {/* Image */}
-        <Image source={option.image} style={styles.cardImage} resizeMode="cover" />
-
-        {/* Label */}
-        <View style={[styles.labelContainer, selected && styles.labelContainerSelected]}>
-          <Text style={[styles.labelText, selected && styles.labelTextSelected]}>
-            {option.label}
-          </Text>
+      {/* Checkmark badge */}
+      {selected && (
+        <View style={styles.checkBadge}>
+          <MaterialIcons name="check" size={14} color={colors.white} />
         </View>
-      </Animated.View>
-    </Pressable>
-  );
-}
+      )}
 
-function SkipButton({ onPress }: { onPress: () => void }) {
-  const translateAnim = useRef(new Animated.Value(0)).current;
+      {/* Image */}
+      <Image source={option.image} style={styles.cardImage} resizeMode="cover" />
 
-  const handlePressIn = () => {
-    Animated.timing(translateAnim, { toValue: 1, duration: 80, useNativeDriver: true }).start();
-  };
-  const handlePressOut = () => {
-    Animated.timing(translateAnim, { toValue: 0, duration: 80, useNativeDriver: true }).start();
-  };
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      style={styles.skipWrapper}
-    >
-      <Animated.View
-        style={[
-          styles.skipShadow,
-          {
-            opacity: translateAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [1, 0],
-            }),
-          },
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.skipButton,
-          {
-            transform: [
-              {
-                translateX: translateAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 4],
-                }),
-              },
-              {
-                translateY: translateAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 4],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        <MaterialIcons name="skip-next" size={18} color={colors.ink} />
-        <Text style={styles.skipLabel}>SKIP</Text>
-      </Animated.View>
-    </Pressable>
+      {/* Label */}
+      <View style={[styles.labelContainer, selected && styles.labelContainerSelected]}>
+        <Text style={[styles.labelText, selected && styles.labelTextSelected]}>
+          {option.label}
+        </Text>
+      </View>
+    </PressableCard>
   );
 }
 
@@ -192,13 +87,7 @@ export default function ImageIDScreen({
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Question row: mascot + question card */}
-        <View style={styles.questionRow}>
-          <MonkeyMascot size={90} />
-          <View style={styles.questionCard}>
-            <Text style={styles.questionText}>{question.text}</Text>
-          </View>
-        </View>
+        <QuestionHeader question={question.text} />
 
         {/* Image grid: 2 top + 1 centered bottom */}
         <View style={styles.imageGrid}>
@@ -246,10 +135,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.canvas,
   },
-  header: {
-    backgroundColor: colors.canvas,
-    zIndex: 10,
-  },
   scroll: {
     flex: 1,
   },
@@ -257,30 +142,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     gap: spacing.lg,
-  },
-
-  // Question row
-  questionRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: spacing.md,
-  },
-  questionCard: {
-    flex: 1,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    backgroundColor: colors.canvasAlt,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  questionText: {
-    fontFamily: fonts.headlineItalic,
-    fontSize: 18,
-    lineHeight: 26,
-    color: colors.ink,
-    textAlign: 'center',
   },
 
   // Image grid
@@ -301,19 +162,7 @@ const styles = StyleSheet.create({
     width: '52%',
   },
 
-  // Image card
-  cardWrapper: {
-    position: 'relative',
-    paddingBottom: 6,
-    paddingRight: 6,
-  },
-  cardShadow: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    right: 0,
-    bottom: 0,
-  },
+  // Image card face
   cardFace: {
     overflow: 'hidden',
     position: 'relative',
@@ -386,44 +235,6 @@ const styles = StyleSheet.create({
     gap: 12,
     alignItems: 'stretch',
   },
-
-  // Skip button
-  skipWrapper: {
-    width: '35%',
-    height: 56,
-    position: 'relative',
-  },
-  skipShadow: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.ink,
-  },
-  skipButton: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 4,
-    bottom: 4,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderStyle: 'dashed',
-    backgroundColor: colors.canvas,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 4,
-  },
-  skipLabel: {
-    fontFamily: fonts.label,
-    fontSize: 14,
-    letterSpacing: 2,
-    color: colors.ink,
-  },
-
-  // Check button
   checkButtonWrapper: {
     flex: 1,
   },

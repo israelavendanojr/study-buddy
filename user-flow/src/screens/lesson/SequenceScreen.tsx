@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   PanResponder,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,7 +12,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
-import MonkeyMascot from '../../components/MonkeyMascot';
+import QuestionHeader from '../../components/QuestionHeader';
+import SkipButton from '../../components/SkipButton';
 import { colors, fonts, spacing } from '../../theme';
 import { SequenceData } from '../../types/lesson';
 
@@ -144,62 +144,6 @@ function FloatingDragRow({
         </Animated.View>
       </Animated.View>
     </Animated.View>
-  );
-}
-
-function SkipButton({ onPress }: { onPress: () => void }) {
-  const translateAnim = useRef(new Animated.Value(0)).current;
-
-  const handlePressIn = () => {
-    Animated.timing(translateAnim, { toValue: 1, duration: 80, useNativeDriver: true }).start();
-  };
-  const handlePressOut = () => {
-    Animated.timing(translateAnim, { toValue: 0, duration: 80, useNativeDriver: true }).start();
-  };
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      style={styles.skipWrapper}
-    >
-      <Animated.View
-        style={[
-          styles.skipShadow,
-          {
-            opacity: translateAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [1, 0],
-            }),
-          },
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.skipButton,
-          {
-            transform: [
-              {
-                translateX: translateAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 4],
-                }),
-              },
-              {
-                translateY: translateAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 4],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        <MaterialIcons name="skip-next" size={18} color={colors.ink} />
-        <Text style={styles.skipLabel}>SKIP</Text>
-      </Animated.View>
-    </Pressable>
   );
 }
 
@@ -375,13 +319,7 @@ export default function SequenceScreen({
         showsVerticalScrollIndicator={false}
         scrollEnabled={!draggingKey}
       >
-        {/* Question row: mascot + prompt card */}
-        <View style={styles.questionRow}>
-          <MonkeyMascot size={90} />
-          <View style={styles.questionCard}>
-            <Text style={styles.questionText}>Put these steps in the correct order.</Text>
-          </View>
-        </View>
+        <QuestionHeader question="Put these steps in the correct order." />
 
         {/* Drag label */}
         <View style={styles.dragLabelRow}>
@@ -440,10 +378,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.canvas,
   },
-  header: {
-    backgroundColor: colors.canvas,
-    zIndex: 10,
-  },
   scroll: {
     flex: 1,
   },
@@ -451,30 +385,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     gap: spacing.lg,
-  },
-
-  // Question row
-  questionRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: spacing.md,
-  },
-  questionCard: {
-    flex: 1,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    backgroundColor: colors.canvasAlt,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  questionText: {
-    fontFamily: fonts.headlineItalic,
-    fontSize: 18,
-    lineHeight: 26,
-    color: colors.ink,
-    textAlign: 'center',
   },
 
   // Drag label
@@ -599,42 +509,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     alignItems: 'stretch',
-  },
-
-  // Skip button
-  skipWrapper: {
-    width: '35%',
-    height: 56,
-    position: 'relative',
-  },
-  skipShadow: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.ink,
-  },
-  skipButton: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 4,
-    bottom: 4,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderStyle: 'dashed',
-    backgroundColor: colors.canvas,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 4,
-  },
-  skipLabel: {
-    fontFamily: fonts.label,
-    fontSize: 14,
-    letterSpacing: 2,
-    color: colors.ink,
   },
 
   // Check button
