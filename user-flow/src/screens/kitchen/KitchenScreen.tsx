@@ -52,7 +52,7 @@ function SectionLabel({ label, amber = true }: { label: string; amber?: boolean 
   );
 }
 
-function MissionCard({ mission }: { mission: MissionData }) {
+function MissionCard({ mission, onStart }: { mission: MissionData; onStart?: () => void }) {
   const pressAnim = useRef(new Animated.Value(1)).current;
 
   const onPressIn = () => Animated.timing(pressAnim, { toValue: 0.94, duration: 80, useNativeDriver: true }).start();
@@ -73,7 +73,7 @@ function MissionCard({ mission }: { mission: MissionData }) {
 
         {/* Start button */}
         <View style={styles.startBtnOuter}>
-          <Pressable onPressIn={onPressIn} onPressOut={onPressOut}>
+          <Pressable onPressIn={onPressIn} onPressOut={onPressOut} onPress={onStart}>
             <Animated.View style={[styles.startBtnFace, { transform: [{ scale: pressAnim }] }]}>
               <Text style={styles.startBtnLabel}>START MISSION</Text>
             </Animated.View>
@@ -139,9 +139,11 @@ function CompletedItem({ item }: { item: CompletedData }) {
 export default function KitchenScreen({
   paddingTop,
   paddingBottom,
+  onStartMission,
 }: {
   paddingTop: number;
   paddingBottom: number;
+  onStartMission?: () => void;
 }) {
   return (
     <View style={styles.root}>
@@ -164,7 +166,7 @@ export default function KitchenScreen({
         {/* ACTIVE MISSIONS */}
         <SectionLabel label="ACTIVE MISSIONS" />
         {ACTIVE_MISSIONS.map((m) => (
-          <MissionCard key={m.id} mission={m} />
+          <MissionCard key={m.id} mission={m} onStart={onStartMission} />
         ))}
 
         {/* MY SUBMISSIONS */}

@@ -9,27 +9,28 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import FlowHeader, { FLOW_HEADER_HEIGHT } from '../../components/FlowHeader';
 import GradingCriteriaCard from '../../components/GradingCriteriaCard';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import PhotoUploadArea from '../../components/PhotoUploadArea';
-import FlowHeader, { FLOW_HEADER_HEIGHT } from '../../components/FlowHeader';
-import RecipeStepIndicator from '../../components/RecipeStepIndicator';
-import StepBadge from '../../components/StepBadge';
 import { colors, fonts, spacing } from '../../theme';
-import { RecipePhotoSubmissionContent } from '../../types/recipe';
 
-interface RecipePhotoSubmissionScreenProps {
-  content: RecipePhotoSubmissionContent;
-  onNext: () => void;
-  onBack: () => void;
+export interface MissionPhotoSubmissionContent {
+  title: string;
+  instruction: string;
+  gradingCriteria: string[];
+  gradingNote: string;
+  submitHint: string;
 }
 
-export default function RecipePhotoSubmissionScreen({
-  content,
-  onNext,
-  onBack,
-}: RecipePhotoSubmissionScreenProps) {
+interface Props {
+  content: MissionPhotoSubmissionContent;
+  onNext: () => void;
+  onClose: () => void;
+}
+
+export default function MissionPhotoSubmissionScreen({ content, onNext, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const [notes, setNotes] = useState<string[]>([]);
   const [newNote, setNewNote] = useState('');
@@ -39,45 +40,34 @@ export default function RecipePhotoSubmissionScreen({
       <GridBackground />
 
       <FlowHeader
-        title="RECIPE CHALLENGE"
-        timeMinutes={content.timeMinutes}
-        onLeft={onBack}
+        title="MISSION"
+        onLeft={onClose}
       />
 
       <View style={{ flex: 1, paddingTop: FLOW_HEADER_HEIGHT + insets.top }}>
-        <RecipeStepIndicator
-          stepCount={content.stepCount}
-          currentStep={content.stepCount + 1}
-          showCameraFinal
-        />
-
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 140 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Step badge + title + instruction */}
+          {/* Title + instruction */}
           <View style={styles.stepHeader}>
-            <StepBadge label={`STEP ${content.stepNumber}`} />
             <Text style={styles.title}>{content.title}</Text>
             <Text style={styles.instruction}>{content.instruction}</Text>
           </View>
 
-          
-
           {/* Photo upload */}
           <PhotoUploadArea />
+          
+          {/* Grading criteria */}
+          <GradingCriteriaCard
+            heading="WHAT WE'RE LOOKING FOR"
+            criteria={content.gradingCriteria.map((label) => ({ label, score: 5, maxScore: 5 }))}
+            filledStarColor={colors.ink}
+            footer={<Text style={styles.gradingNote}>{content.gradingNote}</Text>}
+          />
 
 
-          {/* Grading card */}
-            <GradingCriteriaCard
-              heading="WHAT WE'RE LOOKING FOR"
-              criteria={content.gradingCriteria.map((label) => ({ label, score: 5, maxScore: 5 }))}
-              filledStarColor={colors.ink}
-              footer={<Text style={styles.gradingNote}>{content.gradingNote}</Text>}
-            />
-
-            
           {/* Notes section */}
           <View style={styles.notesSection}>
             <Text style={styles.notesLabel}>ADD NOTES (OPTIONAL)</Text>
@@ -95,7 +85,7 @@ export default function RecipePhotoSubmissionScreen({
                 <Text style={styles.bullet}>•</Text>
                 <TextInput
                   style={styles.notesInput}
-                  placeholder="Add a note..."
+                  placeholder="Any notes about your cook — what went well, what was tricky..."
                   placeholderTextColor={`${colors.ink}50`}
                   value={newNote}
                   onChangeText={setNewNote}
@@ -108,12 +98,11 @@ export default function RecipePhotoSubmissionScreen({
                   }}
                   returnKeyType="done"
                   blurOnSubmit={false}
+                  multiline
                 />
               </View>
             </View>
-            
           </View>
-          
         </ScrollView>
 
         {/* Sticky footer */}
@@ -131,16 +120,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.canvas,
   },
+
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.lg,
     gap: spacing.lg,
   },
 
-  // Step header
   stepHeader: {
     gap: spacing.sm,
   },
@@ -168,7 +157,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
 
-  // Notes
   notesSection: {
     gap: spacing.sm,
   },
@@ -209,7 +197,7 @@ const styles = StyleSheet.create({
   },
   noteInputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
   },
   notesInput: {
@@ -221,7 +209,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
 
-  // Footer
   footer: {
     position: 'absolute',
     bottom: 0,

@@ -3,25 +3,28 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, spacing } from '../theme';
 
-export const RECIPE_HEADER_HEIGHT = 56;
+export const FLOW_HEADER_HEIGHT = 56;
 
-interface RecipeHeaderProps {
+interface FlowHeaderProps {
   title: string;
-  timeMinutes: number;
   onLeft: () => void;
+  leftIcon?: React.ReactNode;
+  timeMinutes?: number;
 }
 
-export default function RecipeHeader({ title, timeMinutes, onLeft }: RecipeHeaderProps) {
+export default function FlowHeader({ title, onLeft, leftIcon, timeMinutes }: FlowHeaderProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.topBar, { paddingTop: insets.top, height: RECIPE_HEADER_HEIGHT + insets.top }]}>
+    <View style={[styles.topBar, { paddingTop: insets.top, height: FLOW_HEADER_HEIGHT + insets.top }]}>
       <Pressable onPress={onLeft} style={styles.leftBtn} hitSlop={12}>
-        <Text style={styles.backArrow}>‹</Text>
+        {leftIcon ?? <Text style={styles.backArrow}>‹</Text>}
       </Pressable>
       <Text style={styles.title}>{title}</Text>
-      <View style={styles.timeSlot}>
-        <Text style={styles.timeText}>{timeMinutes} MIN</Text>
+      <View style={styles.rightSlot}>
+        {timeMinutes != null && (
+          <Text style={styles.timeText}>{timeMinutes} MIN</Text>
+        )}
       </View>
     </View>
   );
@@ -37,13 +40,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     backgroundColor: colors.canvas,
     borderBottomWidth: 2,
     borderBottomColor: colors.ink,
   },
   leftBtn: {
-    width: 36,
+    width: 40,
     alignItems: 'flex-start',
   },
   backArrow: {
@@ -54,16 +57,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: fonts.label,
-    fontSize: 12,
-    letterSpacing: 2,
+    fontSize: 13,
+    letterSpacing: 3,
     color: colors.ink,
   },
-  timeSlot: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    width: 36,
-    justifyContent: 'flex-end',
+  rightSlot: {
+    width: 40,
+    alignItems: 'flex-end',
   },
   timeText: {
     fontFamily: fonts.label,

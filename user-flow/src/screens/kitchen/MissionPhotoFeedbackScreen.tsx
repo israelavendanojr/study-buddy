@@ -9,32 +9,37 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import FlowHeader, { FLOW_HEADER_HEIGHT } from '../../components/FlowHeader';
 import GradingCriteriaCard from '../../components/GradingCriteriaCard';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import PhotoResultCard from '../../components/PhotoResultCard';
-import FlowHeader, { FLOW_HEADER_HEIGHT } from '../../components/FlowHeader';
-import RecipeStepIndicator from '../../components/RecipeStepIndicator';
 import XPBanner from '../../components/XPBanner';
 import { colors, fonts, spacing } from '../../theme';
-import { RecipePhotoFeedbackContent } from '../../types/recipe';
+import { CriterionResult } from '../../types/recipe';
 
-interface RecipePhotoFeedbackScreenProps {
-  content: RecipePhotoFeedbackContent;
-  onBack: () => void;
+export interface MissionPhotoFeedbackContent {
+  title: string;
+  gradingResults: CriterionResult[];
+  maxScorePerCriterion: number;
+  totalScore: number;
+  maxTotalScore: number;
+  xpEarned: number;
+}
+
+interface Props {
+  content: MissionPhotoFeedbackContent;
   onClose: () => void;
 }
 
-export default function RecipePhotoFeedbackScreen({
-  content,
-  onBack,
-  onClose,
-}: RecipePhotoFeedbackScreenProps) {
+export default function MissionPhotoFeedbackScreen({ content, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const shareAnim = useRef(new Animated.Value(0)).current;
 
-  const handleSharePressIn = () => Animated.timing(shareAnim, { toValue: 1, duration: 80, useNativeDriver: true }).start();
-  const handleSharePressOut = () => Animated.timing(shareAnim, { toValue: 0, duration: 80, useNativeDriver: true }).start();
+  const handleSharePressIn = () =>
+    Animated.timing(shareAnim, { toValue: 1, duration: 80, useNativeDriver: true }).start();
+  const handleSharePressOut = () =>
+    Animated.timing(shareAnim, { toValue: 0, duration: 80, useNativeDriver: true }).start();
 
   const overallScoreFooter = (
     <View style={styles.scoreRow}>
@@ -50,18 +55,11 @@ export default function RecipePhotoFeedbackScreen({
       <GridBackground />
 
       <FlowHeader
-        title="RECIPE CHALLENGE"
-        timeMinutes={content.timeMinutes}
-        onLeft={onBack}
+        title="MISSION"
+        onLeft={onClose}
       />
 
       <View style={{ flex: 1, paddingTop: FLOW_HEADER_HEIGHT + insets.top }}>
-        <RecipeStepIndicator
-          stepCount={content.stepCount}
-          currentStep={content.stepCount + 2}
-          showCameraFinal
-        />
-
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
@@ -71,7 +69,7 @@ export default function RecipePhotoFeedbackScreen({
 
           {/* Submitted photo */}
           <Image
-            source={require('../../../assets/submissions/pan_sear_chicken_2.jpg')}
+            source={require('../../../assets/submissions/dice-onion.jpg')}
             style={styles.photo}
             resizeMode="cover"
           />
@@ -88,7 +86,7 @@ export default function RecipePhotoFeedbackScreen({
             footer={overallScoreFooter}
           />
 
-          <XPBanner xpEarned={content.xpEarned} label="RECIPE COMPLETE" />
+          <XPBanner xpEarned={content.xpEarned} label="MISSION COMPLETE" />
         </ScrollView>
 
         {/* Sticky footer */}
@@ -98,20 +96,28 @@ export default function RecipePhotoFeedbackScreen({
             onPressOut={handleSharePressOut}
             style={styles.shareWrapper}
           >
-            <Animated.View style={[styles.shareShadow, {
-              opacity: shareAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
-            }]} />
-            <Animated.View style={[styles.shareButton, {
-              transform: [
-                { translateX: shareAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }) },
-                { translateY: shareAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }) },
-              ],
-            }]}>
+            <Animated.View
+              style={[
+                styles.shareShadow,
+                { opacity: shareAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) },
+              ]}
+            />
+            <Animated.View
+              style={[
+                styles.shareButton,
+                {
+                  transform: [
+                    { translateX: shareAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }) },
+                    { translateY: shareAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }) },
+                  ],
+                },
+              ]}
+            >
               <Text style={styles.shareLabel}>SHARE</Text>
             </Animated.View>
           </Pressable>
-          <View style={styles.roadmapButton}>
-            <InkButton label="BACK TO ROADMAP →" onPress={onClose} />
+          <View style={styles.primaryButton}>
+            <InkButton label="BACK TO KITCHEN →" onPress={onClose} />
           </View>
         </View>
       </View>
@@ -124,12 +130,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.canvas,
   },
+
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.lg,
     gap: spacing.lg,
   },
 
@@ -209,7 +216,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     color: colors.ink,
   },
-  roadmapButton: {
+  primaryButton: {
     flex: 2,
   },
 });

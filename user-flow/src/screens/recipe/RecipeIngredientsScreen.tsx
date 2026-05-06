@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import ProTipCard from '../../components/ProTipCard';
-import RecipeHeader, { RECIPE_HEADER_HEIGHT } from '../../components/RecipeHeader';
+import FlowHeader, { FLOW_HEADER_HEIGHT } from '../../components/FlowHeader';
 import RecipeStepIndicator from '../../components/RecipeStepIndicator';
 import StepBadge from '../../components/StepBadge';
 import { colors, fonts, spacing } from '../../theme';
@@ -40,13 +40,13 @@ export default function RecipeIngredientsScreen({ content, onNext, onBack, onClo
     <View style={styles.root}>
       <GridBackground />
 
-      <RecipeHeader
+      <FlowHeader
         title="YOU'LL NEED"
         timeMinutes={content.timeMinutes}
         onLeft={onBack}
       />
 
-      <View style={{ flex: 1, paddingTop: RECIPE_HEADER_HEIGHT + insets.top }}>
+      <View style={{ flex: 1, paddingTop: FLOW_HEADER_HEIGHT + insets.top }}>
       <RecipeStepIndicator stepCount={content.stepCount} currentStep={0} />
 
       <ScrollView

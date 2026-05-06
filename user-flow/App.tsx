@@ -23,6 +23,7 @@ import OnboardingFlow from './src/screens/onboarding/OnboardingFlow';
 import TrailScreen from './src/screens/trail/TrailScreen';
 import LessonFlowScreen from './src/screens/lesson/LessonFlowScreen';
 import RecipeFlowScreen from './src/screens/recipe/RecipeFlowScreen';
+import MissionFlowScreen from './src/screens/kitchen/MissionFlowScreen';
 import GridBackground from './src/components/GridBackground';
 
 const screenHeight = Dimensions.get('window').height;
@@ -31,6 +32,7 @@ function AppContent() {
   const [isOnboarding, setIsOnboarding] = useState(true);
   const [isInLesson, setIsInLesson] = useState(false);
   const [isInRecipe, setIsInRecipe] = useState(false);
+  const [isInMission, setIsInMission] = useState(false);
   const curtainY = useRef(new Animated.Value(screenHeight)).current;
   const curtainOpacity = useRef(new Animated.Value(1)).current;
 
@@ -94,6 +96,45 @@ function AppContent() {
     });
   };
 
+  const handleStartMission = () => {
+    curtainY.setValue(screenHeight);
+    curtainOpacity.setValue(1);
+    Animated.timing(curtainY, {
+      toValue: 0,
+      duration: 320,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      setIsInMission(true);
+      setTimeout(() => {
+        Animated.timing(curtainOpacity, {
+          toValue: 0,
+          duration: 420,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }).start();
+      }, 180);
+    });
+  };
+
+  const handleCloseMission = () => {
+    curtainY.setValue(0);
+    Animated.timing(curtainOpacity, {
+      toValue: 1,
+      duration: 200,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      setIsInMission(false);
+      Animated.timing(curtainY, {
+        toValue: screenHeight,
+        duration: 320,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }).start();
+    });
+  };
+
   const handleCloseLesson = () => {
     curtainY.setValue(0);
     Animated.timing(curtainOpacity, {
@@ -124,8 +165,10 @@ function AppContent() {
             <LessonFlowScreen onClose={handleCloseLesson} />
           ) : isInRecipe ? (
             <RecipeFlowScreen onClose={handleCloseRecipe} />
+          ) : isInMission ? (
+            <MissionFlowScreen onClose={handleCloseMission} />
           ) : (
-            <TrailScreen onStartLesson={handleStartLesson} onStartRecipe={handleStartRecipe} />
+            <TrailScreen onStartLesson={handleStartLesson} onStartRecipe={handleStartRecipe} onStartMission={handleStartMission} />
           )}
           {/* Grid curtain overlay */}
           <Animated.View

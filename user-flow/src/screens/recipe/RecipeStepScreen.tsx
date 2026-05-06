@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AccentCard from '../../components/AccentCard';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
-import RecipeHeader, { RECIPE_HEADER_HEIGHT } from '../../components/RecipeHeader';
+import FlowHeader, { FLOW_HEADER_HEIGHT } from '../../components/FlowHeader';
 import RecipeStepIndicator from '../../components/RecipeStepIndicator';
 import StepBadge from '../../components/StepBadge';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
@@ -110,13 +110,13 @@ export default function RecipeStepScreen({ content, onNext, onBack, onClose }: R
     <View style={styles.root}>
       <GridBackground />
 
-      <RecipeHeader
+      <FlowHeader
         title="RECIPE CHALLENGE"
         timeMinutes={content.timeMinutes}
         onLeft={onBack}
       />
 
-      <View style={{ flex: 1, paddingTop: RECIPE_HEADER_HEIGHT + insets.top }}>
+      <View style={{ flex: 1, paddingTop: FLOW_HEADER_HEIGHT + insets.top }}>
         <RecipeStepIndicator stepCount={content.stepCount} currentStep={content.stepNumber} />
 
         <ScrollView

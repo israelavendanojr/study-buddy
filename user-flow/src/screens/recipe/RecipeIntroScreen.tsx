@@ -10,7 +10,7 @@ import {
 import { Line, Svg } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GridBackground from '../../components/GridBackground';
-import RecipeHeader, { RECIPE_HEADER_HEIGHT } from '../../components/RecipeHeader';
+import FlowHeader, { FLOW_HEADER_HEIGHT } from '../../components/FlowHeader';
 import { colors, fonts, spacing } from '../../theme';
 import MonkeyMascot from '../../components/MonkeyMascot';
 import { RecipeIntroContent } from '../../types/recipe';
@@ -28,7 +28,7 @@ export default function RecipeIntroScreen({ content, onNext, onBack }: RecipeInt
     <View style={styles.root}>
       <GridBackground />
 
-      <RecipeHeader
+      <FlowHeader
         title="RECIPE CHALLENGE"
         timeMinutes={content.timeMinutes}
         onLeft={onBack}
@@ -37,7 +37,7 @@ export default function RecipeIntroScreen({ content, onNext, onBack }: RecipeInt
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{
-          paddingTop: insets.top + RECIPE_HEADER_HEIGHT + spacing.lg,
+          paddingTop: insets.top + FLOW_HEADER_HEIGHT + spacing.lg,
           paddingBottom: insets.bottom,
           paddingHorizontal: spacing.lg,
         }}

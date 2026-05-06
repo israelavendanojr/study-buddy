@@ -237,7 +237,7 @@ function NavTab({
 
 type ActiveTab = 'trail' | 'kitchen';
 
-export default function TrailScreen({ onStartLesson, onStartRecipe }: { onStartLesson?: () => void; onStartRecipe?: () => void }) {
+export default function TrailScreen({ onStartLesson, onStartRecipe, onStartMission }: { onStartLesson?: () => void; onStartRecipe?: () => void; onStartMission?: () => void }) {
   const insets = useSafeAreaInsets();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('trail');
@@ -250,6 +250,7 @@ export default function TrailScreen({ onStartLesson, onStartRecipe }: { onStartL
         <KitchenScreen
           paddingTop={insets.top}
           paddingBottom={bottomNavHeight}
+          onStartMission={onStartMission}
         />
       ) : (
         <>
