@@ -10,10 +10,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
-import PressableCard from '../../components/PressableCard';
 import QuestionHeader from '../../components/QuestionHeader';
-import { borderRadius, colors, fonts, spacing } from '../../theme';
-import { OnboardingScreenProps } from './types';
+import SelectableCard from '../../components/SelectableCard';
+import { colors, fonts, spacing } from '../../theme';
+import { ONBOARDING_PROGRESS_BAR_HEIGHT, OnboardingScreenProps } from './types';
 
 type CommitmentId = '5' | '10' | '20' | '30';
 
@@ -39,17 +39,12 @@ function CommitmentCard({
   onSelect: () => void;
 }) {
   return (
-    <PressableCard
-      onPress={onSelect}
+    <SelectableCard
       selected={selected}
+      onSelect={onSelect}
       style={styles.cardWrapper}
-      cardStyle={[styles.card, selected ? styles.cardSelected : styles.cardActive]}
+      cardStyle={styles.card}
     >
-      {selected && (
-        <View style={styles.checkBadge}>
-          <MaterialIcons name="check" size={16} color={colors.white} />
-        </View>
-      )}
       <MaterialIcons
         name="timer"
         size={28}
@@ -61,7 +56,7 @@ function CommitmentCard({
       <Text style={[styles.perDayText, selected && styles.perDayTextSelected]}>
         PER DAY
       </Text>
-    </PressableCard>
+    </SelectableCard>
   );
 }
 
@@ -77,7 +72,7 @@ export default function CommitmentScreen({ onContinue, onBack, progress }: Onboa
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + 52 + spacing.md, paddingBottom: 120 + insets.bottom },
+          { paddingTop: insets.top + ONBOARDING_PROGRESS_BAR_HEIGHT + spacing.md, paddingBottom: 120 + insets.bottom },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -99,7 +94,7 @@ export default function CommitmentScreen({ onContinue, onBack, progress }: Onboa
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <InkButton label="CONTINUE" textColor="#FBF6E6" onPress={() => onContinue?.()} />
+        <InkButton label="CONTINUE" textColor={colors.canvas} onPress={() => onContinue?.()} />
         <Text style={styles.footerCaption}>I'll use this to keep your daily roadmap achievable.</Text>
       </View>
     </View>
@@ -117,7 +112,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing.lg,
   },
-
   headerWrapper: {
     marginBottom: spacing.lg,
   },
@@ -139,43 +133,14 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
   },
 
-  // Card face
+  // Card face — centered layout overrides SelectableCard defaults
   card: {
     flex: 1,
-    backgroundColor: colors.surfaceContainer,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    position: 'relative',
-  },
-  cardActive: {
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderStyle: 'solid',
-  },
-  cardSelected: {
-    borderWidth: 2,
-    borderColor: colors.amberDark,
-    borderStyle: 'dashed',
   },
 
-  // Checkmark badge
-  checkBadge: {
-    position: 'absolute',
-    top: -12,
-    right: -12,
-    width: 28,
-    height: 28,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.amberDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.canvas,
-    zIndex: 5,
-  },
-
-  // Card text
+  // Card content
   minsText: {
     fontFamily: fonts.headline,
     fontSize: 26,
@@ -202,7 +167,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: colors.canvas + 'F0',
+    backgroundColor: 'rgba(251,246,230,0.94)',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     gap: spacing.sm,
@@ -211,7 +176,7 @@ const styles = StyleSheet.create({
   footerCaption: {
     fontFamily: fonts.body,
     fontSize: 11,
-    color: colors.ink + '99',
+    color: 'rgba(26,26,26,0.6)',
     textAlign: 'center',
   },
 });

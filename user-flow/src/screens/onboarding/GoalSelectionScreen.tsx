@@ -15,7 +15,7 @@ import InkButton from '../../components/InkButton';
 import QuestionHeader from '../../components/QuestionHeader';
 import { useButtonPress } from '../../hooks/useButtonPress';
 import { borderRadius, colors, fonts, spacing } from '../../theme';
-import { OnboardingScreenProps } from './types';
+import { ONBOARDING_PROGRESS_BAR_HEIGHT, OnboardingScreenProps } from './types';
 
 type GoalId = 'scratch' | 'home' | 'skill' | 'cuisine' | 'healthy' | 'allergy';
 
@@ -184,7 +184,7 @@ export default function GoalSelectionScreen({ onContinue, onBack, progress }: On
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + 52 + spacing.md, paddingBottom: 120 + insets.bottom },
+          { paddingTop: insets.top + ONBOARDING_PROGRESS_BAR_HEIGHT + spacing.md, paddingBottom: 120 + insets.bottom },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -206,7 +206,7 @@ export default function GoalSelectionScreen({ onContinue, onBack, progress }: On
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <InkButton label="CONTINUE" textColor="#FBF6E6" onPress={() => onContinue?.()} />
+        <InkButton label="CONTINUE" textColor={colors.canvas} onPress={() => onContinue?.()} />
         <Text style={styles.footerCaption}>You can change your goal anytime in your profile.</Text>
       </View>
     </View>
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: colors.canvas + 'F0',
+    backgroundColor: 'rgba(251,246,230,0.94)',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     gap: spacing.sm,
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
   footerCaption: {
     fontFamily: fonts.body,
     fontSize: 11,
-    color: colors.ink + '99',
+    color: 'rgba(26,26,26,0.6)',
     textAlign: 'center',
   },
 });

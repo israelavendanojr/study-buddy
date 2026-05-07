@@ -1,4 +1,3 @@
-import { MaterialIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
   ScrollView,
@@ -10,10 +9,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
-import PressableCard from '../../components/PressableCard';
 import QuestionHeader from '../../components/QuestionHeader';
-import { borderRadius, colors, fonts, spacing } from '../../theme';
-import { OnboardingScreenProps } from './types';
+import SelectableCard from '../../components/SelectableCard';
+import { colors, fonts, spacing } from '../../theme';
+import { ONBOARDING_PROGRESS_BAR_HEIGHT, OnboardingScreenProps } from './types';
 
 type GradingId = 'encouraging' | 'balanced' | 'strict';
 
@@ -41,34 +40,6 @@ const OPTIONS: GradingOption[] = [
   },
 ];
 
-function GradingCard({
-  option,
-  selected,
-  onSelect,
-}: {
-  option: GradingOption;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <PressableCard
-      onPress={onSelect}
-      selected={selected}
-      cardStyle={[styles.card, selected ? styles.cardSelected : styles.cardActive]}
-    >
-      {selected && (
-        <View style={styles.checkBadge}>
-          <MaterialIcons name="check" size={16} color={colors.white} />
-        </View>
-      )}
-      <Text style={[styles.cardTitle, selected && styles.cardTitleSelected]}>
-        {option.title}
-      </Text>
-      <Text style={styles.cardDescription}>{option.description}</Text>
-    </PressableCard>
-  );
-}
-
 export default function GradingModeScreen({ onContinue, onBack, progress }: OnboardingScreenProps) {
   const [selected, setSelected] = useState<GradingId>('balanced');
   const insets = useSafeAreaInsets();
@@ -81,7 +52,7 @@ export default function GradingModeScreen({ onContinue, onBack, progress }: Onbo
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + 52 + spacing.md, paddingBottom: 120 + insets.bottom },
+          { paddingTop: insets.top + ONBOARDING_PROGRESS_BAR_HEIGHT + spacing.md, paddingBottom: 120 + insets.bottom },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -91,18 +62,20 @@ export default function GradingModeScreen({ onContinue, onBack, progress }: Onbo
 
         <View style={styles.list}>
           {OPTIONS.map((option) => (
-            <GradingCard
+            <SelectableCard
               key={option.id}
-              option={option}
               selected={selected === option.id}
               onSelect={() => setSelected(option.id)}
+              title={option.title}
+              description={option.description}
+              cardStyle={styles.cardPadding}
             />
           ))}
         </View>
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <InkButton label="CONTINUE" textColor="#FBF6E6" onPress={() => onContinue?.()} />
+        <InkButton label="CONTINUE" textColor={colors.canvas} onPress={() => onContinue?.()} />
         <Text style={styles.footerCaption}>This helps me decide how to evaluate your work.</Text>
       </View>
     </View>
@@ -120,75 +93,22 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing.lg,
   },
-
   headerWrapper: {
     marginBottom: spacing.lg,
   },
-
-  // List
   list: {
     gap: spacing.md,
   },
-
-  // Card face
-  card: {
-    backgroundColor: colors.surfaceContainer,
+  cardPadding: {
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    position: 'relative',
-    gap: spacing.xs,
   },
-  cardActive: {
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderStyle: 'solid',
-  },
-  cardSelected: {
-    borderWidth: 2,
-    borderColor: colors.amberDark,
-    borderStyle: 'dashed',
-  },
-
-  // Checkmark badge
-  checkBadge: {
-    position: 'absolute',
-    top: -12,
-    right: -12,
-    width: 28,
-    height: 28,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.amberDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.canvas,
-    zIndex: 5,
-  },
-
-  // Card text
-  cardTitle: {
-    fontFamily: fonts.headline,
-    fontSize: 18,
-    lineHeight: 24,
-    color: colors.ink,
-  },
-  cardTitleSelected: {
-    color: colors.amberDark,
-  },
-  cardDescription: {
-    fontFamily: fonts.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.onSurfaceVariant,
-  },
-
-  // Footer
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: colors.canvas + 'F0',
+    backgroundColor: 'rgba(251,246,230,0.94)',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     gap: spacing.sm,
@@ -197,7 +117,7 @@ const styles = StyleSheet.create({
   footerCaption: {
     fontFamily: fonts.body,
     fontSize: 11,
-    color: colors.ink + '99',
+    color: 'rgba(26,26,26,0.6)',
     textAlign: 'center',
   },
 });
