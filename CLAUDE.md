@@ -4,186 +4,117 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**GarlicMonkey** is an AI-powered cooking learning companion mobile app (Duolingo-style). Core focus: personalized lesson generation, structured learning paths, and recipe-based cooking challenges.
+GarlicMonkey is an AI-powered cooking learning app. It has two parts:
+- **`backend/`** — FastAPI + PostgreSQL backend that uses Claude to generate personalized learning roadmaps and lessons
+- **`user-flow/`** — React Native (Expo) iOS app for the user-facing experience
 
-- **Mobile frontend**: React Native + Expo (TypeScript)
-- **Backend API**: FastAPI (Python) with PostgreSQL
-- **AI integration**: Anthropic Claude API for lesson generation + vision grading
-- **Authentication**: Clerk OAuth
+The buddy/mascot is named **Garlic** and is hardcoded everywhere (not configurable).
 
-## Key Commands
+## Commands
 
-### Initial Setup
+### First-time setup
 ```bash
-make setup      # First-time setup: install dependencies + start DB
-make install    # Install backend venv + mobile node_modules
+make setup        # install deps + start DB
 ```
 
-### Frontend Prototype
+### Daily development
 ```bash
-cd user-flow && npm start   # Start user-flow Expo dev server (no backend needed)
+make db           # start PostgreSQL (Docker)
+make backend      # start FastAPI on :8000 (requires DB)
+make dev          # start DB + backend + mobile together
 ```
 
-### Full-Stack Development Services
+### Mobile
 ```bash
-make db         # Start PostgreSQL (docker compose)
-make db-wait    # Start DB and wait until ready
-make db-stop    # Stop PostgreSQL
-make backend    # Start FastAPI server (requires DB running)
-make mobile     # Start mobile/ Expo iOS dev server (syncs IP first)
-make mobile-expo # Start mobile/ Expo dev server (web/any platform)
-make dev        # Start all services (DB + backend + mobile/)
-```
-
-### Database
-```bash
-make delete-roadmap    # Clear user roadmaps
-make delete-lessons    # Clear lessons
+cd user-flow && npx expo start --ios   # start Expo dev server
+make reset-onboarding                  # wipe AsyncStorage onboarding state in iOS simulator
 ```
 
 ### Utilities
 ```bash
-make ip         # Print local IP for physical device testing
-make sync-ip    # Write current IP to mobile/.env for API connection
-make clean      # Stop DB and remove venv + node_modules
+make ip           # print local IP for physical device testing
+make sync-ip      # update mobile/.env with current IP (auto-called by dev/mobile)
+make clean        # stop DB + remove venv and node_modules
+make delete-roadmap / delete-lessons  # psql shortcuts to wipe DB tables
 ```
 
-### iOS Native (when changing native dependencies)
+### Backend: run directly
 ```bash
-# pod install requires UTF-8 locale — CocoaPods fails without it on this machine
-LANG=en_US.UTF-8 pod install --repo-update   # run from mobile/ios/
-# Or regenerate the entire native project cleanly:
-cd mobile && npx expo prebuild --clean && LANG=en_US.UTF-8 pod install --repo-update
+cd backend && venv/bin/uvicorn app.main:app --reload --host 0.0.0.0
+```
+
+### Mobile: install deps
+```bash
+cd user-flow && npm install
 ```
 
 ## Architecture
 
-### Backend (`/backend`)
+### Backend (`backend/app/`)
 
-**Routers** (`app/routers/`):
-- `onboarding.py` — User goal selection and preferences
-- `roadmap.py` — AI-generated learning paths, curriculum injection, progress tracking
-- `lesson.py` — Lesson generation (RAG + Claude), activity grading, vision-based photo validation
-- `mission.py` — Legacy mission submission + grading
-- `profile.py` — User stats (XP, streaks, chapter progress)
+**Entry point:** `main.py` — creates FastAPI app, runs `Base.metadata.create_all`, applies inline `ALTER TABLE` migrations, registers routers.
 
-**Services** (`app/services/`):
-- `lesson_prompt_builder.py` — Type-aware lesson prompt generation
-- `activity_rules.py` — Maps lesson types to activity types
-- `mission_rules.py` — Maps lesson types to required/optional missions
+**Routers** (all under `/app/routers/`):
+- `roadmap.py` — `/roadmap/generate`, `/roadmap/coach`, `/roadmap/summarize`, and CRUD. Calls Claude to generate JSON roadmaps. Post-processes roadmaps to inject `recipe` and `minigame` lesson nodes into each chapter.
+- `lesson.py` — `/lesson/generate`, `/lesson/progress`, photo grading via Claude Vision (`VISION_MODEL = claude-sonnet-4-6`). Routes lesson generation to specialized prompt builders based on `lesson_type`.
+- `mission.py` — `/mission/*` — manages kitchen missions (photo submission + AI grading)
+- `profile.py` — `/profile/*` — streak tracking, XP
+- `onboarding.py` — `/onboarding/submit` — lightweight submission endpoint
 
-**Models** (only active):
-- `Source`, `KbChunk` — RAG knowledge base indexing
-- `Lesson` — Cached generated lessons
-- `UserRoadmap` — User's generated curriculum
-- `UserLessonProgress` — Completion tracking (`completed_activities`, `is_required_complete`, `is_fully_complete`)
+**Lesson types** (`LessonType` enum): `technique`, `recipe`, `concept`, `food_science`, `minigame`
 
-**DB**: PostgreSQL with pgvector extension. Core tables: users (via Clerk), lessons, user_roadmaps, user_lesson_progress, sources, kb_chunks.
+**Prompt builders** (`services/lesson_prompt_builder.py`):
+- `build_technique_lesson_prompt` — 5-activity structure
+- `build_food_science_lesson_prompt` — 4-activity structure (no photo mission)
+- `build_recipe_lesson_prompt` — `ingredient_list` + `steps` structure (no activities)
+- `build_activity_prompt` — fallback for concept/minigame
 
-**Running the Backend:**
-```bash
-cd backend && venv/bin/uvicorn app.main:app --reload --host 0.0.0.0
+**Database** (`database.py`): SQLAlchemy with PostgreSQL. Default URL: `postgresql://studbud:studbud_dev@localhost:5432/studbud`. pgvector extension used for RAG embeddings on `kb_chunks`.
+
+**Key models** (`models.py`):
+- `Lesson` — stores generated lesson JSON + recipe-specific columns (`ingredient_list`, `steps`, `final_photo_prompt`, `reflection_prompt`)
+- `UserRoadmap` — per-user roadmap JSON, `active_index`, streak
+- `UserLessonProgress` — per-user per-lesson completion, XP
+- `UserMission` — kitchen missions with photo submission/grading lifecycle (`unlocked → submitted → graded`)
+- `KbChunk` + `Source` — RAG knowledge base with 1536-dim embeddings
+
+**Claude usage**: Model defaults to `claude-haiku-4-5-20251001` (overridable via `ANTHROPIC_MODEL` env var). Vision grading uses `claude-sonnet-4-6` hardcoded. The Anthropic client is instantiated per-request (not a singleton).
+
+**RAG resources**: `app/rag_resources/` contains culinary textbook chunks used to ground lesson generation.
+
+### Frontend (`user-flow/`)
+
+React Native (Expo ~54) app, TypeScript. No Expo Router file-based routing — navigation is manual state in `App.tsx`.
+
+**Navigation model** (`App.tsx`): Single-level state machine with `isOnboarding`, `isInLesson`, `isInRecipe`, `isInMission` booleans. Screen transitions use a `GridBackground` curtain animation (slide up/fade out).
+
+**Top-level screens:**
+- `OnboardingFlow` — 7-step wizard: Welcome → GoalSelection → CookingFrequency → ExperienceLevel → GradingMode → Commitment → RoadmapLoading. Screens are declared in `ONBOARDING_FLOW` array in `OnboardingFlow.tsx`; progress bar and back/forward are derived automatically.
+- `TrailScreen` — the main roadmap view (zigzag lesson trail)
+- `LessonFlowScreen` — lesson activity player (ConceptBeat → MultipleChoice → FillBlank → ImageID → Sequence → LessonComplete)
+- `RecipeFlowScreen` — recipe walkthrough (Intro → Ingredients → Steps → PhotoSubmission → PhotoFeedback)
+- `MissionFlowScreen` — kitchen mission flow
+
+**Design system** (`src/theme/index.ts`):
+- Colors: `ink` (#1A1A1A), `canvas` (#FBF6E6 warm cream), `amber` (#B35C1E)
+- Fonts: Newsreader (headlines), BeVietnamPro (body), SpaceGrotesk (labels)
+- All UI uses these tokens — do not introduce arbitrary hex values or font names
+
+**Key components**: `MonkeyMascot`, `InkButton`, `GridBackground`, `SelectableCard`, `PressableCard`, `XPBanner`, `PhotoUploadArea`, `FlowHeader`
+
+**API base URL**: Set via `EXPO_PUBLIC_API_BASE` in `user-flow/.env` (auto-updated by `make sync-ip`).
+
+**AsyncStorage**: Used to persist onboarding state. Reset with `make reset-onboarding` during development.
+
+## Environment
+
+Backend requires `backend/.env` with at minimum:
 ```
-Server: `http://localhost:8000`. Mobile connects via `EXPO_PUBLIC_API_BASE`.
-
-### Frontend Prototype (`/user-flow`) — Active Development
-
-`user-flow` is a standalone Expo app containing the current UI prototype. It has **no backend connection** — all content is static hardcoded data. The `mobile` directory is the older production app (Clerk auth, API client, React Navigation); `user-flow` is where UI work happens.
-
-```bash
-cd user-flow && npm start   # Start Expo dev server
+ANTHROPIC_API_KEY=...
+DATABASE_URL=postgresql://studbud:studbud_dev@localhost:5432/studbud
 ```
 
-**App-level navigation** (`App.tsx`) is state-based — no navigation library. Top-level state switches between `OnboardingFlow`, `TrailScreen`, `LessonFlowScreen`, and `RecipeFlowScreen`, with a curtain animation between them.
-
-**Flow pattern** — each flow is a declarative array of steps in a single `*FlowScreen` file:
-- `OnboardingFlow.tsx` → `ONBOARDING_FLOW: ScreenEntry[]`
-- `LessonFlowScreen.tsx` → `LESSON_FLOW: LessonStep[]`
-- `RecipeFlowScreen.tsx` → `RECIPE_FLOW: RecipeStep[]`
-
-To add, remove, or reorder screens in a flow, edit only that array. Step numbers and progress are derived automatically.
-
-**`useScreenTransition` hook** (`src/hooks/useScreenTransition.ts`): Manages animated slide transitions within a flow. Returns `{ index, prevIndex, isTransitioning, navigate, incomingStyle, outgoingStyle }`. Both the outgoing and incoming screens are rendered simultaneously during the transition so each flow screen only needs to handle its own content — no transition logic in individual screens.
-
-**Screens** (`src/screens/`):
-- `onboarding/` — Welcome, GoalSelection, CookingFrequency, ExperienceLevel, GradingMode, Commitment, RoadmapLoading
-- `trail/` — `TrailScreen` (vertical lesson roadmap with connector arrows; hardcoded `LESSONS` array)
-- `lesson/` — `LessonFlowScreen` orchestrates: ConceptBeat → MultipleChoice → FillBlank → ImageID → Sequence → LessonComplete
-- `recipe/` — `RecipeFlowScreen` orchestrates: RecipeIntro → RecipeIngredients (more steps TBD)
-
-**Key Components** (`src/components/`):
-- `MonkeyMascot` — Animated mascot (SVG)
-- `InkButton` — Primary CTA; ink-border block-shadow style
-- `GridBackground` — Dot-grid canvas background
-- `ProgressBar` — Shared by lesson and onboarding flows; receives a `progress` (0–1) and `onBack` callback
-- `ProTipCard` — Highlighted tip block used in recipe/concept screens
-- `RecipeHeader` — Shared header for recipe flow screens
-
-**Theme** (`src/theme/index.ts`): Always use tokens, never hardcode values.
-- Colors: `canvas` (#FBF6E6), `ink` (#1A1A1A), `amber` (#B35C1E), `grid` (#EBE7D9)
-- Fonts: `headline` (Newsreader serif), `body` (BeVietnamPro), `label` (SpaceGrotesk monospace)
-- Also exports `spacing` and `borderRadius` scales
-
-**Types** (`src/types/`):
-- `lesson.ts` — `ConceptContent`, `MultipleChoiceData`, `FillBlankData`, `ImageIDData`, `SequenceData`, `LessonCompleteData`
-- `recipe.ts` — `RecipeIntroContent`, `RecipeIngredientsContent`, `Ingredient`
-
-### Production Mobile App (`/mobile`)
-
-Older app with Clerk auth, React Navigation, and full backend integration. API client at `src/api/client.ts` — single typed `request<T>()` function, all endpoints as named exports.
-
-## Core Learning Loop
-
-1. **Onboarding** → User selects goal + preferences
-2. **Roadmap Generation** → Claude generates personalized multi-chapter curriculum via `POST /roadmap/generate`
-3. **Trail View** → User sees winding path of lessons (`TrailScreen`)
-4. **Lesson Flow** → `LessonFlowScreen` orchestrates: hook → concept beats → activities → completion
-   - Activity types: `multiple_choice`, `image_id`, `matching`, `fill_blank`, `sequence`
-   - Photo submission: vision model grading for cooking photos
-5. **Recipe Flow** → Separate cooking challenge flow with step-by-step guidance and AI photo feedback
-6. **Progress Tracking** → `UserLessonProgress` updated; XP awarded per activity
-7. **Profile** → Shows stats (lessons completed, total XP, roadmap progress)
-
-## Key Concepts
-
-### Lesson Generation
-`POST /lesson/generate`:
-1. Checks DB cache first (by `lesson_key`)
-2. RAG retrieval via pgvector (OpenAI embeddings)
-3. Type-aware Claude prompt (`technique`/`recipe`/`concept`/`food_science`/`minigame`)
-4. Returns structured JSON: `{ card1: { motivation, learn_points }, card3: { headline, points, tell_me_more }, activities: [...], sources_cited: [...] }`
-5. Caches in DB
-
-### Activities
-- **Sequential**: User swipes through in order
-- **Types**: `multiple_choice`, `image_id`, `matching`, `fill_blank`, `sequence`
-- **Grading**: Server-side; `fill_blank` uses Claude for fuzzy matching
-- **Completion**: `completed_activities` list in `UserLessonProgress`; two states: `is_required_complete` and `is_fully_complete`
-
-### Roadmap & Progress
-- Structure: chapters → lessons (with `id`, `title`, `type`, `estimatedMinutes`)
-- Active lesson tracked via `active_index` in `UserRoadmap`
-- Progress is immutable: once an activity is marked complete, it stays complete
-
-### Grading Modes
-Set during onboarding, stored in roadmap `_meta._grading_mode`, used by `/lesson/validate`:
-- `encouraging`: Generous 4–5 star ratings
-- `strict`: High bar, honest 2–3 star ratings
-- `balanced` (default): Honest ratings, lenient pass threshold
-
-## Development Workflow
-
-- **UI prototype work**: `cd user-flow && npm start` — no backend needed, Expo fast refresh
-- **Full-stack work**: `make dev` starts DB + backend + mobile/
-- **Backend iteration**: Edit routers/services — server hot-reloads automatically
-- **Clear test data**: `make delete-roadmap` or `make delete-lessons`
-- **Reset fully**: `make clean` + `make setup`
-- **Physical device (mobile/)**: `make sync-ip` writes your current LAN IP to `mobile/.env`
-
-## Common Patterns
-
-- **Routers → Services → Models**: Routers parse HTTP, services hold business logic, models are DB schemas
-- **Type-aware generation**: Lesson `type` field drives both the Claude prompt and which activity types are included
-- **`buddy_name` is always `"Garlic"`**: Hardcoded throughout; no user-configurable buddy name
-- **Caching by `lesson_key`**: Lesson JSON cached in DB; regenerated on demand if stale
-- **No missions in new lessons**: New lessons use `activities` array only; `missions` are legacy
+Mobile requires `user-flow/.env`:
+```
+EXPO_PUBLIC_API_BASE=http://<local-ip>:8000
+```

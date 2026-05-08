@@ -21,12 +21,7 @@ install: ## Install all dependencies
 db: ## Start PostgreSQL
 	docker compose up -d
 	@echo "PostgreSQL starting on localhost:5432"
-
-db-wait: db ## Start PostgreSQL and wait until ready
-	@echo "Waiting for PostgreSQL..."
-	@until docker exec studbud-db pg_isready -U studbud -q 2>/dev/null; do sleep 1; done
-	@echo "PostgreSQL is ready."
-
+	
 db-stop: ## Stop PostgreSQL
 	docker compose down
 
@@ -49,11 +44,7 @@ backend: ## Start FastAPI (requires DB running)
 	cd backend && venv/bin/uvicorn app.main:app --reload --host 0.0.0.0
 
 mobile: sync-ip ## Start Expo dev server (iOS)
-	cd mobile && npx expo run:ios
-
-mobile-expo: sync-ip ## Start Expo dev server (iOS)
-	cd mobile && npx expo start
-
+	cd user && npx run start --clear
 
 dev: sync-ip ## Start all services (DB + backend + mobile)
 	@$(MAKE) db-wait
