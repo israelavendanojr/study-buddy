@@ -1,4 +1,4 @@
-.PHONY: help db db-stop backend mobile setup install dev ip clean
+.PHONY: help db db-stop backend mobile setup install dev ip clean reset-onboarding
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -21,14 +21,18 @@ install: ## Install all dependencies
 db: ## Start PostgreSQL
 	docker compose up -d
 	@echo "PostgreSQL starting on localhost:5432"
-
-db-wait: db ## Start PostgreSQL and wait until ready
-	@echo "Waiting for PostgreSQL..."
-	@until docker exec studbud-db pg_isready -U studbud -q 2>/dev/null; do sleep 1; done
-	@echo "PostgreSQL is ready."
-
+	
 db-stop: ## Stop PostgreSQL
 	docker compose down
+
+reset-onboarding: ## Reset onboarding state in user-flow iOS simulator (Expo Go)
+	@BOOTED=$$(xcrun simctl list devices booted 2>/dev/null | grep -oE '[A-F0-9-]{36}' | head -1); \
+	if [ -z "$$BOOTED" ]; then echo "No booted simulator found."; exit 1; fi; \
+	EXPO_DATA=~/Library/Developer/CoreSimulator/Devices/$$BOOTED/data/Containers/Data/Application; \
+	STORAGE=$$(find "$$EXPO_DATA" -path "*/ExponentExperienceData/@anonymous/user-flow*/RCTAsyncLocalStorage" -type d 2>/dev/null | head -1); \
+	if [ -z "$$STORAGE" ]; then echo "AsyncStorage not found — open the user-flow app in Expo Go first."; exit 1; fi; \
+	rm -rf "$$STORAGE"/*; \
+	echo "Onboarding reset. Restart the app."
 
 delete-roadmap:
 	psql -h localhost -U studbud studbud -c "DELETE FROM user_roadmaps;"
@@ -40,11 +44,7 @@ backend: ## Start FastAPI (requires DB running)
 	cd backend && venv/bin/uvicorn app.main:app --reload --host 0.0.0.0
 
 mobile: sync-ip ## Start Expo dev server (iOS)
-	cd mobile && npx expo run:ios
-
-mobile-expo: sync-ip ## Start Expo dev server (iOS)
-	cd mobile && npx expo start
-
+	cd user && npx run start --clear
 
 dev: sync-ip ## Start all services (DB + backend + mobile)
 	@$(MAKE) db-wait

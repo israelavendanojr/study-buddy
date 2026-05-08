@@ -65,16 +65,14 @@ ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 class RoadmapRequest(BaseModel):
     user_id: str | None = None
     goal: str
-    buddy_name: str
-    experience: int = Field(ge=1, le=5)
-    session_hours: int = Field(ge=0, le=8)
-    session_minutes: int = Field(ge=0, le=45)
-    days_per_week: int = Field(ge=1, le=7)
+    experience: int = Field(ge=1, le=4)
+    frequency: str = "sometimes"  # rarely | sometimes | often | daily
+    session_minutes: int = Field(ge=1, le=120)
     weeks: int = Field(ge=1, le=52)
     success_vision: str
     coaching_result: dict | None = None
     goal_type: str | None = None
-    grading_mode: str | None = None
+    grading_mode: str | None = None  # encouraging | strict | balanced
 
 
 class ProgressUpdate(BaseModel):
@@ -107,11 +105,11 @@ class CoachResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 def _build_prompt(req: RoadmapRequest) -> str:
-    total_minutes = req.session_hours * 60 + req.session_minutes
     exp_label = (
-        "total beginner" if req.experience <= 1
-        else "some experience" if req.experience <= 3
-        else "experienced"
+        "total beginner" if req.experience == 1
+        else "some experience" if req.experience == 2
+        else "experienced" if req.experience == 3
+        else "advanced/pro"
     )
 
     # Scale roadmap size to goal duration
@@ -172,9 +170,9 @@ How to use this context:
 
 {goal_type_block}User profile:
 - Goal: {req.goal}
-- Experience level: {req.experience}/5 ({exp_label})
-- Daily session time: {total_minutes} minutes
-- Days per week: {req.days_per_week}
+- Experience level: {req.experience}/4 ({exp_label})
+- Current cooking frequency: {req.frequency}
+- Daily session time: {req.session_minutes} minutes
 - Duration: {weeks} weeks
 - Success vision: {req.success_vision}
 {coaching_block}{catalog_section}
@@ -203,7 +201,7 @@ Rules:
 - {min_chapters} to {max_chapters} chapters total (scale to the {weeks}-week duration)
 - Every chapter: generate {min_lessons} to {max_lessons} full lessons
   - Last lesson of each chapter must have type "milestone"
-  - estimatedMinutes for each lesson must be <= {total_minutes}
+  - estimatedMinutes for each lesson must be <= {req.session_minutes}
   - Each lesson title must be specific and actionable
 - Chapters should represent meaningful phases of progression
 - Chapter titles must hint at the learning arc without revealing lesson detail
@@ -427,18 +425,17 @@ async def generate_roadmap(req: RoadmapRequest, db: Session = Depends(get_db)) -
     roadmap["_context"] = {
         "goal": req.goal,
         "experience": req.experience,
-        "session_hours": req.session_hours,
         "session_minutes": req.session_minutes,
         "weeks": req.weeks,
         "coaching_result": req.coaching_result,
     }
 
-    # Embed goal/buddy context so it can be retrieved later (e.g. mission deep-links)
+    # Embed goal/buddy context so it can be retrieved later (e.g. lesson generation)
     roadmap_with_meta = {
         **roadmap,
         "_meta": {
             "goal": req.goal,
-            "buddy_name": req.buddy_name,
+            "buddy_name": "Garlic",
             "experience": req.experience,
             "domain": "cooking",
             "goal_type": req.goal_type,
