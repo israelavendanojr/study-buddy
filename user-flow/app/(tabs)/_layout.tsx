@@ -8,7 +8,6 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 const TAB_DEFS = [
   { name: 'index',   label: 'TRAIL',   icon: 'map'        },
   { name: 'kitchen', label: 'KITCHEN', icon: 'restaurant' },
-  { name: 'profile', label: 'PROFILE', icon: 'person'     },
 ] as const;
 
 function GarlicTabBar({ state, navigation }: BottomTabBarProps) {
@@ -76,7 +75,6 @@ export default function TabLayout() {
     <Tabs tabBar={(props) => <GarlicTabBar {...props} />} screenOptions={{ headerShown: false }}>
       <Tabs.Screen name="index" />
       <Tabs.Screen name="kitchen" />
-      <Tabs.Screen name="profile" />
     </Tabs>
   );
 }

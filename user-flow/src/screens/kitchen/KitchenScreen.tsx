@@ -149,6 +149,9 @@ export default function KitchenScreen() {
       {/* Header */}
       <View style={[styles.header, { height: HEADER_HEIGHT + insets.top, paddingTop: insets.top }]}>
         <Text style={styles.headerTitle}>KITCHEN</Text>
+        <Pressable style={styles.headerCog} onPress={() => router.push('/settings')}>
+          <MaterialIcons name="settings" size={22} color={colors.ink} />
+        </Pressable>
       </View>
 
       <ScrollView
@@ -212,6 +215,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.canvas,
     borderBottomWidth: 2,
     borderBottomColor: colors.ink,
+  },
+  headerCog: {
+    position: 'absolute',
+    right: spacing.md,
+    bottom: 0,
+    height: HEADER_HEIGHT,
+    justifyContent: 'center',
   },
   headerTitle: {
     fontFamily: fonts.label,
