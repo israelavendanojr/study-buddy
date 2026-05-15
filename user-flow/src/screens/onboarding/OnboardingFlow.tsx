@@ -40,9 +40,10 @@ function progressOf(index: number) {
 
 interface OnboardingFlowProps {
   onComplete: () => void;
+  onSignIn: () => void;
 }
 
-export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
+export default function OnboardingFlow({ onComplete, onSignIn }: OnboardingFlowProps) {
   const { index: screenIndex, prevIndex, isTransitioning, navigate, incomingStyle, outgoingStyle } = useScreenTransition();
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const insets = useSafeAreaInsets();
@@ -88,6 +89,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           progress={progress}
           onContinue={screenIndex < ONBOARDING_FLOW.length - 1 ? () => navigate(screenIndex + 1, 'forward') : handleComplete}
           onBack={screenIndex > 0 ? () => navigate(screenIndex - 1, 'back') : undefined}
+          onSignIn={current.key === 'welcome' ? onSignIn : undefined}
         />
       </Animated.View>
 

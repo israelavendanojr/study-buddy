@@ -11,5 +11,5 @@ export default function OnboardingRoute() {
     router.replace('/(tabs)');
   };
 
-  return <OnboardingFlow onComplete={handleComplete} />;
+  return <OnboardingFlow onComplete={handleComplete} onSignIn={() => router.push('/sign-in')} />;
 }

@@ -1,16 +1,28 @@
-import React, { useRef, useEffect } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useRef, useEffect, useState } from 'react';
+import {
+  Animated,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import MonkeyMascot from '../../components/MonkeyMascot';
-import { colors, fonts, spacing } from '../../theme';
-import { OnboardingScreenProps } from './types';
+import { colors, fonts, spacing, borderRadius } from '../../theme';
 
-export default function WelcomeScreen({ onContinue, onSignIn }: OnboardingScreenProps) {
+interface SignInScreenProps {
+  onBack: () => void;
+}
+
+export default function SignInScreen({ onBack }: SignInScreenProps) {
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const mascotSlide = useRef(new Animated.Value(-20)).current;
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   useEffect(() => {
     Animated.parallel([
@@ -28,6 +40,10 @@ export default function WelcomeScreen({ onContinue, onSignIn }: OnboardingScreen
     ]).start();
   }, []);
 
+  const handleSignIn = () => {
+    // TODO: wire up Supabase auth — supabase.auth.signInWithPassword({ email, password })
+  };
+
   return (
     <View style={styles.root}>
       <GridBackground />
@@ -39,31 +55,53 @@ export default function WelcomeScreen({ onContinue, onSignIn }: OnboardingScreen
 
         {/* Hero section */}
         <View style={styles.heroSection}>
-
-          {/* Headline card with mascot floating above-right */}
           <View style={styles.headlineWrapper}>
             <Animated.View style={[styles.mascotContainer, { transform: [{ translateY: mascotSlide }] }]}>
-              <MonkeyMascot size={130} />
+              <MonkeyMascot size={110} />
             </Animated.View>
             <View style={styles.headlineCard}>
-              <Text style={styles.headlineBold}>Learn to cook.</Text>
-              <Text style={styles.headlineItalic}>Actually cook.</Text>
+              <Text style={styles.headlineBold}>Welcome back.</Text>
+              <Text style={styles.headlineItalic}>Sign in.</Text>
             </View>
           </View>
 
-          {/* Tagline */}
-          <Text style={styles.tagline}>
-            Personalized lessons, real recipes, and responsive mentorship.
-          </Text>
+          {/* Inputs */}
+          <View style={styles.inputGroup}>
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>Email</Text>
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                placeholderTextColor={colors.onSurfaceVariant}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>Password</Text>
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                placeholderTextColor={colors.onSurfaceVariant}
+                secureTextEntry
+              />
+            </View>
+          </View>
         </View>
 
         {/* Footer */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.lg }]}>
-          <InkButton label="Get Started" onPress={onContinue} />
-          <TouchableOpacity style={styles.signInLink} activeOpacity={0.7} onPress={onSignIn}>
-            <Text style={styles.signInText}>
-              {'Existing user? '}
-              <Text style={styles.signInUnderline}>Sign in</Text>
+          <InkButton label="Sign In" onPress={handleSignIn} />
+          <TouchableOpacity style={styles.backLink} activeOpacity={0.7} onPress={onBack}>
+            <Text style={styles.backText}>
+              {'Don\'t have an account? '}
+              <Text style={styles.backUnderline}>Get started</Text>
             </Text>
           </TouchableOpacity>
         </View>
@@ -98,7 +136,7 @@ const styles = StyleSheet.create({
   },
   mascotContainer: {
     position: 'absolute',
-    top: -72,
+    top: -68,
     right: -8,
     zIndex: 10,
   },
@@ -106,44 +144,62 @@ const styles = StyleSheet.create({
     backgroundColor: colors.canvas,
     borderWidth: 2,
     borderColor: colors.ink,
-    borderRadius: 4,
+    borderRadius: borderRadius.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xl,
   },
   headlineBold: {
     fontFamily: fonts.headline,
-    fontSize: 52,
-    lineHeight: 60,
+    fontSize: 44,
+    lineHeight: 52,
     color: colors.ink,
   },
   headlineItalic: {
     fontFamily: fonts.headlineItalic,
-    fontSize: 52,
-    lineHeight: 60,
+    fontSize: 44,
+    lineHeight: 52,
     color: colors.amber,
   },
-  tagline: {
-    fontFamily: fonts.body,
-    fontSize: 17,
-    lineHeight: 26,
+  inputGroup: {
+    gap: spacing.md,
+  },
+  inputWrapper: {
+    gap: spacing.xs,
+  },
+  inputLabel: {
+    fontFamily: fonts.labelMedium,
+    fontSize: 12,
+    letterSpacing: 1.5,
     color: colors.ink,
+    textTransform: 'uppercase',
     opacity: 0.6,
+  },
+  input: {
+    backgroundColor: colors.canvas,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 4,
+    fontFamily: fonts.body,
+    fontSize: 16,
+    color: colors.ink,
   },
   footer: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
   },
-  signInLink: {
+  backLink: {
     alignItems: 'center',
     marginTop: spacing.xl,
   },
-  signInText: {
+  backText: {
     fontFamily: fonts.body,
     fontSize: 14,
     color: colors.ink,
     opacity: 0.55,
   },
-  signInUnderline: {
+  backUnderline: {
     fontFamily: fonts.bodyMedium,
     color: colors.amber,
     opacity: 1,

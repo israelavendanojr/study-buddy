@@ -49,7 +49,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (!fontsLoaded || !onboardingChecked) return;
 
-    const inOnboarding = segments[0] === 'onboarding';
+    const inOnboarding = segments[0] === 'onboarding' || segments[0] === 'sign-in';
 
     if (onboardingDone && inOnboarding) {
       router.replace('/(tabs)');
@@ -75,6 +75,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="onboarding" />
+        <Stack.Screen name="sign-in" />
         <Stack.Screen
           name="lesson"
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}

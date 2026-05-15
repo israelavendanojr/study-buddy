@@ -24,12 +24,14 @@ import TrailScreen from './src/screens/trail/TrailScreen';
 import LessonFlowScreen from './src/screens/lesson/LessonFlowScreen';
 import RecipeFlowScreen from './src/screens/recipe/RecipeFlowScreen';
 import MissionFlowScreen from './src/screens/kitchen/MissionFlowScreen';
+import SignInScreen from './src/screens/auth/SignInScreen';
 import GridBackground from './src/components/GridBackground';
 
 const screenHeight = Dimensions.get('window').height;
 
 function AppContent() {
   const [isOnboarding, setIsOnboarding] = useState(true);
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const [isInLesson, setIsInLesson] = useState(false);
   const [isInRecipe, setIsInRecipe] = useState(false);
   const [isInMission, setIsInMission] = useState(false);
@@ -158,7 +160,11 @@ function AppContent() {
       <StatusBar style="dark" />
 
       {isOnboarding ? (
-        <OnboardingFlow onComplete={() => setIsOnboarding(false)} />
+        isSigningIn ? (
+          <SignInScreen onBack={() => setIsSigningIn(false)} />
+        ) : (
+          <OnboardingFlow onComplete={() => setIsOnboarding(false)} onSignIn={() => setIsSigningIn(true)} />
+        )
       ) : (
         <>
           {isInLesson ? (
