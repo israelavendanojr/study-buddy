@@ -88,6 +88,7 @@ export default function RootLayout() {
           name="mission"
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
+        <Stack.Screen name="preference-select" />
       </Stack>
     </SafeAreaProvider>
   );
