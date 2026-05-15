@@ -5,116 +5,84 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 GarlicMonkey is an AI-powered cooking learning app. It has two parts:
-- **`backend/`** — FastAPI + PostgreSQL backend that uses Claude to generate personalized learning roadmaps and lessons
-- **`user-flow/`** — React Native (Expo) iOS app for the user-facing experience
+- **`backend/`** — FastAPI + Supabase backend (currently early-stage scaffold)
+- **`user-flow/`** — React Native (Expo ~54) iOS app — fully built out
 
 The buddy/mascot is named **Garlic** and is hardcoded everywhere (not configurable).
 
 ## Commands
 
-### First-time setup
+### Backend setup
 ```bash
-make setup        # install deps + start DB
+cd backend && python3 -m venv venv
+cd backend && venv/bin/pip install -r requirements.txt
 ```
 
-### Daily development
+### Run backend
 ```bash
-make db           # start PostgreSQL (Docker)
-make backend      # start FastAPI on :8000 (requires DB)
-make dev          # start DB + backend + mobile together
+cd backend && venv/bin/uvicorn app.main:app --reload
 ```
 
-### Mobile
-```bash
-cd user-flow && npx expo start --ios   # start Expo dev server
-make reset-onboarding                  # wipe AsyncStorage onboarding state in iOS simulator
-```
-
-### Utilities
-```bash
-make ip           # print local IP for physical device testing
-make sync-ip      # update mobile/.env with current IP (auto-called by dev/mobile)
-make clean        # stop DB + remove venv and node_modules
-make delete-roadmap / delete-lessons  # psql shortcuts to wipe DB tables
-```
-
-### Backend: run directly
-```bash
-cd backend && venv/bin/uvicorn app.main:app --reload --host 0.0.0.0
-```
-
-### Mobile: install deps
+### Mobile setup
 ```bash
 cd user-flow && npm install
+```
+
+### Run mobile
+```bash
+cd user-flow && npx expo start --ios
+```
+
+### Reset onboarding state (iOS simulator)
+```bash
+make reset-onboarding
 ```
 
 ## Architecture
 
 ### Backend (`backend/app/`)
 
-**Entry point:** `main.py` — creates FastAPI app, runs `Base.metadata.create_all`, applies inline `ALTER TABLE` migrations, registers routers.
+Currently an early-stage scaffold. The app has:
+- `main.py` — FastAPI app with a single `GET /` health check
+- `database.py` — Supabase client initialized from env vars (`SUPABASE_URL`, `SUPABASE_KEY`)
 
-**Routers** (all under `/app/routers/`):
-- `roadmap.py` — `/roadmap/generate`, `/roadmap/coach`, `/roadmap/summarize`, and CRUD. Calls Claude to generate JSON roadmaps. Post-processes roadmaps to inject `recipe` and `minigame` lesson nodes into each chapter.
-- `lesson.py` — `/lesson/generate`, `/lesson/progress`, photo grading via Claude Vision (`VISION_MODEL = claude-sonnet-4-6`). Routes lesson generation to specialized prompt builders based on `lesson_type`.
-- `mission.py` — `/mission/*` — manages kitchen missions (photo submission + AI grading)
-- `profile.py` — `/profile/*` — streak tracking, XP
-- `onboarding.py` — `/onboarding/submit` — lightweight submission endpoint
-
-**Lesson types** (`LessonType` enum): `technique`, `recipe`, `concept`, `food_science`, `minigame`
-
-**Prompt builders** (`services/lesson_prompt_builder.py`):
-- `build_technique_lesson_prompt` — 5-activity structure
-- `build_food_science_lesson_prompt` — 4-activity structure (no photo mission)
-- `build_recipe_lesson_prompt` — `ingredient_list` + `steps` structure (no activities)
-- `build_activity_prompt` — fallback for concept/minigame
-
-**Database** (`database.py`): SQLAlchemy with PostgreSQL. Default URL: `postgresql://studbud:studbud_dev@localhost:5432/studbud`. pgvector extension used for RAG embeddings on `kb_chunks`.
-
-**Key models** (`models.py`):
-- `Lesson` — stores generated lesson JSON + recipe-specific columns (`ingredient_list`, `steps`, `final_photo_prompt`, `reflection_prompt`)
-- `UserRoadmap` — per-user roadmap JSON, `active_index`, streak
-- `UserLessonProgress` — per-user per-lesson completion, XP
-- `UserMission` — kitchen missions with photo submission/grading lifecycle (`unlocked → submitted → graded`)
-- `KbChunk` + `Source` — RAG knowledge base with 1536-dim embeddings
-
-**Claude usage**: Model defaults to `claude-haiku-4-5-20251001` (overridable via `ANTHROPIC_MODEL` env var). Vision grading uses `claude-sonnet-4-6` hardcoded. The Anthropic client is instantiated per-request (not a singleton).
-
-**RAG resources**: `app/rag_resources/` contains culinary textbook chunks used to ground lesson generation.
+All business logic (routers, models, lesson generation) is yet to be built.
 
 ### Frontend (`user-flow/`)
 
-React Native (Expo ~54) app, TypeScript. No Expo Router file-based routing — navigation is manual state in `App.tsx`.
+React Native (Expo ~54) app, TypeScript. Despite `expo-router` being in `package.json`, navigation is a **manual state machine** in `App.tsx` — no file-based routing.
 
-**Navigation model** (`App.tsx`): Single-level state machine with `isOnboarding`, `isInLesson`, `isInRecipe`, `isInMission` booleans. Screen transitions use a `GridBackground` curtain animation (slide up/fade out).
+**Navigation model** (`App.tsx`): Boolean flags (`isOnboarding`, `isInLesson`, `isInRecipe`, `isInMission`) control which screen renders. Screen transitions use a `GridBackground` curtain animation (slide up/fade out via `Animated`).
 
-**Top-level screens:**
-- `OnboardingFlow` — 7-step wizard: Welcome → GoalSelection → CookingFrequency → ExperienceLevel → GradingMode → Commitment → RoadmapLoading. Screens are declared in `ONBOARDING_FLOW` array in `OnboardingFlow.tsx`; progress bar and back/forward are derived automatically.
-- `TrailScreen` — the main roadmap view (zigzag lesson trail)
-- `LessonFlowScreen` — lesson activity player (ConceptBeat → MultipleChoice → FillBlank → ImageID → Sequence → LessonComplete)
-- `RecipeFlowScreen` — recipe walkthrough (Intro → Ingredients → Steps → PhotoSubmission → PhotoFeedback)
-- `MissionFlowScreen` — kitchen mission flow
+**Screens** (under `src/screens/`):
+- `onboarding/OnboardingFlow.tsx` — multi-step wizard; screens declared in `ONBOARDING_FLOW` array, progress bar and navigation derived automatically
+- `trail/TrailScreen.tsx` — main roadmap view (zigzag lesson trail)
+- `lesson/LessonFlowScreen.tsx` — activity player (ConceptBeat → MultipleChoice → FillBlank → ImageID → Sequence → LessonComplete)
+- `recipe/RecipeFlowScreen.tsx` — recipe walkthrough (Intro → Ingredients → Steps → PhotoSubmission → PhotoFeedback)
+- `kitchen/MissionFlowScreen.tsx` — kitchen mission flow; `KitchenScreen.tsx` is the entry point
 
-**Design system** (`src/theme/index.ts`):
-- Colors: `ink` (#1A1A1A), `canvas` (#FBF6E6 warm cream), `amber` (#B35C1E)
+**Design system** (`src/theme/index.ts`): exports `colors`, `fonts`, `spacing`, `borderRadius` — always use these tokens, never raw hex values or font name strings.
+- Colors: `ink` (#1A1A1A), `canvas` (#FBF6E6), `amber` (#B35C1E)
 - Fonts: Newsreader (headlines), BeVietnamPro (body), SpaceGrotesk (labels)
-- All UI uses these tokens — do not introduce arbitrary hex values or font names
 
-**Key components**: `MonkeyMascot`, `InkButton`, `GridBackground`, `SelectableCard`, `PressableCard`, `XPBanner`, `PhotoUploadArea`, `FlowHeader`
+**Hooks**: `useButtonPress` (haptic press feedback), `useScreenTransition` (curtain animation helper)
 
-**API base URL**: Set via `EXPO_PUBLIC_API_BASE` in `user-flow/.env` (auto-updated by `make sync-ip`).
-
-**AsyncStorage**: Used to persist onboarding state. Reset with `make reset-onboarding` during development.
+**Types**: `src/types/lesson.ts`, `src/types/recipe.ts`
 
 ## Environment
 
-Backend requires `backend/.env` with at minimum:
+Backend (`backend/.env`):
 ```
-ANTHROPIC_API_KEY=...
-DATABASE_URL=postgresql://studbud:studbud_dev@localhost:5432/studbud
+SUPABASE_URL=...
+SUPABASE_KEY=...          # service role key
+SUPABASE_JWT_SECRET=...
 ```
 
-Mobile requires `user-flow/.env`:
+Mobile (`user-flow/.env`):
 ```
+EXPO_PUBLIC_SUPABASE_URL=...
+EXPO_PUBLIC_SUPABASE_ANON_KEY=...
 EXPO_PUBLIC_API_BASE=http://<local-ip>:8000
 ```
+
+> Note: The Makefile's `mobile`, `dev`, and `sync-ip` targets reference stale directory names (`mobile/`, `user/`) and do not work. Use the direct commands above instead.
