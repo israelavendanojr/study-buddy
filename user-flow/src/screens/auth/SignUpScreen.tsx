@@ -13,6 +13,7 @@ import InkButton from '../../components/InkButton';
 import MonkeyMascot from '../../components/MonkeyMascot';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { OnboardingScreenProps } from '../onboarding/types';
+import { supabase } from '../../lib/supabase';
 
 // Google "G" logo mark
 function GoogleIcon() {
@@ -34,6 +35,8 @@ export default function SignUpScreen({ onContinue, onBack, onSignIn }: Onboardin
   const mascotSlide = useRef(new Animated.Value(-20)).current;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     Animated.parallel([
@@ -51,9 +54,17 @@ export default function SignUpScreen({ onContinue, onBack, onSignIn }: Onboardin
     ]).start();
   }, []);
 
-  const handleSignUp = () => {
-    // TODO: wire up Supabase auth — supabase.auth.signUp({ email, password })
-    onContinue?.();
+  const handleSignUp = async () => {
+    setLoading(true);
+    setError('');
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    setLoading(false);
+    if (error) { setError(error.message); return; }
+    if (data.session) {
+      onContinue?.();
+    } else {
+      setError('Check your email to confirm your account.');
+    }
   };
 
   const handleGoogle = () => {
@@ -143,7 +154,8 @@ export default function SignUpScreen({ onContinue, onBack, onSignIn }: Onboardin
 
         {/* Footer */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.lg }]}>
-          <InkButton label="Sign Up" onPress={handleSignUp} />
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          <InkButton label={loading ? 'Signing up…' : 'Sign Up'} onPress={handleSignUp} />
 
           <Text style={styles.termsText}>
             By signing up, you agree to our{' '}
@@ -329,5 +341,12 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     color: colors.ink,
     fontWeight: '600',
+  },
+  errorText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.amber,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
   },
 });

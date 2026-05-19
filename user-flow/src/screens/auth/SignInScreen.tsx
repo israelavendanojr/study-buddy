@@ -12,17 +12,21 @@ import GridBackground from '../../components/GridBackground';
 import InkButton from '../../components/InkButton';
 import MonkeyMascot from '../../components/MonkeyMascot';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { supabase } from '../../lib/supabase';
 
 interface SignInScreenProps {
   onBack: () => void;
+  onSuccess: () => void;
 }
 
-export default function SignInScreen({ onBack }: SignInScreenProps) {
+export default function SignInScreen({ onBack, onSuccess }: SignInScreenProps) {
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const mascotSlide = useRef(new Animated.Value(-20)).current;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     Animated.parallel([
@@ -40,8 +44,13 @@ export default function SignInScreen({ onBack }: SignInScreenProps) {
     ]).start();
   }, []);
 
-  const handleSignIn = () => {
-    // TODO: wire up Supabase auth — supabase.auth.signInWithPassword({ email, password })
+  const handleSignIn = async () => {
+    setLoading(true);
+    setError('');
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) { setError(error.message); return; }
+    onSuccess();
   };
 
   return (
@@ -97,7 +106,8 @@ export default function SignInScreen({ onBack }: SignInScreenProps) {
 
         {/* Footer */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.lg }]}>
-          <InkButton label="Sign In" onPress={handleSignIn} />
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          <InkButton label={loading ? 'Signing in…' : 'Sign In'} onPress={handleSignIn} />
           <TouchableOpacity style={styles.backLink} activeOpacity={0.7} onPress={onBack}>
             <Text style={styles.backText}>
               {'Don\'t have an account? '}
@@ -204,5 +214,12 @@ const styles = StyleSheet.create({
     color: colors.amber,
     opacity: 1,
     textDecorationLine: 'underline',
+  },
+  errorText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.amber,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
   },
 });

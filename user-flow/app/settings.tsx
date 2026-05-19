@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { supabase } from '../src/lib/supabase';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -56,6 +57,9 @@ export default function SettingsScreen() {
               <Text style={styles.profileUsername}> · Joined 2026</Text>
             </View>
           </View>
+          <Pressable style={styles.logoutButton} onPress={() => supabase.auth.signOut()}>
+            <MaterialIcons name="logout" size={18} color={colors.amber} />
+          </Pressable>
         </View>
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>PREFERENCES</Text>
@@ -185,5 +189,8 @@ const styles = StyleSheet.create({
     fontFamily: fonts.labelMedium,
     fontSize: 13,
     color: colors.amber,
+  },
+  logoutButton: {
+    padding: spacing.xs,
   },
 });

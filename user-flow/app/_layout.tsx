@@ -10,16 +10,14 @@ import {
   Newsreader_700Bold_Italic,
 } from '@expo-google-fonts/newsreader';
 import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts } from 'expo-font';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { supabase } from '../src/lib/supabase';
 import { colors } from '../src/theme';
-
-export const ONBOARDING_KEY = '@garlic_onboarding_done';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -34,40 +32,30 @@ export default function RootLayout() {
     SpaceGrotesk_500Medium,
   });
 
-  const [onboardingChecked, setOnboardingChecked] = useState(false);
-  const [onboardingDone, setOnboardingDone] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [hasSession, setHasSession] = useState(false);
   const router = useRouter();
-  const segments = useSegments();
 
   useEffect(() => {
-    AsyncStorage.getItem(ONBOARDING_KEY).then((val) => {
-      setOnboardingDone(val === 'true');
-      setOnboardingChecked(true);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setHasSession(!!session);
+      setSessionChecked(true);
     });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, _session) => {
+      if (event === 'SIGNED_IN') router.replace('/(tabs)');
+      if (event === 'SIGNED_OUT') router.replace('/onboarding');
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
+  // Navigate once fonts + session check are both ready
   useEffect(() => {
-    if (!fontsLoaded || !onboardingChecked) return;
-
-    const inOnboarding = segments[0] === 'onboarding' || segments[0] === 'sign-in';
-
-    if (onboardingDone && inOnboarding) {
-      router.replace('/(tabs)');
-    } else if (!onboardingDone && !inOnboarding) {
-      // Re-read AsyncStorage in case onboarding just completed and updated it
-      AsyncStorage.getItem(ONBOARDING_KEY).then((val) => {
-        if (val !== 'true') {
-          router.replace('/onboarding');
-        } else {
-          setOnboardingDone(true);
-        }
-      });
-    }
-  }, [fontsLoaded, onboardingChecked, onboardingDone, segments]);
-
-  if (!fontsLoaded || !onboardingChecked) {
-    return <View style={{ flex: 1, backgroundColor: colors.canvas }} />;
-  }
+    if (!fontsLoaded || !sessionChecked) return;
+    router.replace(hasSession ? '/(tabs)' : '/onboarding');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fontsLoaded, sessionChecked]);
 
   return (
     <SafeAreaProvider>
@@ -90,6 +78,9 @@ export default function RootLayout() {
         />
         <Stack.Screen name="preference-select" />
       </Stack>
+      {(!fontsLoaded || !sessionChecked) && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.canvas }} />
+      )}
     </SafeAreaProvider>
   );
 }
