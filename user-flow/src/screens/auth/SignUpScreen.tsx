@@ -1,4 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
+import * as WebBrowser from 'expo-web-browser';
+// import * as AuthSession from 'expo-auth-session'; // kept in case makeRedirectUri is needed later
+
+WebBrowser.maybeCompleteAuthSession();
 import {
   Animated,
   StyleSheet,
@@ -67,8 +71,52 @@ export default function SignUpScreen({ onContinue, onBack, onSignIn }: Onboardin
     }
   };
 
-  const handleGoogle = () => {
-    // TODO: supabase.auth.signInWithOAuth({ provider: 'google' })
+  const handleGoogle = async () => {
+    if (loading) return;
+    setLoading(true);
+    setError('');
+    try {
+      // const redirectUrl = AuthSession.makeRedirectUri({ scheme: 'userflow' }); // falls back to localhost in dev
+      const redirectUrl = 'userflow://';
+
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
+      });
+
+      if (oauthError || !data.url) {
+        setError(oauthError?.message ?? 'OAuth failed');
+        return;
+      }
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+      if (result.type === 'success') {
+        const url = result.url;
+        const fragmentParams = new URLSearchParams(url.split('#')[1] ?? '');
+        const queryParams = new URLSearchParams(url.split('?')[1] ?? '');
+
+        const code = queryParams.get('code');
+        const access_token = fragmentParams.get('access_token');
+        const refresh_token = fragmentParams.get('refresh_token') ?? '';
+
+        if (code) {
+          // PKCE flow (Supabase v2 default)
+          const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+          if (sessionError) { setError(sessionError.message); return; }
+          if (sessionData.session) onContinue?.();
+        } else if (access_token) {
+          // Implicit flow fallback
+          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
+          if (sessionError) { setError(sessionError.message); return; }
+          if (sessionData.session) onContinue?.();
+        } else {
+          setError('Sign-in was cancelled or failed.');
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleApple = () => {
