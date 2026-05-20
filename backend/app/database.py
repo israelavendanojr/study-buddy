@@ -1,40 +1,22 @@
 import os
+from dotenv import load_dotenv
+from supabase import create_client, Client
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+load_dotenv()
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://studbud:studbud_dev@localhost:5432/studbud",
-)
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine)
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-class Base(DeclarativeBase):
-    pass
+def get_waitlist_emails() -> list[str]:
+    response = supabase.table("waitlist").select("email").execute()
+    return [row["email"] for row in response.data]
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-def get_lessons_by_type(db, lesson_type: str):
-    """Return all Lesson rows matching the given lesson_type."""
-    from .models import Lesson
-    return db.query(Lesson).filter(Lesson.lesson_type == lesson_type).all()
-
-
-def get_recipe_lesson(db, lesson_key: str):
-    """Return a recipe Lesson by key, or None if not found or not a recipe."""
-    from .models import Lesson
-    return (
-        db.query(Lesson)
-        .filter(Lesson.lesson_key == lesson_key, Lesson.lesson_type == "recipe")
-        .first()
-    )
+if __name__ == "__main__":
+    emails = get_waitlist_emails()
+    print(f"Found {len(emails)} emails:")
+    for email in emails:
+        print(f"  {email}")

@@ -11,6 +11,7 @@ import GradingModeScreen from './GradingModeScreen';
 import RoadmapLoadingScreen from './RoadmapLoadingScreen';
 import { OnboardingScreenProps } from './types';
 import WelcomeScreen from './WelcomeScreen';
+import SignUpScreen from '../auth/SignUpScreen';
 
 type ScreenEntry = {
   key: string;
@@ -27,6 +28,7 @@ const ONBOARDING_FLOW: ScreenEntry[] = [
   { key: 'experience', component: ExperienceLevelScreen },
   { key: 'grading',    component: GradingModeScreen },
   { key: 'commitment', component: CommitmentScreen },
+  { key: 'signup',     component: SignUpScreen, showProgress: false },
   { key: 'loading',    component: RoadmapLoadingScreen, showProgress: false },
 ];
 
@@ -40,9 +42,10 @@ function progressOf(index: number) {
 
 interface OnboardingFlowProps {
   onComplete: () => void;
+  onSignIn: () => void;
 }
 
-export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
+export default function OnboardingFlow({ onComplete, onSignIn }: OnboardingFlowProps) {
   const { index: screenIndex, prevIndex, isTransitioning, navigate, incomingStyle, outgoingStyle } = useScreenTransition();
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const insets = useSafeAreaInsets();
@@ -88,6 +91,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           progress={progress}
           onContinue={screenIndex < ONBOARDING_FLOW.length - 1 ? () => navigate(screenIndex + 1, 'forward') : handleComplete}
           onBack={screenIndex > 0 ? () => navigate(screenIndex - 1, 'back') : undefined}
+          onSignIn={current.key === 'welcome' || current.key === 'signup' ? onSignIn : undefined}
         />
       </Animated.View>
 

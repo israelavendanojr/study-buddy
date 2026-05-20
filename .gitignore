@@ -33,3 +33,5 @@ garlicmonkey_design_recipe
 user-flow/assets/recipes
 user-flow/assets/submissions
 garlicmonkey_design_missions
+
+backend/.venv

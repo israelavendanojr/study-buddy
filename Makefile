@@ -18,13 +18,6 @@ install: ## Install all dependencies
 
 # ---------- Services ----------
 
-db: ## Start PostgreSQL
-	docker compose up -d
-	@echo "PostgreSQL starting on localhost:5432"
-	
-db-stop: ## Stop PostgreSQL
-	docker compose down
-
 reset-onboarding: ## Reset onboarding state in user-flow iOS simulator (Expo Go)
 	@BOOTED=$$(xcrun simctl list devices booted 2>/dev/null | grep -oE '[A-F0-9-]{36}' | head -1); \
 	if [ -z "$$BOOTED" ]; then echo "No booted simulator found."; exit 1; fi; \
@@ -34,17 +27,11 @@ reset-onboarding: ## Reset onboarding state in user-flow iOS simulator (Expo Go)
 	rm -rf "$$STORAGE"/*; \
 	echo "Onboarding reset. Restart the app."
 
-delete-roadmap:
-	psql -h localhost -U studbud studbud -c "DELETE FROM user_roadmaps;"
-
-delete-lessons:
-	psql -h localhost -p 5432 -U studbud -d studbud -c "DELETE FROM lessons;"
-
 backend: ## Start FastAPI (requires DB running)
-	cd backend && venv/bin/uvicorn app.main:app --reload --host 0.0.0.0
+	cd backend && venv/bin/uvicorn app.main:app --reload 
 
 mobile: sync-ip ## Start Expo dev server (iOS)
-	cd user && npx run start --clear
+	cd user && npx run start 
 
 dev: sync-ip ## Start all services (DB + backend + mobile)
 	@$(MAKE) db-wait
@@ -61,6 +48,3 @@ sync-ip: ## Write current IP into mobile/.env
 	@sed -i '' 's|^EXPO_PUBLIC_API_BASE=.*|EXPO_PUBLIC_API_BASE=http://$(IP):8000|' mobile/.env
 	@echo "API base set to http://$(IP):8000"
 
-clean: db-stop ## Stop DB and remove venv + node_modules
-	rm -rf backend/venv mobile/node_modules
-	@echo "Cleaned."

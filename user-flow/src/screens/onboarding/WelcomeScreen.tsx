@@ -7,7 +7,7 @@ import MonkeyMascot from '../../components/MonkeyMascot';
 import { colors, fonts, spacing } from '../../theme';
 import { OnboardingScreenProps } from './types';
 
-export default function WelcomeScreen({ onContinue }: OnboardingScreenProps) {
+export default function WelcomeScreen({ onContinue, onSignIn }: OnboardingScreenProps) {
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const mascotSlide = useRef(new Animated.Value(-20)).current;
@@ -60,7 +60,7 @@ export default function WelcomeScreen({ onContinue }: OnboardingScreenProps) {
         {/* Footer */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.lg }]}>
           <InkButton label="Get Started" onPress={onContinue} />
-          <TouchableOpacity style={styles.signInLink} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.signInLink} activeOpacity={0.7} onPress={onSignIn}>
             <Text style={styles.signInText}>
               {'Existing user? '}
               <Text style={styles.signInUnderline}>Sign in</Text>
