@@ -30,7 +30,7 @@ const SUBMISSION: MissionPhotoSubmissionContent = {
     'No large uncut pieces remaining',
   ],
   gradingNote: 'Take the photo in good light. Be proud of this.',
-  submitHint: 'Garlic will review your photo and give specific feedback.',
+  submitHint: 'We will review your photo and give specific feedback.',
 };
 
 const FEEDBACK: MissionPhotoFeedbackContent = {

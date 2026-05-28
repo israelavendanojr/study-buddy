@@ -147,7 +147,7 @@ const PHOTO_SUBMISSION: RecipePhotoSubmissionContent = {
     'Glossy sauce that coats not pools',
   ],
   gradingNote: 'Take the photo in good light. Be proud of this.',
-  submitHint: 'Garlic will review your photo and give specific feedback.',
+  submitHint: 'We will review your photo and give specific feedback.',
   timeMinutes: 25,
 };
 
